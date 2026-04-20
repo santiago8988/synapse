@@ -1,0 +1,365 @@
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
+import { EventEmitter2 } from '@nestjs/event-emitter'
+import { PrismaService } from '../../prisma/prisma.service'
+import { Prisma } from '@prisma/client'
+import { ComparisonEvaluatorService } from './services/comparison-evaluator.service'
+import { FormulaEvaluatorService } from './services/formula-evaluator.service'
+import { EntryCreatedEvent, EntryCompletedEvent } from '../../common/events/domain-events'
+
+@Injectable()
+export class EntriesService {
+  constructor(
+    private prisma: PrismaService,
+    private eventEmitter: EventEmitter2,
+    private comparisonEvaluator: ComparisonEvaluatorService,
+    private formulaEvaluator: FormulaEvaluatorService,
+  ) {}
+
+  async findAll(recordId: string, organizationId: string) {
+    const record = await this.prisma.record.findFirst({
+      where: { id: recordId, organizationId },
+    })
+    if (!record) throw new NotFoundException('Registro no encontrado')
+
+    return this.prisma.entry.findMany({
+      where: { recordId },
+      include: {
+        instrument: record.type === 'INSTRUMENTAL'
+          ? { select: { id: true, status: true, nextCalibrationAt: true } }
+          : false,
+        batch: record.type === 'BATCH'
+          ? { select: { id: true, lotNumber: true, status: true, producedQuantity: true, unit: true } }
+          : false,
+        sample: record.type === 'SAMPLE'
+          ? { select: { id: true, sampleCode: true, status: true, client: true, results: true, conditions: true, matrixId: true, methodIds: true, matrix: { select: { id: true, name: true, code: true, parameters: { select: { id: true, name: true, unit: true, minValue: true, maxValue: true, order: true }, orderBy: { order: 'asc' as const } } } } } }
+          : false,
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
+  async findById(entryId: string, recordId: string) {
+    const entry = await this.prisma.entry.findFirst({
+      where: { id: entryId, recordId },
+      include: { nonConformities: true },
+    })
+    if (!entry) throw new NotFoundException('Entrada no encontrada')
+    return entry
+  }
+
+  async create(
+    recordId: string,
+    organizationId: string,
+    createdById: string,
+    data: Record<string, unknown>,
+    revisionDate?: string,
+    batchMeta?: { lotNumber: string },
+    sampleMeta?: { sampleCode: string; client?: string; matrix?: string },
+  ) {
+    // Traer registro con campos activos y acciones
+    const record = await this.prisma.record.findFirst({
+      where: { id: recordId, organizationId },
+      include: {
+        fields: { where: { isActive: true }, orderBy: { order: 'asc' } },
+        actionsAsSource: {
+          include: {
+            targetRecord: {
+              include: { fields: { where: { isActive: true } } },
+            },
+          },
+        },
+      },
+    })
+    if (!record) throw new NotFoundException('Registro no encontrado')
+
+    // Validar que el registro esté ACTIVE para crear entries
+    if (record.status !== 'ACTIVE') {
+      throw new BadRequestException('Solo se pueden crear entradas en registros con estado ACTIVE')
+    }
+
+    // Validar revisionDate para NOT_PERIODIC_WITH_REVISION
+    if (record.type === 'NOT_PERIODIC_WITH_REVISION') {
+      if (!revisionDate) {
+        throw new BadRequestException('Los registros con revisión requieren una fecha de revisión (revisionDate)')
+      }
+    }
+
+    // Auto-detectar lotNumber/sampleCode del campo identificador si no viene explícito
+    const identifierField = record.fields.find((f) => f.isIdentifier)
+    const identifierValue = identifierField ? String(data[identifierField.id] || '') : ''
+
+    if (record.type === 'BATCH') {
+      const lotNumber = batchMeta?.lotNumber || identifierValue
+      if (!lotNumber) {
+        throw new BadRequestException('Los registros de lote requieren un número de lote (campo identificador)')
+      }
+      batchMeta = { lotNumber }
+    }
+
+    if (record.type === 'SAMPLE') {
+      const sampleCode = sampleMeta?.sampleCode || identifierValue
+      if (!sampleCode) {
+        throw new BadRequestException('Los registros de muestra requieren un código de muestra (campo identificador)')
+      }
+      sampleMeta = { sampleCode, client: sampleMeta?.client }
+    }
+
+    // Convertir valores de texto a MAYÚSCULAS
+    for (const field of record.fields) {
+      if (
+        (field.fieldType === 'TEXT' || field.fieldType === 'DROPDOWN') &&
+        typeof data[field.id] === 'string'
+      ) {
+        data[field.id] = (data[field.id] as string).toUpperCase()
+      }
+    }
+
+    // Validar campos requeridos
+    for (const field of record.fields) {
+      if (field.isRequired && field.fieldType !== 'FORMULA' && field.fieldType !== 'COMPARISON') {
+        if (data[field.id] === undefined || data[field.id] === null || data[field.id] === '') {
+          throw new BadRequestException(`El campo "${field.label}" es obligatorio`)
+        }
+      }
+    }
+
+    // Validar estado de instrumentos vinculados via RELATED_ENTRY
+    for (const field of record.fields) {
+      if (
+        (field.fieldType === 'RELATED_ENTRY' || field.fieldType === 'MULTIPLE_RELATED_ENTRY') &&
+        field.relatedRecordId &&
+        data[field.id]
+      ) {
+        // Verificar si el record relacionado es INSTRUMENTAL
+        const relatedRecord = await this.prisma.record.findUnique({
+          where: { id: field.relatedRecordId },
+          select: { type: true },
+        })
+        if (relatedRecord?.type === 'INSTRUMENTAL') {
+          // Obtener el/los entryIds referenciados
+          const relatedValues = Array.isArray(data[field.id]) ? data[field.id] as Array<{ entryId: string }> : [{ entryId: data[field.id] as string }]
+          for (const rv of relatedValues) {
+            const entryId = typeof rv === 'string' ? rv : rv.entryId
+            if (!entryId) continue
+            const instrument = await this.prisma.instrument.findUnique({
+              where: { entryId },
+              select: { status: true, entry: { select: { data: true } } },
+            })
+            if (instrument && instrument.status !== 'ACTIVE') {
+              const entryData = instrument.entry.data as Record<string, unknown>
+              const code = Object.values(entryData)[0] || entryId
+              throw new BadRequestException(
+                `El instrumento "${code}" no está activo (estado: ${instrument.status}). No se puede crear la entrada.`,
+              )
+            }
+          }
+        }
+      }
+    }
+
+    // Evaluar comparaciones usando el servicio dedicado
+    const comparisonResults: Record<string, { passed: boolean; value: unknown; description: string }> = {}
+    for (const field of record.fields) {
+      if (field.fieldType === 'COMPARISON' && field.comparisonConfig) {
+        comparisonResults[field.id] = this.comparisonEvaluator.evaluate(
+          field.comparisonConfig as { operator: string; compareAgainst: string; constantValue?: number; fieldId?: string; secondValue?: number },
+          data[field.id],
+          data,
+        )
+      }
+    }
+
+    // Evaluar todas las fórmulas (resuelve dependencias entre fórmulas automáticamente)
+    const formulaResults = this.formulaEvaluator.evaluateAll(record.fields, data)
+
+    // Calcular dueDate para registros periódicos
+    let dueDate: Date | null = null
+    if (record.type === 'PERIODIC' && record.periodicity) {
+      dueDate = new Date()
+      dueDate.setDate(dueDate.getDate() + record.periodicity)
+    }
+
+    // Estos tipos se auto-completan al crear
+    const autoComplete =
+      record.type === 'INSTRUMENTAL' ||
+      record.type === 'NOT_PERIODIC' ||
+      record.type === 'NOT_PERIODIC_WITH_REVISION' ||
+      record.type === 'STOCK'
+    // BATCH no se auto-completa: tiene lifecycle PLANNED → IN_PROGRESS → COMPLETED
+    // SAMPLE no se auto-completa: se completa cuando su muestra asociada se completa
+
+    // Crear la entrada (lógica core)
+    const entry = await this.prisma.entry.create({
+      data: {
+        recordId,
+        createdById,
+        recordVersion: record.version,
+        data: data as Prisma.InputJsonValue,
+        comparisonResults: Object.keys(comparisonResults).length > 0
+          ? (comparisonResults as unknown as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+        formulaResults: Object.keys(formulaResults).length > 0
+          ? (formulaResults as unknown as Prisma.InputJsonValue)
+          : Prisma.JsonNull,
+        dueDate,
+        revisionDate: revisionDate ? new Date(revisionDate) : null,
+        status: autoComplete ? 'COMPLETED' : 'DRAFT',
+        completedAt: autoComplete ? new Date() : null,
+      },
+    })
+
+    // Crear companion entity según el tipo de record
+    if (record.type === 'BATCH' && batchMeta) {
+      // Extraer recipeId del campo RECIPE_SELECT
+      const recipeSelectField = record.fields.find((f) => f.fieldType === 'RECIPE_SELECT')
+      const batchRecipeId = recipeSelectField && data[recipeSelectField.id]
+        ? String(data[recipeSelectField.id])
+        : null
+
+      await this.prisma.batch.create({
+        data: {
+          organizationId,
+          entryId: entry.id,
+          recordId,
+          recipeId: batchRecipeId,
+          lotNumber: batchMeta.lotNumber,
+        },
+      })
+    }
+
+    if (record.type === 'SAMPLE' && sampleMeta) {
+      // Extraer matrixId y methodIds del campo MATRIX_METHOD
+      const matrixMethodField = record.fields.find((f) => f.fieldType === 'MATRIX_METHOD')
+      let sampleMatrixId: string | null = null
+      let sampleMethodIds: string[] = []
+      if (matrixMethodField && data[matrixMethodField.id]) {
+        const mmValue = data[matrixMethodField.id] as { matrixId?: string; methodIds?: string[] }
+        sampleMatrixId = mmValue.matrixId || null
+        sampleMethodIds = mmValue.methodIds || []
+      }
+
+      await this.prisma.sample.create({
+        data: {
+          organizationId,
+          entryId: entry.id,
+          recordId,
+          sampleCode: sampleMeta.sampleCode,
+          client: sampleMeta.client ? sampleMeta.client.toUpperCase() : null,
+          matrixId: sampleMatrixId,
+          methodIds: sampleMethodIds,
+        },
+      })
+    }
+
+    if (record.type === 'STOCK') {
+      const lotField = record.fields.find((f) => f.label.toUpperCase() === 'LOTE') || record.fields.find((f) => f.isIdentifier)
+      const productField = record.fields.find((f) => f.label.toUpperCase() === 'PRODUCTO')
+      const tipoField = record.fields.find((f) => f.label.toUpperCase() === 'TIPO MOVIMIENTO')
+      const cantidadField = record.fields.find((f) => f.label.toUpperCase() === 'CANTIDAD')
+
+      const lotNumber = lotField ? String(data[lotField.id] || '') : ''
+      const product = productField ? String(data[productField.id] || '') : ''
+      const movementType = tipoField ? String(data[tipoField.id] || 'INGRESO') : 'INGRESO'
+
+      // QUANTITY field stores { value, unit } or plain number
+      let quantity = 0
+      let unit: string | null = null
+      if (cantidadField && data[cantidadField.id]) {
+        const qtyVal = data[cantidadField.id]
+        if (typeof qtyVal === 'object' && qtyVal !== null) {
+          quantity = Number((qtyVal as { value?: number }).value || 0)
+          unit = ((qtyVal as { unit?: string }).unit) || null
+        } else {
+          quantity = Number(qtyVal || 0)
+        }
+      }
+
+      if (lotNumber && product && quantity > 0) {
+        await this.prisma.stockMovement.create({
+          data: {
+            organizationId,
+            entryId: entry.id,
+            recordId,
+            product: product.toUpperCase(),
+            lotNumber: lotNumber.toUpperCase(),
+            movementType: movementType.toUpperCase(),
+            quantity,
+            unit,
+          },
+        })
+      }
+    }
+
+
+    // Emitir evento — los listeners manejan:
+    // - Creación automática de NonConformities (comparaciones fallidas)
+    // - Cascading de RecordActions (crear entries en registros target)
+    this.eventEmitter.emit(
+      EntryCreatedEvent.EVENT_NAME,
+      new EntryCreatedEvent(
+        entry.id,
+        recordId,
+        organizationId,
+        createdById,
+        data,
+        comparisonResults,
+        record,
+      ),
+    )
+
+    return entry
+  }
+
+  async update(
+    entryId: string,
+    recordId: string,
+    data: Record<string, unknown>,
+  ) {
+    const entry = await this.findById(entryId, recordId)
+
+    if (entry.status === 'COMPLETED') {
+      const record = await this.prisma.record.findUniqueOrThrow({
+        where: { id: recordId },
+        include: { fields: { where: { isActive: true } } },
+      })
+      const identifierIds = record.fields.filter((f) => f.isIdentifier).map((f) => f.id)
+      const existingData = entry.data as Record<string, unknown>
+
+      for (const idField of identifierIds) {
+        if (data[idField] !== undefined && data[idField] !== existingData[idField]) {
+          throw new BadRequestException('No se pueden modificar campos identificadores de una entrada completada')
+        }
+      }
+    }
+
+    return this.prisma.entry.update({
+      where: { id: entryId },
+      data: { data: data as Prisma.InputJsonValue },
+    })
+  }
+
+  async complete(entryId: string, recordId: string) {
+    await this.findById(entryId, recordId)
+
+    const updatedEntry = await this.prisma.entry.update({
+      where: { id: entryId },
+      data: {
+        status: 'COMPLETED',
+        completedAt: new Date(),
+      },
+    })
+
+    // Traer datos del record para el evento
+    const record = await this.prisma.record.findUniqueOrThrow({
+      where: { id: recordId },
+    })
+
+    // Emitir evento — el listener maneja la próxima entry periódica
+    this.eventEmitter.emit(
+      EntryCompletedEvent.EVENT_NAME,
+      new EntryCompletedEvent(entryId, recordId, record.organizationId, record),
+    )
+
+    return updatedEntry
+  }
+}

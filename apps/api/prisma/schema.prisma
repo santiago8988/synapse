@@ -1,0 +1,865 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  QUALITY_MANAGER
+  TECHNICIAN
+  AUDITOR
+}
+
+enum RecordType {
+  PERIODIC
+  NOT_PERIODIC
+  NOT_PERIODIC_WITH_REVISION
+  INSTRUMENTAL
+  BATCH
+  SAMPLE
+  STOCK
+}
+
+enum FieldType {
+  NUMBER
+  TEXT
+  DATE
+  DROPDOWN
+  MATRIX_METHOD
+  RECIPE_SELECT
+  QUANTITY
+  CALIBRATION_TEMPLATE
+  RELATED_ENTRY
+  MULTIPLE_RELATED_ENTRY
+  COMPARISON
+  FORMULA
+}
+
+enum ComparisonOperator {
+  LT
+  LTE
+  GT
+  GTE
+  EQ
+  BETWEEN
+}
+
+enum InstrumentStatus {
+  ACTIVE
+  IN_CALIBRATION
+  IN_REPAIR
+  DECOMMISSIONED
+}
+
+enum NonConformityStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum EntryStatus {
+  DRAFT
+  COMPLETED
+}
+
+enum DocumentStatus {
+  DRAFT
+  IN_REVIEW
+  ACTIVE
+  SUPERSEDED
+}
+
+enum RecordStatus {
+  DRAFT
+  IN_REVIEW
+  ACTIVE
+}
+
+enum QualityRoleType {
+  REVIEWER
+  APPROVER
+}
+
+enum ApprovalStatus {
+  PENDING_REVIEW
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum ApprovableEntity {
+  DOCUMENT
+  RECORD
+  RECIPE
+  MATRIX
+  CALIBRATION_TEMPLATE
+}
+
+enum CalibrationStatus {
+  IN_PROGRESS
+  COMPLETED
+  APPROVED
+  REJECTED
+}
+
+enum BatchStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  APPROVED
+  REJECTED
+}
+
+enum SampleStatus {
+  RECEIVED
+  IN_TESTING
+  COMPLETED
+}
+
+// ─────────────────────────────────────────────
+// ORGANIZACIÓN Y USUARIOS
+// ─────────────────────────────────────────────
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  areas            Area[]
+  users            OrganizationUser[]
+  whitelist        EmailWhitelist[]
+  documents        Document[]
+  records          Record[]
+  instruments      Instrument[]
+  auditLogs        AuditLog[]
+  positions        Position[]
+  qualityRoles     QualityRole[]
+  approvalRequests ApprovalRequest[]
+  trainings        Training[]
+  recipes          Recipe[]
+  batches          Batch[]
+  samples          Sample[]
+  matrices         Matrix[]
+  methods          OrgMethod[]
+  stockMovements           StockMovement[]
+  calibrationTemplates     CalibrationTemplate[]
+  calibrations             Calibration[]
+}
+
+model Area {
+  id             String   @id @default(cuid())
+  name           String
+  organizationId String
+  parentId       String?
+  leaderId       String?
+  createdAt      DateTime @default(now())
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  parent       Area?            @relation("AreaTree", fields: [parentId], references: [id])
+  children     Area[]           @relation("AreaTree")
+  leader       OrganizationUser? @relation("AreaLeader", fields: [leaderId], references: [id])
+  users        OrganizationUser[]
+  records      Record[]
+
+  @@index([organizationId])
+  @@index([parentId])
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  avatarUrl String?
+  createdAt DateTime @default(now())
+
+  organizations OrganizationUser[]
+}
+
+model OrganizationUser {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String
+  areaId         String?
+  positionId     String?
+  role           UserRole @default(TECHNICIAN)
+  phone          String?
+  signature      String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  user               User               @relation(fields: [userId], references: [id])
+  organization       Organization       @relation(fields: [organizationId], references: [id])
+  area               Area?              @relation(fields: [areaId], references: [id])
+  position           Position?          @relation(fields: [positionId], references: [id])
+  qualityRoles       QualityRole[]
+  submittedApprovals ApprovalRequest[]  @relation("ApprovalSubmitter")
+  approvalDecisions  ApprovalDecision[] @relation("ApprovalDecider")
+  trainings          Training[]
+  ledAreas           Area[]             @relation("AreaLeader")
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model EmailWhitelist {
+  id             String    @id @default(cuid())
+  email          String
+  organizationId String
+  role           UserRole  @default(TECHNICIAN)
+  areaId         String?
+  invitedAt      DateTime  @default(now())
+  usedAt         DateTime?
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([email, organizationId])
+  @@index([organizationId])
+}
+
+model Position {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  createdAt      DateTime @default(now())
+
+  organization Organization     @relation(fields: [organizationId], references: [id])
+  users        OrganizationUser[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────
+// DOCUMENTOS
+// ─────────────────────────────────────────────
+
+model Document {
+  id             String         @id @default(cuid())
+  organizationId String
+  title          String
+  code           String?
+  version        String         @default("1.0")
+  status         DocumentStatus @default(DRAFT)
+  fileUrl        String?
+  content        String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  createdById    String
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  records      Record[]
+
+  @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────
+// REGISTROS
+// ─────────────────────────────────────────────
+
+model Record {
+  id               String     @id @default(cuid())
+  organizationId   String
+  areaId           String?
+  documentId       String?
+  name             String
+  type             RecordType
+  status           RecordStatus @default(DRAFT)
+  version          Int        @default(1)
+  changeLog        String?    // motivo del último cambio de versión
+  periodicity      Int?
+  notifyDaysBefore Int?
+  isActive         Boolean    @default(true)
+  isSystem         Boolean    @default(false)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  createdById      String
+
+  organization    Organization   @relation(fields: [organizationId], references: [id])
+  area            Area?          @relation(fields: [areaId], references: [id])
+  document        Document?      @relation(fields: [documentId], references: [id])
+  fields          RecordField[]
+  entries         Entry[]
+  instruments     Instrument[]
+  batches         Batch[]
+  samples         Sample[]
+  stockMovements  StockMovement[]
+  actionsAsSource RecordAction[] @relation("SourceRecord")
+  actionsAsTarget RecordAction[] @relation("TargetRecord")
+
+  @@index([organizationId])
+}
+
+model RecordField {
+  id              String    @id @default(cuid())
+  recordId        String
+  label           String
+  fieldType       FieldType
+  order           Int
+  isIdentifier    Boolean   @default(false)
+  isRequired      Boolean   @default(true)
+  isActive        Boolean   @default(true)
+  addedInVersion  Int       @default(1)
+  removedInVersion Int?
+  relatedRecordId String?
+  relatedFieldIds String[]
+  comparisonConfig Json?
+  formulaConfig    Json?
+
+  record Record @relation(fields: [recordId], references: [id])
+
+  @@index([recordId])
+}
+
+model RecordAction {
+  id             String   @id @default(cuid())
+  sourceRecordId String
+  targetRecordId String
+  fieldMapping   Json
+  createdAt      DateTime @default(now())
+
+  sourceRecord Record @relation("SourceRecord", fields: [sourceRecordId], references: [id])
+  targetRecord Record @relation("TargetRecord", fields: [targetRecordId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// ENTRADAS
+// ─────────────────────────────────────────────
+
+model Entry {
+  id                String      @id @default(cuid())
+  recordId          String
+  status            EntryStatus @default(DRAFT)
+  dueDate           DateTime?
+  revisionDate      DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  createdById       String
+  recordVersion     Int         @default(1)
+  data              Json        @default("{}")
+  comparisonResults Json?
+  formulaResults    Json?
+  triggeredById     String?
+
+  record          Record          @relation(fields: [recordId], references: [id])
+  nonConformities NonConformity[]
+  instrument      Instrument?     // 1:1 si es entry de record INSTRUMENTAL
+  batch           Batch?          // 1:1 si es entry de record BATCH
+  sample          Sample?         // 1:1 si es entry de record SAMPLE
+  stockMovement   StockMovement?  // 1:1 si es entry de record STOCK
+  calibrations         Calibration[] @relation("CalibrationEntry") // calibraciones del instrumento
+  usedAsPatternIn      CalibrationPattern[] // join: en que calibraciones este instrumento se uso como patron
+
+  @@index([recordId])
+  @@index([createdById])
+}
+
+// ─────────────────────────────────────────────
+// INSTRUMENTAL
+// ─────────────────────────────────────────────
+
+model Instrument {
+  id                String           @id @default(cuid())
+  organizationId    String
+  entryId           String           @unique // 1:1 con la entry que lo creó
+  recordId          String           // record INSTRUMENTAL al que pertenece
+  status            InstrumentStatus @default(ACTIVE)
+  nextCalibrationAt DateTime?        // calculada: createdAt + periodicity del record
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  entry        Entry               @relation(fields: [entryId], references: [id])
+  record       Record              @relation(fields: [recordId], references: [id])
+  statusLogs   InstrumentStatusLog[]
+
+  @@index([organizationId])
+  @@index([recordId])
+}
+
+model InstrumentStatusLog {
+  id           String           @id @default(cuid())
+  instrumentId String
+  fromStatus   InstrumentStatus
+  toStatus     InstrumentStatus
+  reason       String?
+  changedById  String
+  changedAt    DateTime         @default(now())
+
+  instrument Instrument @relation(fields: [instrumentId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// NO CONFORMIDADES
+// ─────────────────────────────────────────────
+
+model NonConformity {
+  id             String              @id @default(cuid())
+  organizationId String
+  entryId        String?
+  fieldId        String?
+  title          String
+  description    String
+  status         NonConformityStatus @default(OPEN)
+  detectedAt     DateTime            @default(now())
+  resolvedAt     DateTime?
+  createdById    String
+  assignedToId   String?
+
+  entry             Entry?             @relation(fields: [entryId], references: [id])
+  correctiveActions CorrectiveAction[]
+
+  @@index([organizationId])
+  @@index([entryId])
+}
+
+model CorrectiveAction {
+  id              String    @id @default(cuid())
+  nonConformityId String
+  description     String
+  dueDate         DateTime?
+  completedAt     DateTime?
+  createdById     String
+  createdAt       DateTime  @default(now())
+
+  nonConformity NonConformity @relation(fields: [nonConformityId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// RECETAS
+// ─────────────────────────────────────────────
+
+model Recipe {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  code           String
+  version        Int          @default(1)
+  status         RecordStatus @default(DRAFT)
+  isActive       Boolean      @default(true)
+  createdById    String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  ingredients          RecipeIngredient[]
+  usedAsIngredientIn   RecipeIngredient[] @relation("IngredientStockRecipe")
+  steps                RecipeStep[]
+  batches              Batch[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+model RecipeIngredient {
+  id            String  @id @default(cuid())
+  recipeId      String
+  name          String
+  quantity      Float
+  unit          String
+  order         Int
+  fromStock     Boolean @default(false)
+  stockRecipeId String?
+
+  recipe      Recipe  @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  stockRecipe Recipe? @relation("IngredientStockRecipe", fields: [stockRecipeId], references: [id])
+
+  @@index([recipeId])
+}
+
+model RecipeStep {
+  id          String  @id @default(cuid())
+  recipeId    String
+  order       Int
+  name        String
+  description String?
+  duration    Int?
+  controls    String?
+
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([recipeId])
+}
+
+// ─────────────────────────────────────────────
+// LOTES DE PRODUCCIÓN
+// ─────────────────────────────────────────────
+
+model Batch {
+  id               String      @id @default(cuid())
+  organizationId   String
+  entryId          String      @unique
+  recordId         String
+  recipeId         String?
+  lotNumber        String
+  status           BatchStatus @default(PLANNED)
+  producedQuantity Float?
+  unit             String?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  entry        Entry             @relation(fields: [entryId], references: [id])
+  record       Record            @relation(fields: [recordId], references: [id])
+  recipe       Recipe?           @relation(fields: [recipeId], references: [id])
+  statusLogs   BatchStatusLog[]
+
+  @@index([organizationId])
+  @@index([recordId])
+}
+
+model BatchStatusLog {
+  id          String      @id @default(cuid())
+  batchId     String
+  fromStatus  BatchStatus
+  toStatus    BatchStatus
+  reason      String?
+  changedById String
+  changedAt   DateTime    @default(now())
+
+  batch Batch @relation(fields: [batchId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// MUESTRAS
+// ─────────────────────────────────────────────
+
+model Sample {
+  id             String       @id @default(cuid())
+  organizationId String
+  entryId        String       @unique
+  recordId       String
+  matrixId       String?
+  methodIds      String[]
+  sampleCode     String
+  client         String?
+  conditions     Json?
+  results        Json?
+  status         SampleStatus @default(RECEIVED)
+  receivedAt     DateTime     @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  entry        Entry        @relation(fields: [entryId], references: [id])
+  record       Record       @relation(fields: [recordId], references: [id])
+  matrix       Matrix?      @relation(fields: [matrixId], references: [id])
+
+  @@index([organizationId])
+  @@index([recordId])
+}
+
+// ─────────────────────────────────────────────
+// MATRICES
+// ─────────────────────────────────────────────
+
+model Matrix {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  code           String?
+  description    String?
+  version        Int          @default(1)
+  status         RecordStatus @default(DRAFT)
+  isActive       Boolean      @default(true)
+  createdById    String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id])
+  parameters   MatrixParameter[]
+  conditions   MatrixCondition[]
+  samples      Sample[]
+
+  @@index([organizationId])
+}
+
+model MatrixParameter {
+  id       String  @id @default(cuid())
+  matrixId String
+  name     String
+  method   String?
+  unit     String?
+  minValue Float?
+  maxValue Float?
+  order    Int
+
+  matrix Matrix @relation(fields: [matrixId], references: [id], onDelete: Cascade)
+
+  @@index([matrixId])
+}
+
+model MatrixCondition {
+  id        String   @id @default(cuid())
+  matrixId  String
+  label     String
+  fieldType String
+  unit      String?
+  options   String[]
+  order     Int
+
+  matrix Matrix @relation(fields: [matrixId], references: [id], onDelete: Cascade)
+
+  @@index([matrixId])
+}
+
+// ─────────────────────────────────────────────
+// STOCK
+// ─────────────────────────────────────────────
+
+model StockMovement {
+  id             String   @id @default(cuid())
+  organizationId String
+  entryId        String   @unique
+  recordId       String
+  product        String
+  lotNumber      String
+  movementType   String       // INGRESO, EGRESO, AJUSTE
+  quantity       Float
+  unit           String?
+  reason         String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  entry        Entry        @relation(fields: [entryId], references: [id])
+  record       Record       @relation(fields: [recordId], references: [id])
+
+  @@index([organizationId])
+  @@index([recordId])
+  @@index([product])
+  @@index([lotNumber])
+}
+
+// ─────────────────────────────────────────────
+// PLANTILLAS DE CALIBRACION
+// ─────────────────────────────────────────────
+
+model CalibrationTemplate {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  code           String?
+  description    String?
+  version        Int          @default(1)
+  status         RecordStatus @default(DRAFT)
+  isActive       Boolean      @default(true)
+  unitMain         String?
+  unitTolerance    String?
+  periodicity      Int?
+  notifyDaysBefore Int?
+  createdById      String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  tests        CalibrationTest[]
+  calibrations Calibration[]
+
+  @@index([organizationId])
+}
+
+model CalibrationTest {
+  id               String  @id @default(cuid())
+  templateId       String
+  name             String
+  description      String?
+  order            Int
+  tolerance        Float?
+  toleranceUnit    String?
+  readingsPerPoint Int     @default(3)
+  formulaError     String?
+  criteriaOperator String?
+  notes            String?
+
+  template CalibrationTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  points   CalibrationPoint[]
+
+  @@index([templateId])
+}
+
+model CalibrationPoint {
+  id     String  @id @default(cuid())
+  testId String
+  name   String
+  order  Int
+  load   Float?
+  unit   String?
+
+  test CalibrationTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+}
+
+model Calibration {
+  id             String            @id @default(cuid())
+  organizationId String
+  entryId        String
+  templateId     String
+  status         CalibrationStatus @default(IN_PROGRESS)
+  results        Json?
+  dueDate        DateTime?
+  startedAt      DateTime          @default(now())
+  completedAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  entry        Entry               @relation("CalibrationEntry", fields: [entryId], references: [id])
+  template     CalibrationTemplate @relation(fields: [templateId], references: [id])
+  patterns     CalibrationPattern[]
+
+  @@index([organizationId])
+  @@index([entryId])
+  @@index([templateId])
+}
+
+model CalibrationPattern {
+  id             String   @id @default(cuid())
+  calibrationId  String
+  patternEntryId String   // entry del instrumento usado como patron
+  testId         String?  // futuro: atar a un test especifico de la plantilla
+  pointId        String?  // futuro: atar a un punto especifico
+  createdAt      DateTime @default(now())
+
+  calibration Calibration @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
+  pattern     Entry       @relation(fields: [patternEntryId], references: [id])
+
+  @@unique([calibrationId, patternEntryId])
+  @@index([calibrationId])
+  @@index([patternEntryId])
+}
+
+// ─────────────────────────────────────────────
+// MÉTODOS ANALÍTICOS
+// ─────────────────────────────────────────────
+
+model OrgMethod {
+  id         String   @id @default(cuid())
+  orgId      String?
+  code       String
+  name       String
+  parameter  String
+  unit       String?
+  defaultMin Float?
+  defaultMax Float?
+  isGlobal   Boolean  @default(false)
+  sourceRef  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  org Organization? @relation(fields: [orgId], references: [id])
+
+  @@unique([orgId, code])
+  @@index([orgId])
+}
+
+// ─────────────────────────────────────────────
+// CAPACITACIONES
+// ─────────────────────────────────────────────
+
+model Training {
+  id                 String    @id @default(cuid())
+  organizationId     String
+  organizationUserId String
+  name               String
+  description        String?
+  provider           String?
+  completedAt        DateTime
+  expiresAt          DateTime?
+  certificateUrl     String?
+  createdAt          DateTime  @default(now())
+
+  organization     Organization     @relation(fields: [organizationId], references: [id])
+  organizationUser OrganizationUser @relation(fields: [organizationUserId], references: [id])
+
+  @@index([organizationId])
+  @@index([organizationUserId])
+}
+
+// ─────────────────────────────────────────────
+// CIRCUITO DE APROBACIÓN
+// ─────────────────────────────────────────────
+
+model QualityRole {
+  id                 String          @id @default(cuid())
+  organizationId     String
+  organizationUserId String
+  role               QualityRoleType
+  createdAt          DateTime        @default(now())
+
+  organization     Organization     @relation(fields: [organizationId], references: [id])
+  organizationUser OrganizationUser @relation(fields: [organizationUserId], references: [id])
+
+  @@unique([organizationUserId, role])
+  @@index([organizationId])
+}
+
+model ApprovalRequest {
+  id             String           @id @default(cuid())
+  organizationId String
+  entityType     ApprovableEntity
+  entityId       String
+  status         ApprovalStatus   @default(PENDING_REVIEW)
+  submittedById  String
+  submittedAt    DateTime         @default(now())
+  completedAt    DateTime?
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  submittedBy  OrganizationUser   @relation("ApprovalSubmitter", fields: [submittedById], references: [id])
+  decisions    ApprovalDecision[]
+
+  @@index([organizationId])
+  @@index([entityType, entityId])
+}
+
+model ApprovalDecision {
+  id                String          @id @default(cuid())
+  approvalRequestId String
+  stage             QualityRoleType
+  decision          String
+  comments          String?
+  decidedById       String
+  decidedAt         DateTime        @default(now())
+
+  approvalRequest ApprovalRequest  @relation(fields: [approvalRequestId], references: [id])
+  decidedBy       OrganizationUser @relation("ApprovalDecider", fields: [decidedById], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOG
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  action         String
+  entityType     String
+  entityId       String
+  before         Json?
+  after          Json?
+  ip             String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId])
+  @@index([entityType, entityId])
+  @@index([userId])
+}
