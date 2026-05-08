@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { OnEvent } from '@nestjs/event-emitter'
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter'
 import { PrismaService } from '../../../prisma/prisma.service'
 import {
   EntryCreatedEvent,
@@ -18,7 +18,10 @@ import type { ActionCondition, ActionConditionPrimitive } from '@synapse/types'
 export class RecordActionListener {
   private readonly logger = new Logger(RecordActionListener.name)
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private eventEmitter: EventEmitter2,
+  ) {}
 
   @OnEvent(EntryCreatedEvent.EVENT_NAME)
   async handleEntryCreated(event: EntryCreatedEvent) {
@@ -311,9 +314,46 @@ export class RecordActionListener {
         return Array.isArray(expected) && expected.map(String).includes(String(actual))
       case 'NOT_IN':
         return Array.isArray(expected) && !expected.map(String).includes(String(actual))
+      case 'LT':
+        return Number(actual) < Number(expected)
+      case 'LTE':
+        return Number(actual) <= Number(expected)
+      case 'GT':
+        return Number(actual) > Number(expected)
+      case 'GTE':
+        return Number(actual) >= Number(expected)
+      case 'BETWEEN':
+        return (
+          Array.isArray(expected) &&
+          expected.length === 2 &&
+          Number(actual) >= Number(expected[0]) &&
+          Number(actual) <= Number(expected[1])
+        )
       default:
         return false
     }
+  }
+
+  /**
+   * Resuelve un `sourceFieldId` del fieldMapping a su valor actual. Soporta:
+   *   - `$entry.id` → id de la entry que disparó el evento.
+   *   - `$entry.<fieldId>` → valor de un field específico de la entry padre.
+   *   - `$event.toValue` / `$event.fromValue` / `$event.fieldId` → del evento FIELD_VALUE_CHANGED.
+   *   - `<fieldId>` (default) → valor del field en la entry padre. Caso histórico.
+   */
+  private resolveSource(
+    sourceFieldId: string,
+    event: EntryFieldValueChangedEvent,
+    sourceData: Record<string, unknown>,
+  ): unknown {
+    if (sourceFieldId === '$entry.id') return event.entryId
+    if (sourceFieldId.startsWith('$entry.')) {
+      return sourceData[sourceFieldId.slice('$entry.'.length)]
+    }
+    if (sourceFieldId === '$event.toValue') return event.toValue
+    if (sourceFieldId === '$event.fromValue') return event.fromValue
+    if (sourceFieldId === '$event.fieldId') return event.fieldId
+    return sourceData[sourceFieldId]
   }
 
   /**
@@ -371,8 +411,9 @@ export class RecordActionListener {
     }>
     const targetData: Record<string, unknown> = {}
     for (const map of mapping ?? []) {
-      if (sourceData[map.sourceFieldId] !== undefined) {
-        targetData[map.targetFieldId] = sourceData[map.sourceFieldId]
+      const value = this.resolveSource(map.sourceFieldId, event, sourceData)
+      if (value !== undefined) {
+        targetData[map.targetFieldId] = value
       }
     }
 
@@ -400,18 +441,111 @@ export class RecordActionListener {
   }
 
   /**
-   * UPDATE_FIELD — patcha un field de una entry. STUB en esta iteración:
-   * loguea la intención pero no escribe. La implementación real depende de
-   * resolver `entryIdSource: 'self' | 'related'` con un fetch del payload y
-   * propagar el cambio vía EntryFieldValueChangedEvent (con triggeredByCascade=true).
-   * Diferida a la siguiente iteración cuando tengamos un caso de uso.
+   * UPDATE_FIELD — patcha un field de una entry. Funcional desde VFE.6.
+   *
+   * Shape del actionConfig:
+   *   {
+   *     entryIdSource: '$entry.id' | '<fieldId-relacionada>',
+   *     fieldId: string,
+   *     value: string | number | boolean | null,
+   *   }
+   *
+   * - `$entry.id` → patchea la entry que disparó el evento (caso típico
+   *   "cuando NC se cierra, marcar el field REVISADA del mismo Record").
+   * - `<fieldId-relacionada>` → resuelve el id desde sourceData[fieldId]
+   *   (cuando el flow apunta a una entry distinta vía un RELATED_ENTRY).
+   *
+   * Emite `EntryFieldValueChangedEvent` con `triggeredByCascade: true` para
+   * que listeners downstream puedan respetar el anti-loop.
    */
   private async executeUpdateField(
     action: ActionWithTarget,
     event: EntryFieldValueChangedEvent,
   ) {
+    const cfg = action.actionConfig as
+      | {
+          entryIdSource?: string
+          fieldId?: string
+          value?: string | number | boolean | null
+        }
+      | null
+    if (!cfg || !cfg.entryIdSource || !cfg.fieldId) {
+      this.logger.warn(
+        `RecordAction ${action.id} (UPDATE_FIELD) — actionConfig incompleta, omitida`,
+      )
+      return
+    }
+
+    // Resolver entryId destino. Necesitamos sourceData solo si hay que
+    // resolver un fieldId distinto a $entry.id.
+    let targetEntryId: string
+    if (cfg.entryIdSource === '$entry.id') {
+      targetEntryId = event.entryId
+    } else {
+      const sourceEntry = await this.prisma.entry.findUnique({
+        where: { id: event.entryId },
+        select: { data: true },
+      })
+      if (!sourceEntry) return
+      const sourceData = (sourceEntry.data ?? {}) as Record<string, unknown>
+      const candidate = sourceData[cfg.entryIdSource]
+      if (typeof candidate !== 'string' || !candidate) {
+        this.logger.warn(
+          `RecordAction ${action.id} (UPDATE_FIELD) — no se pudo resolver entryIdSource "${cfg.entryIdSource}"`,
+        )
+        return
+      }
+      targetEntryId = candidate
+    }
+
+    const targetEntry = await this.prisma.entry.findUnique({
+      where: { id: targetEntryId },
+      select: { data: true, recordId: true, record: { select: { organizationId: true } } },
+    })
+    if (!targetEntry) {
+      this.logger.warn(
+        `RecordAction ${action.id} (UPDATE_FIELD) — entry destino ${targetEntryId} no existe`,
+      )
+      return
+    }
+
+    const currentData = (targetEntry.data ?? {}) as Record<string, unknown>
+    const oldValue = currentData[cfg.fieldId]
+    const newValue = cfg.value ?? null
+
+    // No-op: si el valor no cambia, no escribimos ni emitimos.
+    if (JSON.stringify(oldValue) === JSON.stringify(newValue)) {
+      this.logger.debug(
+        `RecordAction ${action.id} (UPDATE_FIELD) — no-op (mismo valor) en entry ${targetEntryId} field ${cfg.fieldId}`,
+      )
+      return
+    }
+
+    const newData = { ...currentData, [cfg.fieldId]: newValue }
+    await this.prisma.entry.update({
+      where: { id: targetEntryId },
+      data: { data: newData as Prisma.InputJsonValue },
+    })
+
+    // Emitir evento con triggeredByCascade=true → anti-loop. Las RecordAction
+    // sin allowCascade=true van a ignorar este evento.
+    this.eventEmitter.emit(
+      EntryFieldValueChangedEvent.EVENT_NAME,
+      new EntryFieldValueChangedEvent(
+        targetEntryId,
+        targetEntry.recordId,
+        targetEntry.record.organizationId,
+        cfg.fieldId,
+        oldValue,
+        newValue,
+        event.changedById,
+        true, // triggeredByCascade
+        `Cascada de RecordAction ${action.id}`,
+      ),
+    )
+
     this.logger.log(
-      `RecordAction ${action.id} (UPDATE_FIELD) — STUB: actionConfig=${JSON.stringify(action.actionConfig)}, event=${event.entryId}`,
+      `RecordAction ${action.id} (UPDATE_FIELD) entry=${targetEntryId} field=${cfg.fieldId} → ${JSON.stringify(newValue)}`,
     )
   }
 

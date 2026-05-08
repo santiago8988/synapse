@@ -140,11 +140,53 @@ const conditionPrimitiveValueSchema = z.union([
   z.array(z.number()),
 ])
 
-const actionConditionPrimitiveSchema = z.object({
-  type: z.enum(['EQUALS', 'NOT_EQUALS', 'IN', 'NOT_IN']),
-  field: z.string().min(1, 'El path del campo es obligatorio'),
-  value: conditionPrimitiveValueSchema,
-})
+const actionConditionPrimitiveSchema = z
+  .object({
+    type: z.enum([
+      'EQUALS', 'NOT_EQUALS',
+      'IN', 'NOT_IN',
+      'LT', 'LTE', 'GT', 'GTE',
+      'BETWEEN',
+    ]),
+    field: z.string().min(1, 'El path del campo es obligatorio'),
+    value: conditionPrimitiveValueSchema,
+  })
+  .superRefine((cond, ctx) => {
+    // Operadores numéricos requieren value escalar number.
+    if (['LT', 'LTE', 'GT', 'GTE'].includes(cond.type)) {
+      if (typeof cond.value !== 'number') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['value'],
+          message: `El operador ${cond.type} requiere un valor numérico`,
+        })
+      }
+    }
+    // BETWEEN requiere array de exactamente 2 numbers.
+    if (cond.type === 'BETWEEN') {
+      const ok =
+        Array.isArray(cond.value) &&
+        cond.value.length === 2 &&
+        cond.value.every((v) => typeof v === 'number')
+      if (!ok) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['value'],
+          message: 'BETWEEN requiere un array [min, max] con dos números',
+        })
+      }
+    }
+    // IN / NOT_IN requieren array.
+    if (['IN', 'NOT_IN'].includes(cond.type)) {
+      if (!Array.isArray(cond.value)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['value'],
+          message: `${cond.type} requiere un array de valores`,
+        })
+      }
+    }
+  })
 
 /**
  * Schema recursivo para `RecordAction.condition`. Acepta tanto la condición

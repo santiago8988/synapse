@@ -40,10 +40,20 @@ export type FieldValue =
 
 /**
  * Condición primitiva — compara un campo del payload del evento contra un valor.
+ *
+ * Operadores soportados:
+ *   - EQUALS / NOT_EQUALS: comparación de igualdad (string-coerced).
+ *   - IN / NOT_IN: pertenencia a array (`value` debe ser array).
+ *   - LT / LTE / GT / GTE: comparación numérica (`value` escalar number).
+ *   - BETWEEN: rango inclusivo (`value` debe ser `[min, max]`).
  */
 export interface ActionConditionPrimitive {
-  type: 'EQUALS' | 'NOT_EQUALS' | 'IN' | 'NOT_IN'
-  /** path del campo en el payload del evento, ej. "fieldId" o "toValue" */
+  type:
+    | 'EQUALS' | 'NOT_EQUALS'
+    | 'IN' | 'NOT_IN'
+    | 'LT' | 'LTE' | 'GT' | 'GTE'
+    | 'BETWEEN'
+  /** path del campo en el payload del evento, ej. "fieldId", "toValue", "fromValue" */
   field: string
   value: string | number | boolean | string[] | number[]
 }

@@ -47,18 +47,10 @@ export class EntryCompletedEvent {
   ) {}
 }
 
-export class InstrumentStatusChangedEvent {
-  static readonly EVENT_NAME = 'instrument.statusChanged'
-
-  constructor(
-    public readonly instrumentId: string,
-    public readonly organizationId: string,
-    public readonly fromStatus: string,
-    public readonly toStatus: string,
-    public readonly reason: string | null,
-    public readonly changedById: string,
-  ) {}
-}
+// InstrumentStatusChangedEvent eliminado en VFE.4 — sin consumers, redundante
+// con FIELD_VALUE_CHANGED. El cambio de status del instrumento sigue logueando
+// en InstrumentStatusLog (companion ISO) — solo desaparece la emisión vía
+// EventEmitter2 del evento legacy.
 
 export class NonConformityCreatedEvent {
   static readonly EVENT_NAME = 'nonConformity.created'

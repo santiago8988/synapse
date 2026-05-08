@@ -107,7 +107,6 @@ export enum TriggerType {
   ENTRY_COMPLETED = 'ENTRY_COMPLETED',
   FIELD_VALUE_CHANGED = 'FIELD_VALUE_CHANGED',
   COMPARISON_FAILED = 'COMPARISON_FAILED',
-  INSTRUMENT_STATUS_CHANGED = 'INSTRUMENT_STATUS_CHANGED',
 }
 
 // Tipo de acción ejecutada por una RecordAction cuando matchea trigger+condition.

@@ -46,6 +46,21 @@ interface EditRecordDto {
 interface CreateActionDto {
   targetRecordId: string
   fieldMapping: Array<{ sourceFieldId: string; targetFieldId: string }>
+  trigger?: 'ENTRY_CREATED' | 'ENTRY_COMPLETED' | 'FIELD_VALUE_CHANGED' | 'COMPARISON_FAILED'
+  condition?: Prisma.InputJsonValue | null
+  allowCascade?: boolean
+  actionType?: 'CREATE_ENTRY' | 'UPDATE_FIELD' | 'NOTIFY' | 'EMAIL' | 'WEBHOOK'
+  actionConfig?: Prisma.InputJsonValue | null
+}
+
+interface UpdateActionDto {
+  targetRecordId?: string
+  fieldMapping?: Array<{ sourceFieldId: string; targetFieldId: string }>
+  trigger?: 'ENTRY_CREATED' | 'ENTRY_COMPLETED' | 'FIELD_VALUE_CHANGED' | 'COMPARISON_FAILED'
+  condition?: Prisma.InputJsonValue | null
+  allowCascade?: boolean
+  actionType?: 'CREATE_ENTRY' | 'UPDATE_FIELD' | 'NOTIFY' | 'EMAIL' | 'WEBHOOK'
+  actionConfig?: Prisma.InputJsonValue | null
 }
 
 @Injectable()
@@ -375,24 +390,53 @@ export class RecordsService {
     })
   }
 
-  // ─── Actions ──────────────────────────────────
+  // ─── Actions / Visual Flow Editor ─────────────
+
+  async listActions(recordId: string, organizationId: string) {
+    // Verificar que el record pertenezca a la org (defense-in-depth multitenant).
+    const record = await this.prisma.record.findFirst({
+      where: { id: recordId, organizationId },
+      select: { id: true },
+    })
+    if (!record) throw new NotFoundException('Registro no encontrado')
+
+    return this.prisma.recordAction.findMany({
+      where: { sourceRecordId: recordId },
+      include: {
+        targetRecord: { select: { id: true, name: true, type: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+  }
 
   async addAction(recordId: string, organizationId: string, data: CreateActionDto) {
+    // Verificar source record pertenezca a la org.
+    const source = await this.prisma.record.findFirst({
+      where: { id: recordId, organizationId },
+      select: { id: true },
+    })
+    if (!source) throw new NotFoundException('Registro fuente no encontrado')
+
     const target = await this.prisma.record.findFirst({
       where: { id: data.targetRecordId, organizationId },
       include: { fields: { where: { isActive: true } } },
     })
     if (!target) throw new BadRequestException('El registro destino no existe en esta organización')
 
-    // Validar que todos los campos identifier del target estén mapeados
-    const targetIdentifiers = target.fields.filter((f) => f.isIdentifier)
-    const mappedTargetIds = data.fieldMapping.map((m) => m.targetFieldId)
-    const unmappedIdentifiers = targetIdentifiers.filter((f) => !mappedTargetIds.includes(f.id))
+    // Para CREATE_ENTRY (default): validar que todos los campos identifier del
+    // target estén mapeados. Otras actions (UPDATE_FIELD, etc.) no requieren
+    // este check porque no crean entries nuevas.
+    const actionType = data.actionType ?? 'CREATE_ENTRY'
+    if (actionType === 'CREATE_ENTRY') {
+      const targetIdentifiers = target.fields.filter((f) => f.isIdentifier)
+      const mappedTargetIds = data.fieldMapping.map((m) => m.targetFieldId)
+      const unmappedIdentifiers = targetIdentifiers.filter((f) => !mappedTargetIds.includes(f.id))
 
-    if (unmappedIdentifiers.length > 0) {
-      throw new BadRequestException(
-        `Los campos identificadores del destino deben estar mapeados: ${unmappedIdentifiers.map((f) => f.label).join(', ')}`,
-      )
+      if (unmappedIdentifiers.length > 0) {
+        throw new BadRequestException(
+          `Los campos identificadores del destino deben estar mapeados: ${unmappedIdentifiers.map((f) => f.label).join(', ')}`,
+        )
+      }
     }
 
     return this.prisma.recordAction.create({
@@ -400,9 +444,64 @@ export class RecordsService {
         sourceRecordId: recordId,
         targetRecordId: data.targetRecordId,
         fieldMapping: data.fieldMapping as unknown as Prisma.InputJsonValue,
+        trigger: data.trigger ?? 'ENTRY_COMPLETED',
+        condition: data.condition ?? Prisma.JsonNull,
+        allowCascade: data.allowCascade ?? false,
+        actionType: actionType,
+        actionConfig: data.actionConfig ?? Prisma.JsonNull,
       },
       include: {
-        targetRecord: { select: { id: true, name: true } },
+        targetRecord: { select: { id: true, name: true, type: true } },
+      },
+    })
+  }
+
+  async updateAction(
+    recordId: string,
+    actionId: string,
+    organizationId: string,
+    data: UpdateActionDto,
+  ) {
+    // Verificar que la action pertenece al source record y este a la org.
+    const existing = await this.prisma.recordAction.findFirst({
+      where: {
+        id: actionId,
+        sourceRecordId: recordId,
+        sourceRecord: { organizationId },
+      },
+    })
+    if (!existing) throw new NotFoundException('Flujo no encontrado')
+
+    // Si cambia el target, validarlo contra la org.
+    if (data.targetRecordId) {
+      const target = await this.prisma.record.findFirst({
+        where: { id: data.targetRecordId, organizationId },
+        select: { id: true },
+      })
+      if (!target) {
+        throw new BadRequestException('El registro destino no existe en esta organización')
+      }
+    }
+
+    return this.prisma.recordAction.update({
+      where: { id: actionId },
+      data: {
+        ...(data.targetRecordId !== undefined && { targetRecordId: data.targetRecordId }),
+        ...(data.fieldMapping !== undefined && {
+          fieldMapping: data.fieldMapping as unknown as Prisma.InputJsonValue,
+        }),
+        ...(data.trigger !== undefined && { trigger: data.trigger }),
+        ...(data.condition !== undefined && {
+          condition: data.condition === null ? Prisma.JsonNull : data.condition,
+        }),
+        ...(data.allowCascade !== undefined && { allowCascade: data.allowCascade }),
+        ...(data.actionType !== undefined && { actionType: data.actionType }),
+        ...(data.actionConfig !== undefined && {
+          actionConfig: data.actionConfig === null ? Prisma.JsonNull : data.actionConfig,
+        }),
+      },
+      include: {
+        targetRecord: { select: { id: true, name: true, type: true } },
       },
     })
   }

@@ -135,7 +135,6 @@ enum TriggerType {
   ENTRY_COMPLETED
   FIELD_VALUE_CHANGED
   COMPARISON_FAILED
-  INSTRUMENT_STATUS_CHANGED
 }
 
 // Tipo de acción ejecutada cuando una RecordAction matchea su trigger+condition.

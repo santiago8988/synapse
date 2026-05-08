@@ -1,13 +1,10 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
-import { EventEmitter2 } from '@nestjs/event-emitter'
 import { PrismaService } from '../../prisma/prisma.service'
-import { InstrumentStatusChangedEvent } from '../../common/events/domain-events'
 
 @Injectable()
 export class InstrumentsService {
   constructor(
     private prisma: PrismaService,
-    private eventEmitter: EventEmitter2,
   ) {}
 
   async findAll(organizationId: string, filters?: { status?: string; recordId?: string }) {
@@ -120,10 +117,9 @@ export class InstrumentsService {
       }),
     ])
 
-    this.eventEmitter.emit(
-      InstrumentStatusChangedEvent.EVENT_NAME,
-      new InstrumentStatusChangedEvent(id, organizationId, fromStatus, toStatus, reason, changedById),
-    )
+    // InstrumentStatusChangedEvent eliminado en VFE.4 (sin consumers).
+    // Si en el futuro alguien necesita reaccionar a cambios de status,
+    // que use FIELD_VALUE_CHANGED en un Record con DROPDOWN-as-status.
 
     return updatedInstrument
   }
