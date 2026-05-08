@@ -9,3 +9,6 @@ dist/
 .DS_Store
 coverage/
 .vercel
+
+# Local Claude Code config (agents, skills, worktrees, plans, etc.)
+.claude/
