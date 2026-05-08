@@ -22,33 +22,22 @@ export class RecordActionListener {
 
   @OnEvent(EntryCreatedEvent.EVENT_NAME)
   async handleEntryCreated(event: EntryCreatedEvent) {
-    // Records-as-Lists post-collapse: para records source INSTRUMENTAL, verificar
-    // que el field DROPDOWN-as-status NO esté en un valor distinto a "ACTIVE".
-    // Antes del colapso esto se chequeaba contra Instrument.status.
+    // Si el record source es INSTRUMENTAL, verificar estado del instrumento
     const sourceRecord = await this.prisma.record.findUnique({
       where: { id: event.recordId },
-      select: {
-        type: true,
-        fields: {
-          where: { isActive: true, fieldType: 'DROPDOWN' },
-          select: { id: true, comparisonConfig: true },
-        },
-      },
+      select: { type: true },
     })
 
     if (sourceRecord?.type === 'INSTRUMENTAL') {
-      const statusField = sourceRecord.fields.find((f) => {
-        const cfg = f.comparisonConfig as { isStatus?: boolean } | null
-        return cfg?.isStatus === true
+      const instrument = await this.prisma.instrument.findUnique({
+        where: { entryId: event.entryId },
+        select: { status: true },
       })
-      if (statusField) {
-        const status = String(event.data?.[statusField.id] ?? 'ACTIVE')
-        if (status !== 'ACTIVE') {
-          this.logger.warn(
-            `RecordAction omitida: instrumento ${event.entryId} no está activo (${status})`,
-          )
-          return
-        }
+      if (instrument && instrument.status !== 'ACTIVE') {
+        this.logger.warn(
+          `RecordAction omitida: instrumento ${event.entryId} no está activo (${instrument.status})`,
+        )
+        return
       }
     }
 

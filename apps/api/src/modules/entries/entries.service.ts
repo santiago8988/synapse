@@ -24,12 +24,12 @@ export class EntriesService {
     })
     if (!record) throw new NotFoundException('Registro no encontrado')
 
-    // Records-as-Lists post-collapse: Instrument companion ya no existe — su
-    // status y nextCalibrationAt viven en Entry.data del propio entry. Para
-    // INSTRUMENTAL no incluimos nada extra; el caller lo resuelve con record.fields.
     return this.prisma.entry.findMany({
       where: { recordId },
       include: {
+        instrument: record.type === 'INSTRUMENTAL'
+          ? { select: { id: true, status: true, nextCalibrationAt: true } }
+          : false,
         batch: record.type === 'BATCH'
           ? { select: { id: true, lotNumber: true, status: true, producedQuantity: true, unit: true } }
           : false,
@@ -139,50 +139,33 @@ export class EntriesService {
       }
     }
 
-    // Validar estado de instrumentos vinculados via RELATED_ENTRY (Records-as-Lists:
-    // el "estado" del instrumento ahora vive en Entry.data[<statusFieldId>] del
-    // record INSTRUMENTAL relacionado, no en Instrument.status).
+    // Validar estado de instrumentos vinculados via RELATED_ENTRY
     for (const field of record.fields) {
       if (
         (field.fieldType === 'RELATED_ENTRY' || field.fieldType === 'MULTIPLE_RELATED_ENTRY') &&
         field.relatedRecordId &&
         data[field.id]
       ) {
+        // Verificar si el record relacionado es INSTRUMENTAL
         const relatedRecord = await this.prisma.record.findUnique({
           where: { id: field.relatedRecordId },
-          select: {
-            type: true,
-            fields: {
-              where: { isActive: true, fieldType: 'DROPDOWN' },
-              select: { id: true, comparisonConfig: true },
-            },
-          },
+          select: { type: true },
         })
         if (relatedRecord?.type === 'INSTRUMENTAL') {
-          // Resolver el statusFieldId del record relacionado.
-          const statusField = relatedRecord.fields.find((f) => {
-            const cfg = f.comparisonConfig as { isStatus?: boolean } | null
-            return cfg?.isStatus === true
-          })
-          if (!statusField) continue
-
-          const relatedValues = Array.isArray(data[field.id])
-            ? (data[field.id] as Array<{ entryId: string } | string>)
-            : [data[field.id] as { entryId: string } | string]
+          // Obtener el/los entryIds referenciados
+          const relatedValues = Array.isArray(data[field.id]) ? data[field.id] as Array<{ entryId: string }> : [{ entryId: data[field.id] as string }]
           for (const rv of relatedValues) {
-            const entryId = typeof rv === 'string' ? rv : rv?.entryId
+            const entryId = typeof rv === 'string' ? rv : rv.entryId
             if (!entryId) continue
-            const relatedEntry = await this.prisma.entry.findUnique({
-              where: { id: entryId },
-              select: { data: true },
+            const instrument = await this.prisma.instrument.findUnique({
+              where: { entryId },
+              select: { status: true, entry: { select: { data: true } } },
             })
-            if (!relatedEntry) continue
-            const relatedData = (relatedEntry.data ?? {}) as Record<string, unknown>
-            const status = String(relatedData[statusField.id] ?? '')
-            if (status && status !== 'ACTIVE') {
-              const code = Object.values(relatedData)[0] || entryId
+            if (instrument && instrument.status !== 'ACTIVE') {
+              const entryData = instrument.entry.data as Record<string, unknown>
+              const code = Object.values(entryData)[0] || entryId
               throw new BadRequestException(
-                `El instrumento "${code}" no está activo (estado: ${status}). No se puede crear la entrada.`,
+                `El instrumento "${code}" no está activo (estado: ${instrument.status}). No se puede crear la entrada.`,
               )
             }
           }

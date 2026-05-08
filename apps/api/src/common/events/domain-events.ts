@@ -47,11 +47,18 @@ export class EntryCompletedEvent {
   ) {}
 }
 
-// InstrumentStatusChangedEvent eliminado en el colapso de Instrument
-// (Records-as-Lists). Los cambios de status de un instrumento ahora viajan
-// como `EntryFieldValueChangedEvent` con `field.isStatus === true` y
-// `record.type === 'INSTRUMENTAL'`. Auditoría confirmó que no había
-// consumers del evento anterior antes de eliminarlo.
+export class InstrumentStatusChangedEvent {
+  static readonly EVENT_NAME = 'instrument.statusChanged'
+
+  constructor(
+    public readonly instrumentId: string,
+    public readonly organizationId: string,
+    public readonly fromStatus: string,
+    public readonly toStatus: string,
+    public readonly reason: string | null,
+    public readonly changedById: string,
+  ) {}
+}
 
 export class NonConformityCreatedEvent {
   static readonly EVENT_NAME = 'nonConformity.created'
@@ -88,8 +95,7 @@ export class DocumentVersionCreatedEvent {
  *
  * `reason` es la justificación opcional del usuario (transitionReason del
  * body del PATCH) — obligatoria cuando la transition declara `requireReason`.
- * El EntryStatusLogListener la persiste para preservar el paper trail ISO
- * (equivalente al `reason` del antiguo InstrumentStatusLog/BatchStatusLog).
+ * El EntryStatusLogListener la persiste para preservar el paper trail ISO.
  */
 export class EntryFieldValueChangedEvent {
   static readonly EVENT_NAME = 'entry.fieldValueChanged'

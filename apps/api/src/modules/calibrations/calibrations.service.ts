@@ -2,10 +2,6 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException }
 import { PrismaService } from '../../prisma/prisma.service'
 import { CalibrationStatus, Prisma } from '@prisma/client'
 
-// Patrones de calibración: el "pattern" es una Entry de un Record INSTRUMENTAL
-// (post Records-as-Lists, ya no hay tabla Instrument). Devolvemos la entry +
-// los fields del record para que el frontend resuelva status/nextCalibrationAt
-// leyendo de Entry.data[<statusFieldId>].
 const PATTERNS_INCLUDE = {
   patterns: {
     orderBy: { createdAt: 'asc' as const },
@@ -14,16 +10,9 @@ const PATTERNS_INCLUDE = {
         select: {
           id: true,
           data: true,
-          record: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
-              fields: {
-                where: { isActive: true, fieldType: 'DROPDOWN' as const },
-                select: { id: true, comparisonConfig: true },
-              },
-            },
+          record: { select: { id: true, name: true } },
+          instrument: {
+            select: { id: true, status: true, nextCalibrationAt: true },
           },
         },
       },
@@ -54,17 +43,8 @@ export class CalibrationsService {
           select: {
             id: true,
             data: true,
-            record: {
-              select: {
-                id: true,
-                name: true,
-                type: true,
-                fields: {
-                  where: { isActive: true, fieldType: 'DROPDOWN' },
-                  select: { id: true, comparisonConfig: true },
-                },
-              },
-            },
+            record: { select: { id: true, name: true } },
+            instrument: { select: { id: true, status: true } },
           },
         },
         template: { select: { id: true, name: true, code: true } },
@@ -86,14 +66,10 @@ export class CalibrationsService {
               select: {
                 id: true,
                 name: true,
-                type: true,
-                fields: {
-                  where: { isActive: true },
-                  orderBy: { order: 'asc' },
-                  select: { id: true, label: true, fieldType: true, comparisonConfig: true },
-                },
+                fields: { where: { isActive: true }, orderBy: { order: 'asc' }, select: { id: true, label: true, fieldType: true } },
               },
             },
+            instrument: { select: { id: true, status: true } },
           },
         },
         ...PATTERNS_INCLUDE,
@@ -156,15 +132,13 @@ export class CalibrationsService {
       throw new BadRequestException('No se pueden modificar patrones en una calibracion aprobada')
     }
 
-    // Verificar que el patron exista y pertenezca a la misma org. El patrón es
-    // una Entry de un Record `type=INSTRUMENTAL` (post-Records-as-Lists, ya no
-    // hay tabla Instrument).
+    // Verificar que el patron exista y pertenezca a la misma org
     const patternEntry = await this.prisma.entry.findFirst({
       where: { id: patternEntryId, record: { organizationId } },
-      include: { record: { select: { type: true } } },
+      include: { instrument: true },
     })
     if (!patternEntry) throw new NotFoundException('Patron no encontrado')
-    if (patternEntry.record.type !== 'INSTRUMENTAL') {
+    if (!patternEntry.instrument) {
       throw new BadRequestException('La entrada seleccionada no es un instrumento')
     }
 
