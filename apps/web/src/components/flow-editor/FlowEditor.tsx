@@ -16,7 +16,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Save, Trash2, Zap, Filter, Wrench, Power, Loader2 } from 'lucide-react'
+import { Plus, Save, Trash2, Zap, Filter, Wrench, Loader2, Target } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import type {
@@ -216,7 +216,7 @@ function FlowEditorInner({ recordId, recordFields }: FlowEditorProps) {
             Seleccioná un flujo o creá uno nuevo.
           </div>
         ) : (
-          <FlowCanvas draft={draft} />
+          <FlowCanvas draft={draft} orgRecords={orgRecords} />
         )}
       </main>
 
@@ -284,35 +284,55 @@ function FlowEditorInner({ recordId, recordFields }: FlowEditorProps) {
 // Canvas (xyflow) con 3 custom nodes
 // =============================================================================
 
-function FlowCanvas({ draft }: { draft: FlowDraft }) {
+function FlowCanvas({ draft, orgRecords }: { draft: FlowDraft; orgRecords: RecordSummary[] }) {
+  // Layout vertical: trigger → [condition] → action → [target]
+  const X = 240
+  const STEP = 130
+
+  const showTarget = draft.actionType === 'CREATE_ENTRY' && Boolean(draft.targetRecordId)
+  const targetRecord = showTarget ? orgRecords.find((r) => r.id === draft.targetRecordId) : null
+
   const nodes = useMemo<Node[]>(() => {
+    let y = 40
     const list: Node[] = [
       {
         id: 'trigger',
         type: 'triggerNode',
-        position: { x: 40, y: 120 },
+        position: { x: X, y },
         data: { trigger: draft.trigger },
         draggable: false,
       },
     ]
+    y += STEP
     if (draft.condition) {
       list.push({
         id: 'condition',
         type: 'conditionNode',
-        position: { x: 320, y: 120 },
+        position: { x: X, y },
         data: { condition: draft.condition },
         draggable: false,
       })
+      y += STEP
     }
     list.push({
       id: 'action',
       type: 'actionNode',
-      position: { x: draft.condition ? 600 : 320, y: 120 },
-      data: { actionType: draft.actionType, targetRecordId: draft.targetRecordId },
+      position: { x: X, y },
+      data: { actionType: draft.actionType, targetRecordId: draft.targetRecordId, targetRecordName: targetRecord?.name },
       draggable: false,
     })
+    y += STEP
+    if (showTarget && targetRecord) {
+      list.push({
+        id: 'target',
+        type: 'targetNode',
+        position: { x: X, y },
+        data: { recordName: targetRecord.name, recordType: targetRecord.type },
+        draggable: false,
+      })
+    }
     return list
-  }, [draft.trigger, draft.condition, draft.actionType, draft.targetRecordId])
+  }, [draft.trigger, draft.condition, draft.actionType, draft.targetRecordId, showTarget, targetRecord])
 
   const edges = useMemo<Edge[]>(() => {
     const list: Edge[] = []
@@ -322,14 +342,14 @@ function FlowCanvas({ draft }: { draft: FlowDraft }) {
     } else {
       list.push({ id: 'e1', source: 'trigger', target: 'action', animated: true })
     }
+    if (showTarget) {
+      list.push({ id: 'e3', source: 'action', target: 'target', animated: true })
+    }
     return list
-  }, [draft.condition])
+  }, [draft.condition, showTarget])
 
-  const [n, , onNodesChange] = useNodesState(nodes)
-  const [e, , onEdgesChange] = useEdgesState(edges)
-
-  // Sync cuando draft cambia.
-  useEffect(() => { /* xyflow internal state se inicializa con nodes/edges; el useEffect no es necesario aquí */ }, [])
+  const [, , onNodesChange] = useNodesState(nodes)
+  const [, , onEdgesChange] = useEdgesState(edges)
 
   return (
     <ReactFlow
@@ -356,6 +376,7 @@ const NODE_TYPES = {
   triggerNode: TriggerNode,
   conditionNode: ConditionNode,
   actionNode: ActionNode,
+  targetNode: TargetNode,
 }
 
 function TriggerNode({ data }: NodeProps) {
@@ -366,14 +387,14 @@ function TriggerNode({ data }: NodeProps) {
       style={{
         background: 'var(--bg-1)',
         borderColor: 'var(--info)',
-        minWidth: 220,
+        minWidth: 240,
       }}
     >
       <div className="mb-1 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: 'var(--info)' }}>
         <Zap className="h-3 w-3" /> Cuando
       </div>
       <div style={{ color: 'var(--ink-0)', fontWeight: 500 }}>{triggerLabel(trigger)}</div>
-      <Handle type="source" position={Position.Right} />
+      <Handle type="source" position={Position.Bottom} />
     </div>
   )
 }
@@ -386,35 +407,71 @@ function ConditionNode({ data }: NodeProps) {
       style={{
         background: 'var(--bg-1)',
         borderColor: 'var(--warn)',
-        minWidth: 220,
+        minWidth: 240,
       }}
     >
       <div className="mb-1 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: 'var(--warn)' }}>
         <Filter className="h-3 w-3" /> Si
       </div>
       <div style={{ color: 'var(--ink-0)' }}>{conditionPreview(condition)}</div>
-      <Handle type="target" position={Position.Left} />
-      <Handle type="source" position={Position.Right} />
+      <Handle type="target" position={Position.Top} />
+      <Handle type="source" position={Position.Bottom} />
     </div>
   )
 }
 
 function ActionNode({ data }: NodeProps) {
-  const { actionType } = data as { actionType: ActionType; targetRecordId: string }
+  const { actionType, targetRecordName } = data as {
+    actionType: ActionType
+    targetRecordId: string
+    targetRecordName?: string
+  }
   return (
     <div
       className="rounded-[10px] border-2 px-4 py-3 text-[12.5px]"
       style={{
         background: 'var(--bg-1)',
         borderColor: 'var(--ok)',
-        minWidth: 220,
+        minWidth: 240,
       }}
     >
       <div className="mb-1 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: 'var(--ok)' }}>
         <Wrench className="h-3 w-3" /> Hacer
       </div>
       <div style={{ color: 'var(--ink-0)', fontWeight: 500 }}>{actionLabel(actionType)}</div>
-      <Handle type="target" position={Position.Left} />
+      {actionType === 'CREATE_ENTRY' && targetRecordName && (
+        <div className="mt-1 text-[11px]" style={{ color: 'var(--ink-2)' }}>
+          en {targetRecordName}
+        </div>
+      )}
+      <Handle type="target" position={Position.Top} />
+      {actionType === 'CREATE_ENTRY' && <Handle type="source" position={Position.Bottom} />}
+    </div>
+  )
+}
+
+function TargetNode({ data }: NodeProps) {
+  const { recordName, recordType } = data as { recordName: string; recordType: string }
+  return (
+    <div
+      className="rounded-[16px] border-2 px-4 py-2.5 text-[12.5px]"
+      style={{
+        background: 'var(--bg-2)',
+        borderColor: 'var(--primary-hex)',
+        minWidth: 240,
+        borderStyle: 'dashed',
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <Target className="h-3.5 w-3.5" style={{ color: 'var(--primary-hex)' }} />
+        <div className="flex-1">
+          <div className="font-mono text-[9px] uppercase tracking-[0.14em]" style={{ color: 'var(--ink-3)' }}>
+            Registro destino · {recordType}
+          </div>
+          <div style={{ color: 'var(--ink-0)', fontWeight: 500 }}>{recordName}</div>
+        </div>
+      </div>
+      <Handle type="target" position={Position.Top} />
     </div>
   )
 }
