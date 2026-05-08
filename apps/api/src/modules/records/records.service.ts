@@ -145,9 +145,49 @@ export class RecordsService {
           isIdentifier: true,
           isRequired: true,
         })
-        // Reordenar los demás
-        data.fields.forEach((f, i) => { f.order = i })
       }
+      // Auto-agregar campo ESTADO (DROPDOWN-as-status) si no lo incluyó.
+      // Patrón "Records-as-Lists": el estado es un OWN field configurable, no
+      // una columna fija. El usuario puede editar options/transitions después
+      // — el motor genérico se adapta. Las options canónicas reproducen la
+      // semántica del enum InstrumentStatus legacy y las reglas implícitas
+      // de instruments.service.changeStatus (DECOMMISSIONED es terminal,
+      // IN_CALIBRATION → ACTIVE recalcula nextCalibrationAt vía listener).
+      const hasStatus = data.fields.some(
+        (f) =>
+          f.fieldType === ('DROPDOWN' as FieldType) &&
+          (f.comparisonConfig as { isStatus?: boolean } | undefined)?.isStatus === true,
+      )
+      if (!hasStatus) {
+        const estadoConfig: Prisma.InputJsonValue = {
+          isStatus: true,
+          options: [
+            { value: 'ACTIVE', label: 'Activo', color: 'green', isInitial: true },
+            { value: 'IN_CALIBRATION', label: 'En calibración', color: 'blue' },
+            { value: 'IN_REPAIR', label: 'En reparación', color: 'amber' },
+            { value: 'DECOMMISSIONED', label: 'Dado de baja', color: 'red', isFinal: true },
+          ],
+          transitions: [
+            { from: 'ACTIVE', to: 'IN_CALIBRATION' },
+            { from: 'ACTIVE', to: 'IN_REPAIR' },
+            { from: 'ACTIVE', to: 'DECOMMISSIONED', requireReason: true },
+            { from: 'IN_CALIBRATION', to: 'ACTIVE' },
+            { from: 'IN_CALIBRATION', to: 'IN_REPAIR' },
+            { from: 'IN_REPAIR', to: 'ACTIVE' },
+            { from: 'IN_REPAIR', to: 'DECOMMISSIONED', requireReason: true },
+          ],
+        }
+        data.fields.push({
+          label: 'ESTADO',
+          fieldType: 'DROPDOWN' as FieldType,
+          order: data.fields.length,
+          isIdentifier: false,
+          isRequired: true,
+          comparisonConfig: estadoConfig,
+        })
+      }
+      // Reordenar todos los fields al final
+      data.fields.forEach((f, i) => { f.order = i })
     }
 
     const hasIdentifier = data.fields.some((f) => f.isIdentifier)
