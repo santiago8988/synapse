@@ -195,7 +195,7 @@ model Area {
   children     Area[]           @relation("AreaTree")
   leader       OrganizationUser? @relation("AreaLeader", fields: [leaderId], references: [id])
   users        OrganizationUser[]
-  records      Record[]
+  records      RecordArea[]     // junction multi-area (un Record puede pertenecer a N areas)
 
   @@index([organizationId])
   @@index([parentId])
@@ -295,7 +295,6 @@ model Document {
 model Record {
   id               String     @id @default(cuid())
   organizationId   String
-  areaId           String?
   documentId       String?
   name             String
   type             RecordType
@@ -311,8 +310,8 @@ model Record {
   createdById      String
 
   organization    Organization   @relation(fields: [organizationId], references: [id])
-  area            Area?          @relation(fields: [areaId], references: [id])
   document        Document?      @relation(fields: [documentId], references: [id])
+  areas           RecordArea[]   // junction multi-area
   fields          RecordField[]
   entries         Entry[]
   instruments     Instrument[]
@@ -324,6 +323,20 @@ model Record {
   entryStatusLogs EntryStatusLog[]
 
   @@index([organizationId])
+}
+
+// Junction Record ↔ Area. Un Record puede pertenecer a N areas y una Area
+// puede tener N Records. Reemplaza el FK simple Record.areaId del modelo
+// original (single-area).
+model RecordArea {
+  recordId String
+  areaId   String
+
+  record Record @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  area   Area   @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@id([recordId, areaId])
+  @@index([areaId])
 }
 
 model RecordField {

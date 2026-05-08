@@ -30,7 +30,7 @@ export default function NewRecordPage() {
 
   const [name, setName] = useState('')
   const [type, setType] = useState<RecordType>('PERIODIC')
-  const [areaId, setAreaId] = useState<string>('')
+  const [areaIds, setAreaIds] = useState<string[]>([])
   const [periodicity, setPeriodicity] = useState<number | ''>('')
   const [notifyDaysBefore, setNotifyDaysBefore] = useState<number | ''>('')
   const [fields, setFields] = useState<FieldDef[]>([])
@@ -145,7 +145,7 @@ export default function NewRecordPage() {
     createMutation.mutate({
       name,
       type,
-      areaId: areaId || undefined,
+      areaIds: areaIds.length > 0 ? areaIds : undefined,
       periodicity:
         (type === 'PERIODIC' || type === 'INSTRUMENTAL') && periodicity !== ''
           ? periodicity
@@ -330,19 +330,30 @@ export default function NewRecordPage() {
                   </>
                 )}
                 <div className="syn-field">
-                  <span className="syn-field-label">Área</span>
+                  <span className="syn-field-label">
+                    Áreas <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>(múltiple — ctrl/cmd+click)</span>
+                  </span>
                   <select
                     className="syn-select"
-                    value={areaId}
-                    onChange={(e) => setAreaId(e.target.value)}
+                    multiple
+                    size={Math.min(6, Math.max(3, flatAreas.length))}
+                    value={areaIds}
+                    onChange={(e) => {
+                      const selected = Array.from(e.target.selectedOptions).map((o) => o.value)
+                      setAreaIds(selected)
+                    }}
                   >
-                    <option value="">Toda la organización</option>
                     {flatAreas.map((a) => (
                       <option key={a.id} value={a.id}>
                         {'—'.repeat(a.depth)} {a.name}
                       </option>
                     ))}
                   </select>
+                  <span className="syn-field-hint" style={{ color: 'var(--ink-3)', fontSize: 11 }}>
+                    {areaIds.length === 0
+                      ? 'Sin selección — el registro queda visible para toda la organización'
+                      : `${areaIds.length} ${areaIds.length === 1 ? 'área seleccionada' : 'áreas seleccionadas'}`}
+                  </span>
                 </div>
               </div>
             </div>

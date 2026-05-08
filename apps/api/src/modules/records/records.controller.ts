@@ -29,7 +29,7 @@ export class RecordsController {
     body: {
       name: string
       type: RecordType
-      areaId?: string
+      areaIds?: string[]
       documentId?: string
       periodicity?: number
       notifyDaysBefore?: number
@@ -62,7 +62,7 @@ export class RecordsController {
     @Body()
     body: {
       name?: string
-      areaId?: string | null
+      areaIds?: string[]
       periodicity?: number
       notifyDaysBefore?: number
       changeReason: string

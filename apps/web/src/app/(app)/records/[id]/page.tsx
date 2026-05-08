@@ -83,7 +83,7 @@ interface RecordDetail {
   notifyDaysBefore: number | null
   isActive: boolean
   createdAt: string
-  area: { id: string; name: string } | null
+  areas: Array<{ area: { id: string; name: string } }>
   document: { id: string; title: string; code: string | null } | null
   fields: FieldDef[]
   actionsAsSource: Array<{ id: string; targetRecord: { id: string; name: string } }>
@@ -1571,10 +1571,12 @@ export default function RecordDetailPage() {
                 <span className="mv">Cada {record.periodicity} días</span>
               </div>
             )}
-            {record.area && (
+            {record.areas && record.areas.length > 0 && (
               <div className="m">
-                <span className="mk">ÁREA</span>
-                <span className="mv">{record.area.name}</span>
+                <span className="mk">{record.areas.length === 1 ? 'ÁREA' : 'ÁREAS'}</span>
+                <span className="mv">
+                  {record.areas.map((ra: { area: { name: string } }) => ra.area.name).join(', ')}
+                </span>
               </div>
             )}
             <div className="m">

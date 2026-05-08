@@ -5,7 +5,8 @@ import { Prisma, RecordType, FieldType } from '@prisma/client'
 interface CreateRecordDto {
   name: string
   type: RecordType
-  areaId?: string
+  /** Multi-area (junction RecordArea). Acepta array vacío o ausente. */
+  areaIds?: string[]
   documentId?: string
   periodicity?: number
   notifyDaysBefore?: number
@@ -34,7 +35,9 @@ interface UpdateFieldDto {
 
 interface EditRecordDto {
   name?: string
-  areaId?: string | null
+  /** Multi-area: si se provee, reemplaza el set actual (no hace merge).
+   *  Para limpiar todas las areas pasar []. Para no tocarlas, omitir el campo. */
+  areaIds?: string[]
   periodicity?: number
   notifyDaysBefore?: number
   changeReason: string
@@ -95,7 +98,7 @@ export class RecordsService {
         ...(status ? { status: status as 'DRAFT' | 'IN_REVIEW' | 'ACTIVE' } : {}),
       },
       include: {
-        area: { select: { id: true, name: true } },
+        areas: { include: { area: { select: { id: true, name: true } } } },
         document: { select: { id: true, title: true, code: true } },
         fields: { where: { isActive: true }, orderBy: { order: 'asc' } },
         _count: { select: { entries: true } },
@@ -108,7 +111,7 @@ export class RecordsService {
     const record = await this.prisma.record.findFirst({
       where: { id, organizationId },
       include: {
-        area: true,
+        areas: { include: { area: true } },
         document: true,
         fields: { where: { isActive: true }, orderBy: { order: 'asc' } },
         actionsAsSource: {
@@ -213,8 +216,10 @@ export class RecordsService {
         name: data.name.toUpperCase(),
         type: data.type,
         version: 1,
-        areaId: data.areaId || null,
         documentId: data.documentId || null,
+        ...(data.areaIds && data.areaIds.length > 0
+          ? { areas: { create: data.areaIds.map((areaId) => ({ areaId })) } }
+          : {}),
         periodicity: data.periodicity || null,
         notifyDaysBefore: data.notifyDaysBefore || null,
         fields: {
@@ -297,13 +302,25 @@ export class RecordsService {
       where: { id },
       data: {
         name: data.name ?? record.name,
-        areaId: data.areaId !== undefined ? data.areaId : record.areaId,
         periodicity: data.periodicity ?? record.periodicity,
         notifyDaysBefore: data.notifyDaysBefore ?? record.notifyDaysBefore,
         version: newVersion,
         changeLog: data.changeReason,
       },
     })
+
+    // Multi-area: si se provee areaIds (incluso array vacío), reemplazamos el
+    // set completo con un delete+create dentro de una transacción implícita.
+    // Si areaIds es undefined, no tocamos las areas.
+    if (data.areaIds !== undefined) {
+      await this.prisma.recordArea.deleteMany({ where: { recordId: id } })
+      if (data.areaIds.length > 0) {
+        await this.prisma.recordArea.createMany({
+          data: data.areaIds.map((areaId) => ({ recordId: id, areaId })),
+          skipDuplicates: true,
+        })
+      }
+    }
 
     // Eliminar campos (soft delete)
     if (data.removeFieldIds && data.removeFieldIds.length > 0) {
