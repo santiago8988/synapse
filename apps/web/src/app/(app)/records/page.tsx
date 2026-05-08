@@ -27,7 +27,7 @@ interface RecordItem {
     | 'CALIBRATION'
   periodicity: number | null
   isActive: boolean
-  area: { id: string; name: string } | null
+  areas: Array<{ area: { id: string; name: string } }>
   document: { id: string; title: string; code: string | null } | null
   fields: Array<{ id: string; label: string; fieldType: string }>
   _count: { entries: number }
@@ -213,8 +213,10 @@ export default function RecordsPage() {
                         </span>
                       )}
                     </td>
-                    <td data-label="Área" style={{ color: 'var(--ink-1)' }}>
-                      {r.area?.name ?? (
+                    <td data-label="Áreas" style={{ color: 'var(--ink-1)' }}>
+                      {r.areas && r.areas.length > 0 ? (
+                        r.areas.map((ra) => ra.area.name).join(', ')
+                      ) : (
                         <span style={{ color: 'var(--ink-4)' }}>—</span>
                       )}
                     </td>

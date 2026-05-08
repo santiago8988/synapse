@@ -329,27 +329,69 @@ export default function NewRecordPage() {
                     </div>
                   </>
                 )}
-                <div className="syn-field">
-                  <span className="syn-field-label">
-                    Áreas <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>(múltiple — ctrl/cmd+click)</span>
-                  </span>
-                  <select
-                    className="syn-select"
-                    multiple
-                    size={Math.min(6, Math.max(3, flatAreas.length))}
-                    value={areaIds}
-                    onChange={(e) => {
-                      const selected = Array.from(e.target.selectedOptions).map((o) => o.value)
-                      setAreaIds(selected)
+                <div className="syn-field" style={{ gridColumn: 'span 2' }}>
+                  <span className="syn-field-label">Áreas</span>
+                  <div
+                    className="rounded-[10px] border"
+                    style={{
+                      background: 'var(--bg-1)',
+                      borderColor: 'var(--line-2)',
+                      maxHeight: 180,
+                      overflowY: 'auto',
                     }}
                   >
-                    {flatAreas.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {'—'.repeat(a.depth)} {a.name}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="syn-field-hint" style={{ color: 'var(--ink-3)', fontSize: 11 }}>
+                    {flatAreas.length === 0 ? (
+                      <div style={{ padding: 12, fontSize: 12.5, color: 'var(--ink-3)' }}>
+                        No hay áreas en la organización.
+                      </div>
+                    ) : (
+                      flatAreas.map((a) => {
+                        const checked = areaIds.includes(a.id)
+                        return (
+                          <button
+                            type="button"
+                            key={a.id}
+                            onClick={() =>
+                              setAreaIds((prev) =>
+                                checked ? prev.filter((x) => x !== a.id) : [...prev, a.id],
+                              )
+                            }
+                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition"
+                            style={{
+                              fontSize: 13,
+                              color: 'var(--ink-0)',
+                              borderBottom: '1px solid var(--line-3)',
+                              background: checked ? 'var(--info-soft)' : 'transparent',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!checked) e.currentTarget.style.background = 'var(--bg-2)'
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!checked) e.currentTarget.style.background = 'transparent'
+                            }}
+                          >
+                            <span
+                              aria-hidden
+                              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border"
+                              style={{
+                                borderColor: checked ? 'var(--info)' : 'var(--line-1)',
+                                background: checked ? 'var(--info)' : 'transparent',
+                                color: 'white',
+                                fontSize: 10,
+                                fontWeight: 700,
+                              }}
+                            >
+                              {checked ? '✓' : ''}
+                            </span>
+                            <span style={{ paddingLeft: a.depth * 14, color: 'var(--ink-0)' }}>
+                              {a.name}
+                            </span>
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                  <span className="syn-field-hint" style={{ color: 'var(--ink-3)', fontSize: 11, marginTop: 4 }}>
                     {areaIds.length === 0
                       ? 'Sin selección — el registro queda visible para toda la organización'
                       : `${areaIds.length} ${areaIds.length === 1 ? 'área seleccionada' : 'áreas seleccionadas'}`}
