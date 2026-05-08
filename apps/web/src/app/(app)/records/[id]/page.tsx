@@ -850,6 +850,41 @@ function SynEntriesTabbedCard({
   )
   const canCreate = !(record.type === 'PERIODIC' && record.actionsAsTarget.length > 0)
 
+  // Map de los colores de DropdownStateOption (workflow engine v2) a las
+  // CSS classes existentes de syn-chip.
+  const colorToChipClass: Record<string, string> = {
+    gray: 'syn-chip-draft',
+    slate: 'syn-chip-draft',
+    blue: 'syn-chip-active',
+    green: 'syn-chip-ok',
+    amber: 'syn-chip-warn',
+    red: 'syn-chip-fail',
+  }
+
+  /**
+   * Si el field es DROPDOWN con options ricas (workflow engine v2),
+   * renderiza un badge con color y label del option matching. Si no
+   * matchea o el field no usa options ricas, devuelve null y la celda
+   * cae al formatCell normal.
+   */
+  const renderRichDropdownBadge = (
+    f: { fieldType: string; comparisonConfig: Record<string, unknown> | null },
+    value: unknown,
+  ) => {
+    if (f.fieldType !== 'DROPDOWN') return null
+    const cfg = f.comparisonConfig as {
+      options?: unknown[]
+    } | null
+    const opts = cfg?.options
+    if (!Array.isArray(opts) || opts.length === 0) return null
+    if (typeof opts[0] !== 'object' || opts[0] === null) return null
+    const richOpts = opts as Array<{ value: string; label?: string; color?: string }>
+    const opt = richOpts.find((o) => o.value === String(value))
+    if (!opt) return null
+    const chipCls = colorToChipClass[opt.color || 'gray'] || 'syn-chip-draft'
+    return <span className={`syn-chip ${chipCls}`}>{opt.label || opt.value}</span>
+  }
+
   const formatCell = (v: unknown, type: string) => {
     if (v === null || v === undefined || v === '') return '—'
     if (type === 'DATE' && typeof v === 'string') return new Date(v).toLocaleDateString('es-AR')
@@ -1008,6 +1043,10 @@ function SynEntriesTabbedCard({
                             : isNum
                               ? { fontFamily: 'var(--font-mono)', fontSize: 12 }
                               : {}
+                        // Workflow engine v2: si el field es DROPDOWN con
+                        // options ricas (incluyendo isStatus), render como
+                        // badge con color del option en lugar de texto plano.
+                        const richBadge = renderRichDropdownBadge(f, data[f.id])
                         return (
                           <td
                             key={f.id}
@@ -1016,7 +1055,7 @@ function SynEntriesTabbedCard({
                             data-label={f.label}
                             data-role={i === 0 || f.isIdentifier ? 'identifier' : undefined}
                           >
-                            {formatCell(data[f.id], f.fieldType)}
+                            {richBadge ?? formatCell(data[f.id], f.fieldType)}
                           </td>
                         )
                       })}
