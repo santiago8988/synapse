@@ -112,8 +112,11 @@ export const api = {
     get: (recordId: string, entryId: string) => fetchApi(`/records/${recordId}/entries/${entryId}`),
     create: (recordId: string, body: { data: Record<string, unknown>; revisionDate?: string; lotNumber?: string; sampleCode?: string; client?: string }) =>
       fetchApi(`/records/${recordId}/entries`, { method: 'POST', body: JSON.stringify(body) }),
-    update: (recordId: string, entryId: string, data: Record<string, unknown>) =>
-      fetchApi(`/records/${recordId}/entries/${entryId}`, { method: 'PATCH', body: JSON.stringify({ data }) }),
+    update: (recordId: string, entryId: string, data: Record<string, unknown>, transitionReason?: string) =>
+      fetchApi(`/records/${recordId}/entries/${entryId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(transitionReason ? { data, transitionReason } : { data }),
+      }),
     complete: (recordId: string, entryId: string) =>
       fetchApi(`/records/${recordId}/entries/${entryId}/complete`, { method: 'POST' }),
   },
@@ -127,6 +130,7 @@ export const api = {
     },
     get: (id: string) => fetchApi(`/instruments/${id}`),
     patterns: () => fetchApi('/instruments/patterns'),
+    real: () => fetchApi('/instruments/real'),
     changeStatus: (id: string, data: { status: string; reason?: string }) =>
       fetchApi(`/instruments/${id}/status`, { method: 'POST', body: JSON.stringify(data) }),
   },
@@ -185,6 +189,14 @@ export const api = {
       fetchApi(`/batches/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     consumeStock: (id: string, consumptions: Array<{ ingredientName: string; product: string; lotNumber: string; quantity: number; unit: string }>) =>
       fetchApi(`/batches/${id}/consume-stock`, { method: 'POST', body: JSON.stringify({ consumptions }) }),
+    checkStock: (id: string) => fetchApi(`/batches/${id}/stock-check`),
+    start: (id: string) => fetchApi(`/batches/${id}/start`, { method: 'POST' }),
+    complete: (id: string, data: { producedQuantity: number; unit: string; consumptions: Array<{ product: string; lotNumber: string; quantity: number; unit: string }> }) =>
+      fetchApi(`/batches/${id}/complete`, { method: 'POST', body: JSON.stringify(data) }),
+    assignInstrument: (id: string, data: { label: string; instrumentId: string; order: number }) =>
+      fetchApi(`/batches/${id}/instrument-assignments`, { method: 'POST', body: JSON.stringify(data) }),
+    unassignInstrument: (id: string, assignmentId: string) =>
+      fetchApi(`/batches/${id}/instrument-assignments/${assignmentId}`, { method: 'DELETE' }),
   },
   methods: {
     search: (query?: string) => {
@@ -223,6 +235,10 @@ export const api = {
       fetchApi(`/samples/${id}/results`, { method: 'POST', body: JSON.stringify({ results }) }),
     saveConditions: (id: string, conditions: Record<string, unknown>) =>
       fetchApi(`/samples/${id}/conditions`, { method: 'POST', body: JSON.stringify({ conditions }) }),
+    assignInstrument: (id: string, data: { label: string; instrumentId: string; order: number }) =>
+      fetchApi(`/samples/${id}/instrument-assignments`, { method: 'POST', body: JSON.stringify(data) }),
+    unassignInstrument: (id: string, assignmentId: string) =>
+      fetchApi(`/samples/${id}/instrument-assignments/${assignmentId}`, { method: 'DELETE' }),
   },
   calibrationTemplates: {
     list: () => fetchApi('/calibration-templates'),
