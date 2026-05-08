@@ -1172,6 +1172,7 @@ function SynEntriesTabbedCard({
         <div style={{ padding: 16 }}>
           <FlowEditor
             recordId={record.id}
+            recordName={record.name}
             recordFields={record.fields.map((f) => ({
               id: f.id,
               label: f.label,
