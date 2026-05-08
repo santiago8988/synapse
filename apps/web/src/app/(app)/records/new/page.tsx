@@ -278,7 +278,7 @@ export default function NewRecordPage() {
                     · Obligatorios
                   </span>
                   {type === 'INSTRUMENTAL' && 'CODIGO (identificador)'}
-                  {type === 'BATCH' && 'LOTE (identificador), RECETA (opcional)'}
+                  {type === 'BATCH' && 'LOTE (identificador), FÓRMULA (opcional)'}
                   {type === 'SAMPLE' &&
                     'CODIGO MUESTRA (identificador), MATRIZ Y METODOS (tipo Matriz · Métodos)'}
                   {type === 'STOCK' &&

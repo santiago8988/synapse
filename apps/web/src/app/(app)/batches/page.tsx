@@ -139,7 +139,7 @@ export default function BatchesPage() {
               <tr>
                 <th>Lote</th>
                 <th>Registro</th>
-                <th>Receta</th>
+                <th>Fórmula</th>
                 <th>Inicio</th>
                 <th>Estado</th>
                 <th style={{ textAlign: 'right' }}>Acción</th>
@@ -162,7 +162,7 @@ export default function BatchesPage() {
                     <td data-label="Registro" style={{ color: 'var(--ink-1)' }}>
                       {b.record.name}
                     </td>
-                    <td data-label="Receta" style={{ color: 'var(--ink-1)' }}>
+                    <td data-label="Fórmula" style={{ color: 'var(--ink-1)' }}>
                       {b.recipe?.name ?? <span style={{ color: 'var(--ink-4)' }}>—</span>}
                     </td>
                     <td

@@ -43,7 +43,7 @@ QualitTab es un sistema de gestion de calidad para laboratorios, plantas industr
 | Rol | Permisos |
 |-----|----------|
 | **ADMIN** | Control total. Gestiona usuarios, areas, puestos, configuracion. Sin restriccion de area. |
-| **QUALITY_MANAGER** | Crea registros, documentos, recetas, matrices. Gestiona no conformidades. Acceso a su area y sub-areas. |
+| **QUALITY_MANAGER** | Crea registros, documentos, fórmulas, matrices. Gestiona no conformidades. Acceso a su area y sub-areas. |
 | **TECHNICIAN** | Carga datos en entradas, opera lotes, registra muestras y movimientos de stock. Acceso a su area. |
 | **AUDITOR** | Solo lectura. Accede a toda la organizacion para auditorias. |
 
@@ -153,7 +153,7 @@ Los registros con seguimiento requieren campos con labels especificos. Sin ellos
 | **RELATED_ENTRY** | Referencia a entrada de otro registro |
 | **MULTIPLE_RELATED_ENTRY** | Multiples referencias |
 | **MATRIX_METHOD** | Selector de matriz y metodos analiticos (solo SAMPLE) |
-| **RECIPE_SELECT** | Selector de receta/producto activo (solo BATCH) |
+| **RECIPE_SELECT** | Selector de fórmula/producto activo (solo BATCH) |
 
 ## Versionado
 
@@ -203,7 +203,7 @@ Error (%) = ((VALOR MEDIDO - VALOR REFERENCIA) / VALOR REFERENCIA) * 100
 
 **MATRIX_METHOD**: selector de matriz de ensayo y metodos analiticos por muestra. Exclusivo para registros tipo SAMPLE.
 
-**RECIPE_SELECT**: selector de receta activa para el lote. Exclusivo para registros tipo BATCH.
+**RECIPE_SELECT**: selector de fórmula activa para el lote. Exclusivo para registros tipo BATCH.
 
 **RELATED_ENTRY**: vincula con otra entrada. Si referencia un instrumento, valida que este ACTIVO.
 
@@ -217,18 +217,18 @@ Al crear/completar una entrada:
     `,
   },
   {
-    id: 'recetas',
-    label: 'Recetas',
+    id: 'fórmulas',
+    label: 'Fórmulas',
     icon: FlaskConical,
     content: `
 ## Formulas de produccion
 
-Una receta define los **ingredientes** (BOM) y los **pasos del proceso** para fabricar un producto. Se vincula con el inventario de stock y tiene versionado con trazabilidad.
+Una fórmula define los **ingredientes** (BOM) y los **pasos del proceso** para fabricar un producto. Se vincula con el inventario de stock y tiene versionado con trazabilidad.
 
 ## Estructura
 
 \`\`\`
-Receta: "FERTILIZANTE NPK 15-15-15" (FER-001) v1
+Fórmula: "FERTILIZANTE NPK 15-15-15" (FER-001) v1
 +-- Ingredientes (BOM)
 |   +-- NITRATO DE AMONIO -- 150 kg [desde stock]
 |   +-- SUPERFOSFATO TRIPLE -- 150 kg [desde stock]
@@ -248,8 +248,8 @@ Cuando un ingrediente tiene \`fromStock = true\`, se vincula con un producto del
 
 ## Versionado
 
-- **Receta en DRAFT**: se edita in-place, sin crear nueva version
-- **Receta ACTIVE**: al editarla se crea una nueva version (v2, v3...) en DRAFT. La anterior se desactiva. Los lotes existentes conservan la referencia a la version original
+- **Fórmula en DRAFT**: se edita in-place, sin crear nueva version
+- **Fórmula ACTIVE**: al editarla se crea una nueva version (v2, v3...) en DRAFT. La anterior se desactiva. Los lotes existentes conservan la referencia a la version original
 
 \`\`\`
 FER-001 v1 (ACTIVE) → Se edita → FER-001 v1 (isActive=false)
@@ -258,7 +258,7 @@ FER-001 v1 (ACTIVE) → Se edita → FER-001 v1 (isActive=false)
 
 ## Uso en produccion
 
-La receta se selecciona **por cada entrada** de un registro tipo BATCH mediante un campo **RECIPE_SELECT**. Un mismo registro puede trabajar con diferentes recetas. Solo se muestran recetas en estado ACTIVE.
+La fórmula se selecciona **por cada entrada** de un registro tipo BATCH mediante un campo **RECIPE_SELECT**. Un mismo registro puede trabajar con diferentes fórmulas. Solo se muestran fórmulas en estado ACTIVE.
 
 ## Codigo obligatorio
 
@@ -290,7 +290,7 @@ PLANNED → IN_PROGRESS → COMPLETED → APPROVED / REJECTED
 
 ## Consumo de stock al iniciar
 
-Cuando la receta tiene ingredientes \`fromStock\`, al pasar de PLANNED a IN_PROGRESS:
+Cuando la fórmula tiene ingredientes \`fromStock\`, al pasar de PLANNED a IN_PROGRESS:
 
 1. El sistema muestra los ingredientes vinculados a stock
 2. El operador selecciona los lotes de stock disponibles
@@ -305,13 +305,13 @@ Stock (materias primas consumidas)
   +-- Lote STCK-2026-001: NITRATO DE AMONIO (150 kg)
        |
 Lote LOT-2026-015 (FERTILIZANTE NPK 15-15-15)
-  +-- Receta: FER-001 v2
+  +-- Fórmula: FER-001 v2
   +-- Muestra M-2026-042 (Control de calidad)
        +-- N 15.1%, P 14.8%, K 15.2% → PASA
        → Lote APPROVED
 \`\`\`
 
-La trazabilidad se logra con campos RELATED_ENTRY, consumo de stock y la receta vinculada.
+La trazabilidad se logra con campos RELATED_ENTRY, consumo de stock y la fórmula vinculada.
     `,
   },
   {
@@ -439,7 +439,7 @@ BIFTALATO DE POTASIO (Stock total: 4.85 kg)
 
 ## Consumo desde lotes de produccion
 
-Cuando una receta tiene ingredientes \`fromStock\`, al iniciar produccion el operador selecciona los lotes y cantidades de stock a consumir. El sistema crea los egresos automaticamente. Esto permite trazabilidad completa desde producto terminado hasta materias primas.
+Cuando una fórmula tiene ingredientes \`fromStock\`, al iniciar produccion el operador selecciona los lotes y cantidades de stock a consumir. El sistema crea los egresos automaticamente. Esto permite trazabilidad completa desde producto terminado hasta materias primas.
     `,
   },
   {
@@ -471,7 +471,7 @@ Las condiciones definen campos dinamicos que se completan en la pagina de detall
 
 ## Versionado
 
-Funciona igual que las recetas:
+Funciona igual que las fórmulas:
 - **Matriz en DRAFT**: se edita in-place
 - **Matriz ACTIVE**: al editarla se crea nueva version en DRAFT. La anterior se desactiva. Las muestras existentes conservan la referencia a su version original
 
@@ -534,7 +534,7 @@ Para registros con seguimiento, el sistema valida que existan los campos con lab
 
 - Documentos
 - Registros
-- Recetas
+- Fórmulas
 - Matrices de ensayo
 
 Cada decision (APPROVED/REJECTED) queda registrada con quien decidio, comentarios, fecha/hora y etapa (REVIEW o APPROVAL), proporcionando evidencia para auditorias ISO.

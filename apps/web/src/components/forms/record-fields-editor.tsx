@@ -82,7 +82,7 @@ export const fieldTypeOptions: {
   { value: 'RELATED_ENTRY', label: 'Entrada relacionada', short: 'RELATED' },
   { value: 'MULTIPLE_RELATED_ENTRY', label: 'Múltiples relacionadas', short: 'MULTI-RELATED' },
   { value: 'MATRIX_METHOD', label: 'Matriz · Métodos', short: 'MATRIX · MÉTODOS' },
-  { value: 'RECIPE_SELECT', label: 'Receta', short: 'RECIPE' },
+  { value: 'RECIPE_SELECT', label: 'Fórmula', short: 'FÓRMULA' },
   { value: 'CALIBRATION_TEMPLATE', label: 'Plantilla calibración', short: 'PLANTILLA' },
 ]
 
@@ -476,7 +476,7 @@ function BuilderFieldCard({
               {field.fieldType === 'MATRIX_METHOD'
                 ? 'matriz y los métodos'
                 : field.fieldType === 'RECIPE_SELECT'
-                  ? 'receta'
+                  ? 'fórmula'
                   : 'plantilla de calibración'}{' '}
               al cargar la entrada.
             </p>

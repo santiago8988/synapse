@@ -628,14 +628,14 @@ export function RecipeSelectField({
   const active = recipes.filter((r) => r.status === 'ACTIVE')
   return (
     <div className="syn-field">
-      <FieldLabel field={field} hint="RECETA" />
+      <FieldLabel field={field} hint="FÓRMULA" />
       <select
         className="syn-select"
         value={(value as string) || ''}
         disabled={readOnly}
         onChange={(e) => onChange(e.target.value || null)}
       >
-        <option value="">Seleccionar receta…</option>
+        <option value="">Seleccionar fórmula…</option>
         {active.map((r) => (
           <option key={r.id} value={r.id}>
             {r.name} {r.code ? `(${r.code})` : ''}

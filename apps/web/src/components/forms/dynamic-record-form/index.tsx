@@ -293,8 +293,8 @@ function FieldSwitch({
         return (
           <PlaceholderSelectField
             field={field}
-            hint="RECETA"
-            placeholder="(seleccionar receta al ingresar)"
+            hint="FÓRMULA"
+            placeholder="(seleccionar fórmula al ingresar)"
           />
         )
       }

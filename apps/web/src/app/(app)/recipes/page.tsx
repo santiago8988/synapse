@@ -80,7 +80,7 @@ export default function RecipesPage() {
     mutationFn: (id: string) => api.recipes.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] })
-      toast.success('Receta eliminada')
+      toast.success('Fórmula eliminada')
     },
     onError: (err: Error) => toast.error(err.message),
   })
@@ -89,7 +89,7 @@ export default function RecipesPage() {
     mutationFn: (id: string) => api.approval.submit({ entityType: 'RECIPE', entityId: id }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recipes'] })
-      toast.success('Receta enviada a revisión')
+      toast.success('Fórmula enviada a revisión')
     },
     onError: (err: Error) => toast.error(err.message),
   })
@@ -104,9 +104,9 @@ export default function RecipesPage() {
     <div className="mx-auto max-w-[1280px]">
       <div className="syn-ph">
         <div>
-          <div className="kicker mb-2">· Definición · Recetas</div>
+          <div className="kicker mb-2">· Definición · Fórmulas</div>
           <h1>
-            Recetas de <span className="italic">producción.</span>
+            Fórmulas de <span className="italic">producción.</span>
           </h1>
           <p className="sub">
             Fórmulas (BOM) y procesos paso a paso. Las usás al crear lotes para consumo automático de stock y trazabilidad de cada producción.
@@ -118,7 +118,7 @@ export default function RecipesPage() {
             onClick={() => setShowForm(true)}
             className="syn-btn syn-btn-primary"
           >
-            <Plus className="h-3 w-3" /> Nueva receta
+            <Plus className="h-3 w-3" /> Nueva fórmula
           </button>
         </div>
       </div>
@@ -133,7 +133,7 @@ export default function RecipesPage() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar recetas…"
+            placeholder="Buscar fórmulas…"
             className="h-[38px] w-full rounded-[10px] border pl-10 pr-3 text-[13px] outline-none"
             style={{
               background: 'var(--bg-1)',
@@ -146,7 +146,7 @@ export default function RecipesPage() {
           className="ml-auto font-mono text-[11px] uppercase tracking-[0.14em]"
           style={{ color: 'var(--ink-3)' }}
         >
-          {filtered.length} {filtered.length === 1 ? 'receta' : 'recetas'}
+          {filtered.length} {filtered.length === 1 ? 'fórmula' : 'fórmulas'}
         </div>
       </div>
 
@@ -195,14 +195,14 @@ export default function RecipesPage() {
                 </>
               ) : (
                 <>
-                  Aún no hay <span className="italic">recetas.</span>
+                  Aún no hay <span className="italic">fórmulas.</span>
                 </>
               )}
             </div>
             <p className="max-w-sm text-[13px]" style={{ color: 'var(--ink-2)' }}>
               {search
                 ? 'Probá cambiar la búsqueda.'
-                : 'Creá tu primera receta para estandarizar la producción.'}
+                : 'Creá tu primera fórmula para estandarizar la producción.'}
             </p>
           </div>
         </div>
@@ -268,7 +268,7 @@ export default function RecipesPage() {
             setViewingRecipe(null)
           }}
           onDelete={() => {
-            if (confirm(`¿Eliminar la receta "${viewingRecipe.name}"?`)) {
+            if (confirm(`¿Eliminar la fórmula "${viewingRecipe.name}"?`)) {
               deleteMutation.mutate(viewingRecipe.id)
               setViewingRecipe(null)
             }
@@ -315,7 +315,7 @@ function RecipeDetailDialog({
         >
           <div style={{ minWidth: 0 }}>
             <div className="kicker mb-1 flex items-center gap-2">
-              <FlaskConical className="h-3 w-3" /> Receta
+              <FlaskConical className="h-3 w-3" /> Fórmula
               <span
                 className="rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em]"
                 style={{ background: 'var(--bg-3)', color: 'var(--ink-3)' }}
@@ -628,7 +628,7 @@ function RecipeForm({
           requiredInstruments: requiredInstrumentsPayload,
         })
         toast.success(
-          isDraft ? 'Receta actualizada' : 'Receta actualizada (nueva versión)',
+          isDraft ? 'Fórmula actualizada' : 'Fórmula actualizada (nueva versión)',
         )
       } else {
         await api.recipes.create({
@@ -638,7 +638,7 @@ function RecipeForm({
           steps: steps.filter((s) => s.name.trim()),
           requiredInstruments: requiredInstrumentsPayload,
         })
-        toast.success('Receta creada')
+        toast.success('Fórmula creada')
       }
       onSuccess()
     } catch (e) {
@@ -653,7 +653,7 @@ function RecipeForm({
       <div className="syn-card-head">
         <div>
           <div className="eyebrow">
-            · {isEditing ? 'Editar receta' : 'Nueva receta'}
+            · {isEditing ? 'Editar fórmula' : 'Nueva fórmula'}
           </div>
           <h3 style={{ marginTop: 6 }}>
             {isEditing ? (
@@ -1032,7 +1032,7 @@ function RecipeForm({
               ? isDraft
                 ? 'Guardar cambios'
                 : 'Guardar nueva versión'
-              : 'Crear receta'}
+              : 'Crear fórmula'}
           </button>
           <button type="button" onClick={onClose} className="syn-btn syn-btn-ghost">
             Cancelar

@@ -49,7 +49,7 @@ function buildNavigation(counts: { ncOpen: number; approvalsPending: number }): 
         { href: '/dashboard', name: 'Dashboard', icon: LayoutDashboard },
         { href: '/records', name: 'Registros', icon: ClipboardList },
         { href: '/documents', name: 'Documentos', icon: FileText },
-        { href: '/recipes', name: 'Recetas', icon: FlaskConical },
+        { href: '/recipes', name: 'Fórmulas', icon: FlaskConical },
         { href: '/matrices', name: 'Matrices', icon: Microscope },
         { href: '/methods', name: 'Métodos', icon: FlaskRound },
         { href: '/calibration-templates', name: 'Plantillas calib.', icon: Ruler },

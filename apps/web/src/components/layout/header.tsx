@@ -17,7 +17,7 @@ const breadcrumbMap: Record<string, string> = {
   batches: 'Lotes',
   samples: 'Muestras',
   stock: 'Stock',
-  recipes: 'Recetas',
+  recipes: 'Fórmulas',
   matrices: 'Matrices',
   methods: 'Métodos',
   'non-conformities': 'No conformidades',

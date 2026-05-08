@@ -336,7 +336,7 @@ export default function BatchDetailPage() {
             </div>
             {batch.recipe && (
               <div className="m">
-                <span className="mk">RECETA</span>
+                <span className="mk">FÓRMULA</span>
                 <span className="mv">{batch.recipe.name}</span>
               </div>
             )}
@@ -556,7 +556,7 @@ export default function BatchDetailPage() {
           </div>
         </div>
 
-        {/* Right — datos producción + receta */}
+        {/* Right — datos producción + fórmula */}
         <div className="space-y-5 min-w-0">
           {/* Datos de producción */}
           <div className="syn-card">
@@ -778,13 +778,13 @@ export default function BatchDetailPage() {
             )
           })()}
 
-          {/* Receta */}
+          {/* Fórmula */}
           {batch.recipe && (
             <div className="syn-card">
               <div className="syn-card-head">
                 <div>
                   <div className="eyebrow flex items-center gap-1.5">
-                    <FlaskConical className="h-3 w-3" /> Receta{' '}
+                    <FlaskConical className="h-3 w-3" /> Fórmula{' '}
                     {batch.recipe.code && (
                       <span className="font-mono" style={{ color: 'var(--ink-4)' }}>
                         ({batch.recipe.code})
@@ -1072,7 +1072,7 @@ function StartCheckPanel({
       )}
       {!loading && check && check.ingredients.length === 0 && (
         <div className="text-[12.5px]" style={{ color: 'var(--ink-2)' }}>
-          Esta receta no tiene ingredientes de stock. Podés iniciar la producción sin restricciones.
+          Esta fórmula no tiene ingredientes de stock. Podés iniciar la producción sin restricciones.
         </div>
       )}
       {!loading && check && check.ingredients.length > 0 && (
@@ -1235,7 +1235,7 @@ function CompleteProductionForm({
                       className="font-mono text-[11px]"
                       style={{ color: 'var(--ink-3)' }}
                     >
-                      receta: {c.quantity} {c.unit}
+                      fórmula: {c.quantity} {c.unit}
                     </span>
                   </div>
                   <div className="grid grid-cols-[1fr_auto] gap-2">

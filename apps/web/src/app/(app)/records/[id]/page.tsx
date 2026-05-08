@@ -1583,7 +1583,7 @@ export default function RecordDetailPage() {
             </div>
             {(record as Record<string, unknown>).recipe && (
               <div className="m">
-                <span className="mk">RECETA</span>
+                <span className="mk">FÓRMULA</span>
                 <span className="mv">
                   {((record as Record<string, unknown>).recipe as { name: string }).name}
                 </span>
@@ -1710,7 +1710,7 @@ export default function RecordDetailPage() {
             · Obligatorios
           </span>
           {record.type === 'INSTRUMENTAL' && 'CÓDIGO (identificador)'}
-          {record.type === 'BATCH' && 'LOTE (identificador), RECETA (tipo Receta, opcional)'}
+          {record.type === 'BATCH' && 'LOTE (identificador), FÓRMULA (tipo Fórmula, opcional)'}
           {record.type === 'SAMPLE' &&
             'CÓDIGO MUESTRA (identificador), MATRIZ Y MÉTODOS (tipo Matriz y Métodos)'}
           {record.type === 'STOCK' &&

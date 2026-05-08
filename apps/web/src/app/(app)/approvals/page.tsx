@@ -58,7 +58,7 @@ const entityIcons: Record<string, typeof FileText> = {
 const entityLabels: Record<string, string> = {
   DOCUMENT: 'Documento',
   RECORD: 'Registro',
-  RECIPE: 'Receta',
+  RECIPE: 'Fórmula',
 }
 
 export default function ApprovalsPage() {
@@ -113,7 +113,7 @@ export default function ApprovalsPage() {
             Circuito de <span className="italic">revisión.</span>
           </h1>
           <p className="sub">
-            Documentos, registros y recetas que esperan tu revisión o aprobación. La aprobación sigue el flujo ISO de dos etapas: revisor → aprobador.
+            Documentos, registros y fórmulas que esperan tu revisión o aprobación. La aprobación sigue el flujo ISO de dos etapas: revisor → aprobador.
           </p>
         </div>
       </div>
