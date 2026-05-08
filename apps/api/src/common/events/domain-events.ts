@@ -85,6 +85,11 @@ export class DocumentVersionCreatedEvent {
  * `triggeredByCascade` previene loops cuando este cambio fue causado por una
  * acción cascadeada de otra Entry; los listeners pueden filtrar para no
  * recursar salvo que la action declare `allowCascade: true`.
+ *
+ * `reason` es la justificación opcional del usuario (transitionReason del
+ * body del PATCH) — obligatoria cuando la transition declara `requireReason`.
+ * El EntryStatusLogListener la persiste para preservar el paper trail ISO
+ * (equivalente al `reason` del antiguo InstrumentStatusLog/BatchStatusLog).
  */
 export class EntryFieldValueChangedEvent {
   static readonly EVENT_NAME = 'entry.fieldValueChanged'
@@ -98,5 +103,6 @@ export class EntryFieldValueChangedEvent {
     public readonly toValue: unknown,
     public readonly changedById: string,
     public readonly triggeredByCascade: boolean,
+    public readonly reason: string | null = null,
   ) {}
 }

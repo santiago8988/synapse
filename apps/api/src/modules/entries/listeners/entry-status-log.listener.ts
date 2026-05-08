@@ -42,6 +42,7 @@ export class EntryStatusLogListener {
           toValue: String(event.toValue),
           changedById: event.changedById,
           triggeredByCascade: event.triggeredByCascade,
+          reason: event.reason ?? null,
         },
       })
     } catch (err) {

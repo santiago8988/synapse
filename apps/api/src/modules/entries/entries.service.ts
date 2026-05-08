@@ -423,6 +423,7 @@ export class EntriesService {
           newValue,
           changedById,
           false, // triggeredByCascade — futuro: heredar de contexto de cascada
+          transitionReason ?? null,
         ),
       )
     }

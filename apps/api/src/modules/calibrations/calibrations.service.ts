@@ -2,6 +2,10 @@ import { Injectable, NotFoundException, BadRequestException, ConflictException }
 import { PrismaService } from '../../prisma/prisma.service'
 import { CalibrationStatus, Prisma } from '@prisma/client'
 
+// Patrones de calibración: el "pattern" es una Entry de un Record INSTRUMENTAL
+// (post Records-as-Lists, ya no hay tabla Instrument). Devolvemos la entry +
+// los fields del record para que el frontend resuelva status/nextCalibrationAt
+// leyendo de Entry.data[<statusFieldId>].
 const PATTERNS_INCLUDE = {
   patterns: {
     orderBy: { createdAt: 'asc' as const },
@@ -10,9 +14,16 @@ const PATTERNS_INCLUDE = {
         select: {
           id: true,
           data: true,
-          record: { select: { id: true, name: true } },
-          instrument: {
-            select: { id: true, status: true, nextCalibrationAt: true },
+          record: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              fields: {
+                where: { isActive: true, fieldType: 'DROPDOWN' as const },
+                select: { id: true, comparisonConfig: true },
+              },
+            },
           },
         },
       },
