@@ -1,4 +1,4 @@
-import { ComparisonOperator, UserRole } from './enums'
+import { ComparisonOperator, RecordActionType, UserRole } from './enums'
 
 export interface ComparisonConfig {
   operator: ComparisonOperator
@@ -38,12 +38,83 @@ export type FieldValue =
 // Workflow engine — condiciones de RecordAction
 // ─────────────────────────────────────────────
 
-export interface ActionCondition {
+/**
+ * Condición primitiva — compara un campo del payload del evento contra un valor.
+ */
+export interface ActionConditionPrimitive {
   type: 'EQUALS' | 'NOT_EQUALS' | 'IN' | 'NOT_IN'
   /** path del campo en el payload del evento, ej. "fieldId" o "toValue" */
   field: string
   value: string | number | boolean | string[] | number[]
 }
+
+/**
+ * Condición compuesta — combina múltiples condiciones (recursivo, sin límite
+ * de profundidad). La evaluación es eager — se cortocircuita en el primer fail
+ * para AND y en el primer match para OR.
+ */
+export interface ActionConditionComposite {
+  type: 'AND' | 'OR'
+  conditions: ActionCondition[]
+}
+
+/**
+ * Condición de una RecordAction — primitiva u operador booleano recursivo.
+ * Si el campo `condition` de la RecordAction es null/undefined, la action
+ * dispara siempre que su trigger+actionType matcheen.
+ */
+export type ActionCondition = ActionConditionPrimitive | ActionConditionComposite
+
+/** @deprecated usar ActionConditionPrimitive cuando se necesite la forma plana */
+export type ActionConditionLeaf = ActionConditionPrimitive
+
+// ─────────────────────────────────────────────
+// Workflow engine — config de RecordAction según actionType
+// ─────────────────────────────────────────────
+//
+// Cada actionType (ver `RecordActionType`) tiene una shape específica para
+// `RecordAction.actionConfig`. CREATE_ENTRY ignora actionConfig: usa las
+// columnas dedicadas `targetRecordId` + `fieldMapping` (back-compat).
+
+/** Patcha un field de una entry. La entry destino puede ser la misma del payload
+ *  ('self') o una relacionada (a definir cuando haya casos de uso). */
+export interface UpdateFieldActionConfig {
+  entryIdSource: 'self' | 'related'
+  fieldId: string
+  /** valor literal — para casos avanzados con expresiones se evolucionará */
+  value: string | number | boolean | null
+}
+
+/** Notifica a un destinatario derivable. Implementación real con BullMQ + email
+ *  queda diferida; en esta iteración el handler loguea. */
+export interface NotifyActionConfig {
+  /** 'area_owner' = leader del area del Record fuente; 'role:<R>' = todos los
+   *  usuarios con ese rol en la org; 'user:<id>' = un OrganizationUser puntual */
+  recipients: string
+  message: string
+}
+
+/** Envía un email. Implementación diferida. */
+export interface EmailActionConfig {
+  to: string[]
+  subject: string
+  body: string
+}
+
+/** POST/PATCH a un webhook externo. Implementación diferida. */
+export interface WebhookActionConfig {
+  url: string
+  method: 'POST' | 'PATCH'
+  headers?: Record<string, string>
+}
+
+/** Type discriminado de actionConfig según actionType. */
+export type RecordActionConfig =
+  | { type: RecordActionType.CREATE_ENTRY }
+  | ({ type: RecordActionType.UPDATE_FIELD } & UpdateFieldActionConfig)
+  | ({ type: RecordActionType.NOTIFY } & NotifyActionConfig)
+  | ({ type: RecordActionType.EMAIL } & EmailActionConfig)
+  | ({ type: RecordActionType.WEBHOOK } & WebhookActionConfig)
 
 // ─────────────────────────────────────────────
 // Workflow engine — DROPDOWN-as-status

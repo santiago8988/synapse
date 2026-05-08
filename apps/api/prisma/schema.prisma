@@ -138,6 +138,17 @@ enum TriggerType {
   INSTRUMENT_STATUS_CHANGED
 }
 
+// Tipo de acción ejecutada cuando una RecordAction matchea su trigger+condition.
+// CREATE_ENTRY es el comportamiento histórico (crear entry en target record);
+// los demás se introducen con la generalización Power Automate-like del motor.
+enum RecordActionType {
+  CREATE_ENTRY
+  UPDATE_FIELD
+  NOTIFY
+  EMAIL
+  WEBHOOK
+}
+
 // ─────────────────────────────────────────────
 // ORGANIZACIÓN Y USUARIOS
 // ─────────────────────────────────────────────
@@ -169,6 +180,7 @@ model Organization {
   stockMovements           StockMovement[]
   calibrationTemplates     CalibrationTemplate[]
   calibrations             Calibration[]
+  entryStatusLogs          EntryStatusLog[]
 }
 
 model Area {
@@ -310,6 +322,7 @@ model Record {
   stockMovements  StockMovement[]
   actionsAsSource RecordAction[] @relation("SourceRecord")
   actionsAsTarget RecordAction[] @relation("TargetRecord")
+  entryStatusLogs EntryStatusLog[]
 
   @@index([organizationId])
 }
@@ -336,20 +349,31 @@ model RecordField {
 }
 
 model RecordAction {
-  id             String      @id @default(cuid())
+  id             String           @id @default(cuid())
   sourceRecordId String
   targetRecordId String
   fieldMapping   Json
   // Evento que dispara esta acción. Default ENTRY_COMPLETED para retrocompatibilidad
   // con las acciones existentes pre-workflow-engine.
-  trigger        TriggerType @default(ENTRY_COMPLETED)
-  // Filtro opcional sobre el payload del evento. Forma: ActionCondition.
-  // Ver packages/types/src/field-types.ts.
+  trigger        TriggerType      @default(ENTRY_COMPLETED)
+  // Filtro opcional sobre el payload del evento. Forma: ActionCondition (recursiva
+  // con AND/OR). Ver packages/types/src/field-types.ts.
   condition      Json?
   // Si false, la acción no se dispara cuando el evento que la activa fue
   // generado por otra acción en cascada. Previene loops infinitos.
-  allowCascade   Boolean     @default(false)
-  createdAt      DateTime    @default(now())
+  allowCascade   Boolean          @default(false)
+  // Tipo de acción a ejecutar. Default CREATE_ENTRY = comportamiento histórico
+  // (crea entry en targetRecord con fieldMapping). Los demás dispatchean por
+  // RecordActionListener.execute<Type> con shape de actionConfig específica.
+  actionType     RecordActionType @default(CREATE_ENTRY)
+  // Config opcional adicional para la acción. Forma según actionType:
+  //   CREATE_ENTRY  → ignorada (target/fieldMapping en columnas dedicadas)
+  //   UPDATE_FIELD  → { entryIdSource: 'self'|'related', fieldId, value }
+  //   NOTIFY        → { recipients: 'area_owner'|'role:<R>'|'user:<id>', message }
+  //   EMAIL         → { to: string[], subject, body }
+  //   WEBHOOK       → { url, method: 'POST'|'PATCH', headers? }
+  actionConfig   Json?
+  createdAt      DateTime         @default(now())
 
   sourceRecord Record @relation("SourceRecord", fields: [sourceRecordId], references: [id])
   targetRecord Record @relation("TargetRecord", fields: [targetRecordId], references: [id])
@@ -383,6 +407,7 @@ model Entry {
   stockMovement   StockMovement?  // 1:1 si es entry de record STOCK
   calibrations         Calibration[] @relation("CalibrationEntry") // calibraciones del instrumento
   usedAsPatternIn      CalibrationPattern[] // join: en que calibraciones este instrumento se uso como patron
+  statusLogs           EntryStatusLog[]
 
   @@index([recordId])
   @@index([createdById])
@@ -884,4 +909,33 @@ model AuditLog {
   @@index([organizationId])
   @@index([entityType, entityId])
   @@index([userId])
+}
+
+// Append-only. Loguea cualquier transición de un field DROPDOWN con isStatus:true
+// (workflow engine v2). Reemplaza los *StatusLog específicos por dominio
+// (InstrumentStatusLog, BatchStatusLog, futura SampleCustodyEvent) para cumplir
+// los requisitos ISO 9001 §8.5 / 17025 §7.5 de paper trail.
+//
+// REGLA ISO: NUNCA UPDATE ni DELETE sobre esta tabla — solo INSERT.
+model EntryStatusLog {
+  id                 String   @id @default(cuid())
+  entryId            String
+  recordId           String
+  organizationId     String
+  fieldId            String
+  fromValue          String?
+  toValue            String
+  changedById        String
+  triggeredByCascade Boolean  @default(false)
+  reason             String?
+  createdAt          DateTime @default(now())
+
+  entry        Entry        @relation(fields: [entryId], references: [id])
+  record       Record       @relation(fields: [recordId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([entryId])
+  @@index([recordId])
+  @@index([organizationId])
+  @@index([createdAt])
 }

@@ -109,3 +109,15 @@ export enum TriggerType {
   COMPARISON_FAILED = 'COMPARISON_FAILED',
   INSTRUMENT_STATUS_CHANGED = 'INSTRUMENT_STATUS_CHANGED',
 }
+
+// Tipo de acción ejecutada por una RecordAction cuando matchea trigger+condition.
+// CREATE_ENTRY es el comportamiento histórico (crear entry en target record).
+// Los demás se dispatchean por RecordActionListener.execute<Type>(action, event)
+// y leen su config de RecordAction.actionConfig (ver field-types.ts para shapes).
+export enum RecordActionType {
+  CREATE_ENTRY = 'CREATE_ENTRY',
+  UPDATE_FIELD = 'UPDATE_FIELD',
+  NOTIFY = 'NOTIFY',
+  EMAIL = 'EMAIL',
+  WEBHOOK = 'WEBHOOK',
+}

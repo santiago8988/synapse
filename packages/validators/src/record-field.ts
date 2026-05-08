@@ -127,3 +127,118 @@ export function parseDropdownStatusConfig(raw: unknown): DropdownStatusConfigInp
   const result = dropdownStatusConfigSchema.safeParse(raw)
   return result.success ? result.data : null
 }
+
+// ─────────────────────────────────────────────
+// Workflow engine — RecordAction.condition (recursivo) y actionConfig
+// ─────────────────────────────────────────────
+
+const conditionPrimitiveValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(z.string()),
+  z.array(z.number()),
+])
+
+const actionConditionPrimitiveSchema = z.object({
+  type: z.enum(['EQUALS', 'NOT_EQUALS', 'IN', 'NOT_IN']),
+  field: z.string().min(1, 'El path del campo es obligatorio'),
+  value: conditionPrimitiveValueSchema,
+})
+
+/**
+ * Schema recursivo para `RecordAction.condition`. Acepta tanto la condición
+ * primitiva (EQUALS / NOT_EQUALS / IN / NOT_IN sobre un field del payload) como
+ * la composite (AND / OR de un array de condiciones recursivas, sin límite).
+ *
+ * Implementado con `z.lazy` para evitar la circular dep en la inferencia.
+ */
+export type ActionConditionInput =
+  | z.infer<typeof actionConditionPrimitiveSchema>
+  | { type: 'AND' | 'OR'; conditions: ActionConditionInput[] }
+
+export const actionConditionSchema: z.ZodType<ActionConditionInput> = z.lazy(() =>
+  z.union([
+    actionConditionPrimitiveSchema,
+    z.object({
+      type: z.enum(['AND', 'OR']),
+      conditions: z
+        .array(actionConditionSchema)
+        .min(1, 'AND/OR requieren al menos una condición'),
+    }),
+  ]),
+)
+
+/** Helper: parsea un condition que vino de la DB (Json). Null si no parsea. */
+export function parseActionCondition(raw: unknown): ActionConditionInput | null {
+  if (raw === null || raw === undefined) return null
+  const result = actionConditionSchema.safeParse(raw)
+  return result.success ? result.data : null
+}
+
+const updateFieldActionConfigSchema = z.object({
+  entryIdSource: z.enum(['self', 'related']),
+  fieldId: z.string().min(1),
+  value: z.union([z.string(), z.number(), z.boolean(), z.null()]),
+})
+export type UpdateFieldActionConfigInput = z.infer<typeof updateFieldActionConfigSchema>
+
+const notifyActionConfigSchema = z.object({
+  recipients: z.string().min(1),
+  message: z.string().min(1).max(2000),
+})
+export type NotifyActionConfigInput = z.infer<typeof notifyActionConfigSchema>
+
+const emailActionConfigSchema = z.object({
+  to: z.array(z.string().email()).min(1),
+  subject: z.string().min(1).max(200),
+  body: z.string().min(1),
+})
+export type EmailActionConfigInput = z.infer<typeof emailActionConfigSchema>
+
+const webhookActionConfigSchema = z.object({
+  url: z.string().url(),
+  method: z.enum(['POST', 'PATCH']),
+  headers: z.record(z.string()).optional(),
+})
+export type WebhookActionConfigInput = z.infer<typeof webhookActionConfigSchema>
+
+/**
+ * Valida que el `actionConfig` de una RecordAction matchee su `actionType`.
+ * Devuelve el config validado o null si la combinación es inválida. Se usa
+ * en `RecordActionListener.execute<Type>` antes de actuar (defense-in-depth)
+ * y en cualquier flujo de creación de RecordAction (frontend + backend).
+ */
+export function parseActionConfig(
+  actionType: string,
+  raw: unknown,
+):
+  | null
+  | { type: 'CREATE_ENTRY' }
+  | ({ type: 'UPDATE_FIELD' } & UpdateFieldActionConfigInput)
+  | ({ type: 'NOTIFY' } & NotifyActionConfigInput)
+  | ({ type: 'EMAIL' } & EmailActionConfigInput)
+  | ({ type: 'WEBHOOK' } & WebhookActionConfigInput) {
+  switch (actionType) {
+    case 'CREATE_ENTRY':
+      return { type: 'CREATE_ENTRY' }
+    case 'UPDATE_FIELD': {
+      const r = updateFieldActionConfigSchema.safeParse(raw)
+      return r.success ? { type: 'UPDATE_FIELD', ...r.data } : null
+    }
+    case 'NOTIFY': {
+      const r = notifyActionConfigSchema.safeParse(raw)
+      return r.success ? { type: 'NOTIFY', ...r.data } : null
+    }
+    case 'EMAIL': {
+      const r = emailActionConfigSchema.safeParse(raw)
+      return r.success ? { type: 'EMAIL', ...r.data } : null
+    }
+    case 'WEBHOOK': {
+      const r = webhookActionConfigSchema.safeParse(raw)
+      return r.success ? { type: 'WEBHOOK', ...r.data } : null
+    }
+    default:
+      return null
+  }
+}
