@@ -43,8 +43,17 @@ export class CalibrationsService {
           select: {
             id: true,
             data: true,
-            record: { select: { id: true, name: true } },
-            instrument: { select: { id: true, status: true } },
+            record: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+                fields: {
+                  where: { isActive: true, fieldType: 'DROPDOWN' },
+                  select: { id: true, comparisonConfig: true },
+                },
+              },
+            },
           },
         },
         template: { select: { id: true, name: true, code: true } },
@@ -66,10 +75,14 @@ export class CalibrationsService {
               select: {
                 id: true,
                 name: true,
-                fields: { where: { isActive: true }, orderBy: { order: 'asc' }, select: { id: true, label: true, fieldType: true } },
+                type: true,
+                fields: {
+                  where: { isActive: true },
+                  orderBy: { order: 'asc' },
+                  select: { id: true, label: true, fieldType: true, comparisonConfig: true },
+                },
               },
             },
-            instrument: { select: { id: true, status: true } },
           },
         },
         ...PATTERNS_INCLUDE,
@@ -132,13 +145,15 @@ export class CalibrationsService {
       throw new BadRequestException('No se pueden modificar patrones en una calibracion aprobada')
     }
 
-    // Verificar que el patron exista y pertenezca a la misma org
+    // Verificar que el patron exista y pertenezca a la misma org. El patrón es
+    // una Entry de un Record `type=INSTRUMENTAL` (post-Records-as-Lists, ya no
+    // hay tabla Instrument).
     const patternEntry = await this.prisma.entry.findFirst({
       where: { id: patternEntryId, record: { organizationId } },
-      include: { instrument: true },
+      include: { record: { select: { type: true } } },
     })
     if (!patternEntry) throw new NotFoundException('Patron no encontrado')
-    if (!patternEntry.instrument) {
+    if (patternEntry.record.type !== 'INSTRUMENTAL') {
       throw new BadRequestException('La entrada seleccionada no es un instrumento')
     }
 

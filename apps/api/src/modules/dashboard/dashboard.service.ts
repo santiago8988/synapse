@@ -49,12 +49,43 @@ export class DashboardService {
         where: { organizationId, status: 'IN_PROGRESS' },
       }),
 
-      // Instrumentos agrupados por estado
-      this.prisma.instrument.groupBy({
-        by: ['status'],
-        where: { organizationId },
-        _count: true,
-      }),
+      // Instrumentos agrupados por estado — post-Records-as-Lists. La tabla
+      // `Instrument` ya no existe; el "instrumento" es una Entry de Record
+      // type=INSTRUMENTAL. El estado vive en `Entry.data[<statusFieldId>]`,
+      // donde el statusFieldId es el id del field DROPDOWN con isStatus=true.
+      // Como `groupBy` por JSON path no es trivial, agrupamos en JS.
+      this.prisma.entry
+        .findMany({
+          where: { record: { organizationId, type: 'INSTRUMENTAL' } },
+          select: {
+            data: true,
+            record: {
+              select: {
+                fields: {
+                  where: { isActive: true, fieldType: 'DROPDOWN' },
+                  select: { id: true, comparisonConfig: true },
+                },
+              },
+            },
+          },
+        })
+        .then((entries) => {
+          const counts = new Map<string, number>()
+          for (const e of entries) {
+            const statusField = e.record.fields.find((f) => {
+              const cfg = f.comparisonConfig as { isStatus?: boolean } | null
+              return cfg?.isStatus === true
+            })
+            if (!statusField) continue
+            const data = (e.data ?? {}) as Record<string, unknown>
+            const status = String(data[statusField.id] ?? '') || 'UNKNOWN'
+            counts.set(status, (counts.get(status) ?? 0) + 1)
+          }
+          return Array.from(counts.entries()).map(([status, count]) => ({
+            status,
+            _count: count,
+          }))
+        }),
 
       // Últimas 10 entries
       this.prisma.entry.findMany({

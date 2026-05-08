@@ -47,18 +47,11 @@ export class EntryCompletedEvent {
   ) {}
 }
 
-export class InstrumentStatusChangedEvent {
-  static readonly EVENT_NAME = 'instrument.statusChanged'
-
-  constructor(
-    public readonly instrumentId: string,
-    public readonly organizationId: string,
-    public readonly fromStatus: string,
-    public readonly toStatus: string,
-    public readonly reason: string | null,
-    public readonly changedById: string,
-  ) {}
-}
+// InstrumentStatusChangedEvent eliminado en el colapso de Instrument
+// (Records-as-Lists). Los cambios de status de un instrumento ahora viajan
+// como `EntryFieldValueChangedEvent` con `field.isStatus === true` y
+// `record.type === 'INSTRUMENTAL'`. Auditoría confirmó que no había
+// consumers del evento anterior antes de eliminarlo.
 
 export class NonConformityCreatedEvent {
   static readonly EVENT_NAME = 'nonConformity.created'

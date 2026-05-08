@@ -1,130 +1,183 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
-import { EventEmitter2 } from '@nestjs/event-emitter'
 import { PrismaService } from '../../prisma/prisma.service'
-import { InstrumentStatusChangedEvent } from '../../common/events/domain-events'
+import { EntriesService } from '../entries/entries.service'
+import type { UserRole } from '@synapse/types'
 
+/**
+ * Wrapper sobre `entries` post-colapso (Records-as-Lists). La tabla `Instrument`
+ * fue dropeada en `20260508130000_collapse_instrument`. El "instrumento" es
+ * ahora una Entry de un Record `type=INSTRUMENTAL` con un field DROPDOWN
+ * `isStatus=true` que guarda el estado.
+ *
+ * Los endpoints `/instruments/*` siguen respondiendo (sin breaking changes en
+ * el frontend legacy) — internamente delegan a `EntriesService` y consultan
+ * `EntryStatusLog` para el historial.
+ */
 @Injectable()
 export class InstrumentsService {
   constructor(
     private prisma: PrismaService,
-    private eventEmitter: EventEmitter2,
+    private entries: EntriesService,
   ) {}
 
-  async findAll(organizationId: string, filters?: { status?: string; recordId?: string }) {
-    return this.prisma.instrument.findMany({
-      where: {
-        organizationId,
-        ...(filters?.status && { status: filters.status as never }),
-        ...(filters?.recordId && { recordId: filters.recordId }),
-      },
-      include: {
-        entry: {
-          select: { id: true, data: true, status: true, createdAt: true },
-        },
-        record: {
-          select: { id: true, name: true, periodicity: true, notifyDaysBefore: true,
-            fields: { where: { isActive: true }, orderBy: { order: 'asc' }, select: { id: true, label: true, fieldType: true, isIdentifier: true } },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+  /** Resuelve el field DROPDOWN-as-status de un Record INSTRUMENTAL. Null si no existe. */
+  private getStatusField(
+    fields: Array<{ id: string; fieldType: string; comparisonConfig: unknown; isActive?: boolean }>,
+  ): { id: string } | null {
+    const f = fields.find((field) => {
+      if (field.fieldType !== 'DROPDOWN') return false
+      if (field.isActive === false) return false
+      const cfg = field.comparisonConfig as { isStatus?: boolean } | null
+      return cfg?.isStatus === true
     })
+    return f ? { id: f.id } : null
   }
 
-  async findPatterns(organizationId: string) {
-    // Patrones = instrumentos cuyo record NO tiene campo CALIBRATION_TEMPLATE
-    const allInstruments = await this.prisma.instrument.findMany({
-      where: { organizationId, status: 'ACTIVE' },
+  /** Lista entries de records INSTRUMENTAL con resolved status field. */
+  async findAll(organizationId: string, filters?: { status?: string; recordId?: string }) {
+    const entries = await this.prisma.entry.findMany({
+      where: {
+        record: {
+          organizationId,
+          type: 'INSTRUMENTAL',
+          ...(filters?.recordId && { id: filters.recordId }),
+        },
+      },
       include: {
-        entry: { select: { id: true, data: true } },
         record: {
           select: {
             id: true,
             name: true,
-            fields: { where: { isActive: true }, select: { fieldType: true } },
+            periodicity: true,
+            notifyDaysBefore: true,
+            fields: {
+              where: { isActive: true },
+              orderBy: { order: 'asc' },
+              select: {
+                id: true,
+                label: true,
+                fieldType: true,
+                isIdentifier: true,
+                comparisonConfig: true,
+              },
+            },
           },
         },
       },
       orderBy: { createdAt: 'desc' },
     })
 
-    return allInstruments.filter(
-      (i) => !i.record.fields.some((f) => f.fieldType === 'CALIBRATION_TEMPLATE'),
+    // Si filters.status presente, filtrar leyendo del statusFieldId por record.
+    return entries
+      .filter((e) => {
+        if (!filters?.status) return true
+        const statusField = this.getStatusField(e.record.fields)
+        if (!statusField) return false
+        const data = (e.data ?? {}) as Record<string, unknown>
+        return String(data[statusField.id] ?? '') === filters.status
+      })
+      .map((e) => this.resolveStatus(e))
+  }
+
+  /** Patrones = entries INSTRUMENTAL ACTIVE en records sin field CALIBRATION_TEMPLATE. */
+  async findPatterns(organizationId: string) {
+    const all = await this.findAll(organizationId, { status: 'ACTIVE' })
+    return all.filter(
+      (e) => !e.record.fields.some((f) => f.fieldType === 'CALIBRATION_TEMPLATE'),
     )
   }
 
   async findById(id: string, organizationId: string) {
-    const instrument = await this.prisma.instrument.findFirst({
-      where: { id, organizationId },
+    const entry = await this.prisma.entry.findFirst({
+      where: { id, record: { organizationId, type: 'INSTRUMENTAL' } },
       include: {
-        entry: {
-          select: { id: true, data: true, status: true, recordId: true, createdAt: true },
-        },
         record: {
           select: {
-            id: true, name: true, periodicity: true, notifyDaysBefore: true,
-            fields: { where: { isActive: true }, orderBy: { order: 'asc' } },
+            id: true,
+            name: true,
+            periodicity: true,
+            notifyDaysBefore: true,
+            fields: {
+              where: { isActive: true },
+              orderBy: { order: 'asc' },
+            },
           },
-        },
-        statusLogs: {
-          orderBy: { changedAt: 'desc' },
-          take: 50,
         },
       },
     })
-    if (!instrument) throw new NotFoundException('Instrumento no encontrado')
-    return instrument
+    if (!entry) throw new NotFoundException('Instrumento no encontrado')
+
+    const resolved = this.resolveStatus(entry)
+    const statusField = this.getStatusField(entry.record.fields)
+    const statusLogs = statusField
+      ? await this.prisma.entryStatusLog.findMany({
+          where: { entryId: id, fieldId: statusField.id },
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        })
+      : []
+
+    return { ...resolved, statusLogs }
   }
 
+  /**
+   * Cambia el estado del instrumento (Entry). Wrapper sobre EntriesService.update
+   * con patch del statusFieldId. Side-effects (transition validation,
+   * EntryStatusLog write, recálculo de nextCalibrationAt) los manejan los
+   * listeners genéricos.
+   */
   async changeStatus(
     id: string,
     organizationId: string,
     toStatus: string,
     reason: string | null,
     changedById: string,
+    userRole: UserRole,
   ) {
-    const instrument = await this.findById(id, organizationId)
-    const fromStatus = instrument.status
+    const entry = await this.prisma.entry.findFirst({
+      where: { id, record: { organizationId, type: 'INSTRUMENTAL' } },
+      include: {
+        record: { include: { fields: { where: { isActive: true } } } },
+      },
+    })
+    if (!entry) throw new NotFoundException('Instrumento no encontrado')
 
-    if (fromStatus === toStatus) {
-      throw new BadRequestException('El instrumento ya tiene ese estado')
+    const statusField = this.getStatusField(entry.record.fields)
+    if (!statusField) {
+      throw new BadRequestException(
+        'El record INSTRUMENTAL no tiene un field DROPDOWN configurado como status (isStatus: true)',
+      )
     }
 
-    if (fromStatus === 'DECOMMISSIONED' && toStatus !== 'DECOMMISSIONED') {
-      throw new BadRequestException('No se puede reactivar un instrumento dado de baja')
-    }
+    const existingData = (entry.data ?? {}) as Record<string, unknown>
+    const newData = { ...existingData, [statusField.id]: toStatus }
 
-    // Recalcular nextCalibrationAt al volver a ACTIVE después de calibración
-    let nextCalibrationAt = instrument.nextCalibrationAt
-    if (toStatus === 'ACTIVE' && fromStatus === 'IN_CALIBRATION' && instrument.record.periodicity) {
-      nextCalibrationAt = new Date()
-      nextCalibrationAt.setDate(nextCalibrationAt.getDate() + instrument.record.periodicity)
-    }
-
-    const [updatedInstrument] = await this.prisma.$transaction([
-      this.prisma.instrument.update({
-        where: { id },
-        data: {
-          status: toStatus as never,
-          nextCalibrationAt,
-        },
-      }),
-      this.prisma.instrumentStatusLog.create({
-        data: {
-          instrumentId: id,
-          fromStatus: fromStatus as never,
-          toStatus: toStatus as never,
-          reason,
-          changedById,
-        },
-      }),
-    ])
-
-    this.eventEmitter.emit(
-      InstrumentStatusChangedEvent.EVENT_NAME,
-      new InstrumentStatusChangedEvent(id, organizationId, fromStatus, toStatus, reason, changedById),
+    // Delegamos al flow estándar de update — el TransitionValidator valida
+    // transitions, los listeners escriben EntryStatusLog y recalculan
+    // nextCalibrationAt cuando aplica.
+    return this.entries.update(
+      id,
+      entry.recordId,
+      newData,
+      changedById,
+      userRole,
+      reason ?? undefined,
     )
+  }
 
-    return updatedInstrument
+  /** Decora una Entry INSTRUMENTAL con su status canónico (resolved del field DROPDOWN). */
+  private resolveStatus<
+    T extends {
+      data: unknown
+      record: {
+        fields: Array<{ id: string; fieldType: string; comparisonConfig: unknown; isActive?: boolean }>
+      }
+    },
+  >(entry: T): T & { status: string | null; nextCalibrationAt: string | null } {
+    const statusField = this.getStatusField(entry.record.fields)
+    const data = (entry.data ?? {}) as Record<string, unknown>
+    const status = statusField ? String(data[statusField.id] ?? '') || null : null
+    const nextCalibrationAt = (data.nextCalibrationAt as string | undefined) ?? null
+    return { ...entry, status, nextCalibrationAt }
   }
 }

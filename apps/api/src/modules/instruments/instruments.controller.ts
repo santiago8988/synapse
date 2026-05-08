@@ -5,6 +5,7 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import type { UserRole } from '@synapse/types'
 
 @Controller('instruments')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -44,6 +45,13 @@ export class InstrumentsController {
     @CurrentUser() user: JwtPayload,
     @Body() body: { status: string; reason?: string },
   ) {
-    return this.service.changeStatus(id, user.organizationId, body.status, body.reason || null, user.sub)
+    return this.service.changeStatus(
+      id,
+      user.organizationId,
+      body.status,
+      body.reason || null,
+      user.sub,
+      user.role as UserRole,
+    )
   }
 }
