@@ -59,7 +59,7 @@ Para correr un solo workspace: `pnpm --filter @synapse/api dev` o `pnpm --filter
 1. **Nunca** ejecutar queries Prisma sin `where: { organizationId }` — el aislamiento multitenant depende de esto.
 2. **Nunca** tomar `organizationId` del body, params o query string. Siempre desde el JWT (`@CurrentUser() user.organizationId`).
 3. **Nunca** usar `eval()` para fórmulas. Solo `mathjs` con scope explícito de variables.
-4. **Nunca** hacer `UPDATE` o `DELETE` sobre `AuditLog`, `InstrumentStatusLog`, `BatchStatusLog`, ni futuros `*StatusLog` o `*Event` (append-only — requisito ISO).
+4. **Nunca** hacer `UPDATE` o `DELETE` sobre `AuditLog`, `EntryStatusLog`, `InstrumentStatusLog`, `BatchStatusLog`, ni futuros `*StatusLog` o `*Event` (append-only — requisito ISO). `EntryStatusLog` es el reemplazo unificado del workflow engine v2 — todo cambio de field `isStatus: true` se loguea acá.
 5. **Nunca** modificar valores de campos `isIdentifier` de una `Entry` con `status = COMPLETED`. El frontend deshabilita; el backend valida.
 6. **Nunca** editar in-place un `Document` con `status = ACTIVE`. Crear nueva versión y la anterior pasa a `SUPERSEDED`.
 7. **Nunca** commitear `.env*`, claves R2, `JWT_SECRET`, `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET`. Verificar con `git diff` antes de stage.

@@ -141,11 +141,14 @@ Para saltear el log en un endpoint específico: `@AuditIgnore()` (justificar el 
 
 ## Reglas ISO específicas del workspace
 
-1. **Append-only**: los siguientes modelos no se pueden `UPDATE` ni `DELETE` desde código — solo `INSERT`. La migración tampoco puede dropear estas tablas.
+1. **Append-only**: los siguientes modelos no se pueden `UPDATE` ni `DELETE` desde código — solo `INSERT`. La migración tampoco puede dropear estas tablas (excepto si se demuestra reemplazo 1:1 a otra append-only, ver excepciones documentadas).
    - `AuditLog`
-   - `InstrumentStatusLog`
-   - `BatchStatusLog`
-   - `SampleCustodyEvent` (cuando se implemente — ver `SAMPLE_CUSTODY_SPEC.md`)
+   - `EntryStatusLog` ← workflow engine v2: paper trail unificado de cambios de fields `isStatus`. Reemplaza progresivamente los logs específicos por dominio.
+   - `InstrumentStatusLog` (en proceso de deprecación — backfill a `EntryStatusLog`)
+   - `BatchStatusLog` (en proceso de deprecación — backfill a `EntryStatusLog`)
+   - `SampleCustodyEvent` (si se implementa — ver `SAMPLE_CUSTODY_SPEC.md`)
+
+   El `EntryStatusLogListener` (en `entries/listeners/`) es el único writer legítimo de `EntryStatusLog`; cualquier nuevo path que toque la tabla debe pasar por el evento `EntryFieldValueChangedEvent`.
 
 2. **Versionado inmutable de documentos**: `Document` con `status = ACTIVE` no se edita. Para cambios → crear nueva versión, la anterior pasa a `SUPERSEDED`. La acción la maneja `documents.service` y emite `DocumentVersionCreatedEvent`.
 
