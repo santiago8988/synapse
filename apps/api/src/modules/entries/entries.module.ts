@@ -8,6 +8,7 @@ import { NonConformityListener } from './listeners/non-conformity.listener'
 import { RecordActionListener } from './listeners/record-action.listener'
 import { DueDateListener } from './listeners/due-date.listener'
 import { InstrumentListener } from './listeners/instrument.listener'
+import { EntryStatusLogListener } from './listeners/entry-status-log.listener'
 
 @Module({
   controllers: [EntriesController],
@@ -20,6 +21,7 @@ import { InstrumentListener } from './listeners/instrument.listener'
     RecordActionListener,
     DueDateListener,
     InstrumentListener,
+    EntryStatusLogListener,
   ],
   exports: [EntriesService],
 })

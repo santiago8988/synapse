@@ -6,7 +6,7 @@ import {
   EntryFieldValueChangedEvent,
 } from '../../../common/events/domain-events'
 import { Prisma } from '@prisma/client'
-import type { ActionCondition } from '@synapse/types'
+import type { ActionCondition, ActionConditionPrimitive } from '@synapse/types'
 
 /**
  * Escucha EntryCreatedEvent y dispara la creación automática
@@ -226,10 +226,11 @@ export class RecordActionListener {
         // Anti-loop: omitir cascadas si la action no las permite explícitamente.
         if (event.triggeredByCascade && !action.allowCascade) continue
 
-        // Filtrar por condition.
+        // Filtrar por condition (recursiva).
         if (!this.matchesCondition(action.condition, event)) continue
 
-        await this.executeFieldValueChangedAction(action, event)
+        // Dispatch por actionType — default CREATE_ENTRY mantiene back-compat.
+        await this.dispatchAction(action, event)
       }
     } catch (err) {
       this.logger.error(
@@ -247,17 +248,41 @@ export class RecordActionListener {
 
   /**
    * Evalúa una `condition` (JSON guardada en RecordAction.condition) contra
-   * el payload del evento. Si condition es null/undefined, siempre matchea.
+   * el payload del evento. Soporta:
+   *  - Primitivas: { type: 'EQUALS' | 'NOT_EQUALS' | 'IN' | 'NOT_IN', field, value }
+   *  - Composite: { type: 'AND' | 'OR', conditions: ActionCondition[] } (recursivo)
+   * Si condition es null/undefined, siempre matchea.
    */
   private matchesCondition(
     condition: unknown,
     event: EntryFieldValueChangedEvent,
   ): boolean {
     if (!condition) return true
-    const cond = condition as ActionCondition
-    if (!cond.type || !cond.field) return true
+    return this.evalCondition(condition as ActionCondition, event)
+  }
 
-    // Resolver el lado izquierdo según el path del field en el payload.
+  private evalCondition(
+    cond: ActionCondition,
+    event: EntryFieldValueChangedEvent,
+  ): boolean {
+    if (cond.type === 'AND') {
+      return cond.conditions.every((c) => this.evalCondition(c, event))
+    }
+    if (cond.type === 'OR') {
+      return cond.conditions.some((c) => this.evalCondition(c, event))
+    }
+    // Tras los checks AND/OR, el resto necesariamente matchea ActionConditionPrimitive
+    // (EQUALS / NOT_EQUALS / IN / NOT_IN). TS no estrecha el union por nombres de
+    // propiedad — cast explícito.
+    return this.evalPrimitive(cond as ActionConditionPrimitive, event)
+  }
+
+  private evalPrimitive(
+    cond: ActionConditionPrimitive,
+    event: EntryFieldValueChangedEvent,
+  ): boolean {
+    if (!cond.type || !cond.field) return false
+
     let actual: unknown
     switch (cond.field) {
       case 'fieldId':
@@ -270,8 +295,8 @@ export class RecordActionListener {
         actual = event.fromValue
         break
       default:
-        // Path no soportado: no matcheamos para evitar disparar acciones
-        // por error con configs malformadas.
+        // Path no soportado: no matcheamos para evitar disparar acciones por
+        // error con configs malformadas (fail-closed).
         return false
     }
 
@@ -292,27 +317,47 @@ export class RecordActionListener {
   }
 
   /**
-   * Ejecuta una RecordAction disparada por FIELD_VALUE_CHANGED: crea una
-   * Entry en el target Record con field mapping aplicado desde la entry
-   * source. Versión simplificada (sin companion creation) — los side-effects
-   * de Batch/Sample/Stock se mantienen en handleEntryCreated por ahora.
+   * Dispatcher por `actionType`. Cada caso lee `actionConfig` (Json en DB) con
+   * la shape correspondiente y llama el handler. Default CREATE_ENTRY usa las
+   * columnas dedicadas (targetRecordId + fieldMapping) para back-compat.
    */
-  private async executeFieldValueChangedAction(
-    action: {
-      id: string
-      targetRecordId: string
-      fieldMapping: unknown
-      targetRecord: {
-        type: string
-        version: number
-        periodicity: number | null
-        fields: Array<{ id: string; isActive: boolean }>
-      }
-    },
+  private async dispatchAction(
+    action: ActionWithTarget,
     event: EntryFieldValueChangedEvent,
   ) {
-    // Cargar la entry source para tener su data completa (necesaria para el
-    // field mapping).
+    switch (action.actionType) {
+      case 'CREATE_ENTRY':
+        await this.executeCreateEntry(action, event)
+        break
+      case 'UPDATE_FIELD':
+        await this.executeUpdateField(action, event)
+        break
+      case 'NOTIFY':
+        await this.executeNotify(action, event)
+        break
+      case 'EMAIL':
+        await this.executeEmail(action, event)
+        break
+      case 'WEBHOOK':
+        await this.executeWebhook(action, event)
+        break
+      default:
+        this.logger.warn(
+          `RecordAction ${action.id}: actionType desconocido "${String(action.actionType)}", omitida`,
+        )
+    }
+  }
+
+  /**
+   * CREATE_ENTRY (default) — comportamiento histórico: crea una Entry en el
+   * target Record con field mapping aplicado desde la entry source.
+   * No crea companion entities (las cascadas vía FIELD_VALUE_CHANGED apuntan
+   * al modelo Records-as-Lists; las companion las maneja handleEntryCreated).
+   */
+  private async executeCreateEntry(
+    action: ActionWithTarget,
+    event: EntryFieldValueChangedEvent,
+  ) {
     const sourceEntry = await this.prisma.entry.findUnique({
       where: { id: event.entryId },
       select: { data: true, createdById: true },
@@ -350,7 +395,77 @@ export class RecordActionListener {
     })
 
     this.logger.log(
-      `RecordAction ${action.id} disparada por FIELD_VALUE_CHANGED (field=${event.fieldId}, toValue=${String(event.toValue)})`,
+      `RecordAction ${action.id} (CREATE_ENTRY) disparada por FIELD_VALUE_CHANGED (field=${event.fieldId}, toValue=${String(event.toValue)})`,
     )
+  }
+
+  /**
+   * UPDATE_FIELD — patcha un field de una entry. STUB en esta iteración:
+   * loguea la intención pero no escribe. La implementación real depende de
+   * resolver `entryIdSource: 'self' | 'related'` con un fetch del payload y
+   * propagar el cambio vía EntryFieldValueChangedEvent (con triggeredByCascade=true).
+   * Diferida a la siguiente iteración cuando tengamos un caso de uso.
+   */
+  private async executeUpdateField(
+    action: ActionWithTarget,
+    event: EntryFieldValueChangedEvent,
+  ) {
+    this.logger.log(
+      `RecordAction ${action.id} (UPDATE_FIELD) — STUB: actionConfig=${JSON.stringify(action.actionConfig)}, event=${event.entryId}`,
+    )
+  }
+
+  /**
+   * NOTIFY — envía notificación al destinatario derivado. STUB: requiere
+   * BullMQ + worker de notificaciones (módulo notifications no implementado
+   * todavía).
+   */
+  private async executeNotify(
+    action: ActionWithTarget,
+    event: EntryFieldValueChangedEvent,
+  ) {
+    this.logger.log(
+      `RecordAction ${action.id} (NOTIFY) — STUB: actionConfig=${JSON.stringify(action.actionConfig)}, event=${event.entryId}`,
+    )
+  }
+
+  /**
+   * EMAIL — envía email. STUB: requiere transport (Resend/nodemailer) +
+   * BullMQ queue.
+   */
+  private async executeEmail(
+    action: ActionWithTarget,
+    event: EntryFieldValueChangedEvent,
+  ) {
+    this.logger.log(
+      `RecordAction ${action.id} (EMAIL) — STUB: actionConfig=${JSON.stringify(action.actionConfig)}, event=${event.entryId}`,
+    )
+  }
+
+  /**
+   * WEBHOOK — POST/PATCH a URL externa. STUB: implementación real requiere
+   * retry + circuit breaker + log de respuestas para auditoría.
+   */
+  private async executeWebhook(
+    action: ActionWithTarget,
+    event: EntryFieldValueChangedEvent,
+  ) {
+    this.logger.log(
+      `RecordAction ${action.id} (WEBHOOK) — STUB: actionConfig=${JSON.stringify(action.actionConfig)}, event=${event.entryId}`,
+    )
+  }
+}
+
+type ActionWithTarget = {
+  id: string
+  actionType: string
+  actionConfig: unknown
+  targetRecordId: string
+  fieldMapping: unknown
+  targetRecord: {
+    type: string
+    version: number
+    periodicity: number | null
+    fields: Array<{ id: string; isActive: boolean }>
   }
 }
