@@ -6,7 +6,6 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft,
-  ScanLine,
   Ruler,
   CheckCircle2,
   XCircle,
@@ -20,9 +19,6 @@ import {
   X,
   Search,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -255,7 +251,7 @@ export default function CalibrationDetailPage() {
   if (isLoading) {
     return (
       <div className="flex justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Loader2 className="h-6 w-6 animate-spin" style={{ color: 'var(--ink-3)' }} />
       </div>
     )
   }
@@ -284,229 +280,437 @@ export default function CalibrationDetailPage() {
     ? Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null
 
+  const statusChipCls = isPending
+    ? 'syn-chip-draft'
+    : calibration.status === 'IN_PROGRESS'
+      ? 'syn-chip-active'
+      : calibration.status === 'COMPLETED'
+        ? 'syn-chip-warn'
+        : calibration.status === 'APPROVED'
+          ? 'syn-chip-ok'
+          : 'syn-chip-fail'
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push('/calibrations')}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">Calibración {String(codigo)}</h1>
-            <Badge variant={displayVariant}>{displayLabel}</Badge>
-            {isOverdue && (
-              <Badge variant="destructive" className="gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                Vencida
-              </Badge>
-            )}
+    <div className="mx-auto max-w-[1280px] fade-in">
+      {/* Hero */}
+      <div className="syn-rec-hero">
+        <div>
+          <div className="kicker mb-1.5 flex items-center gap-2">
+            <Link
+              href="/calibrations"
+              className="flex items-center gap-1 hover:text-ink-0"
+              onClick={(e) => {
+                e.preventDefault()
+                router.push('/calibrations')
+              }}
+            >
+              <ArrowLeft className="h-3 w-3" /> Calibraciones
+            </Link>
+            <span>·</span>
+            <span>{String(codigo)}</span>
+          </div>
+          <h2>
+            Calibración <span className="italic">{String(codigo)}.</span>
+          </h2>
+          <div className="syn-rec-hero-meta">
+            <div className="m">
+              <span className="mk">ESTADO</span>
+              <span className="mv">
+                <span className={`syn-chip ${statusChipCls}`}>{displayLabel}</span>
+              </span>
+            </div>
             {overallResult !== null && (
-              <Badge variant={overallResult ? 'success' : 'destructive'}>
-                {overallResult ? 'APTA' : 'NO APTA'}
-              </Badge>
+              <div className="m">
+                <span className="mk">RESULTADO</span>
+                <span className="mv">
+                  <span
+                    className={
+                      overallResult ? 'syn-chip syn-chip-ok' : 'syn-chip syn-chip-fail'
+                    }
+                  >
+                    {overallResult ? 'APTA' : 'NO APTA'}
+                  </span>
+                </span>
+              </div>
+            )}
+            {isOverdue && (
+              <div className="m">
+                <span className="mk">VENCIDA</span>
+                <span className="mv">
+                  <span className="syn-chip syn-chip-fail">
+                    <AlertTriangle className="h-3 w-3" /> Vencida
+                  </span>
+                </span>
+              </div>
+            )}
+            <div className="m">
+              <span className="mk">REGISTRO</span>
+              <span className="mv">{calibration.entry.record.name}</span>
+            </div>
+            {calibration.template && (
+              <div className="m">
+                <span className="mk">PLANTILLA</span>
+                <span className="mv">{calibration.template.name}</span>
+              </div>
+            )}
+            {dueDate && (
+              <div className="m">
+                <span className="mk">VENCE</span>
+                <span
+                  className="mv font-mono"
+                  style={{
+                    color: isOverdue
+                      ? 'var(--danger)'
+                      : daysUntilDue !== null && daysUntilDue <= 7
+                        ? 'var(--warn)'
+                        : 'var(--ink-1)',
+                  }}
+                >
+                  {dueDate.toLocaleDateString('es-AR')}
+                </span>
+              </div>
             )}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {calibration.entry.record.name}
-            {calibration.template && <> &middot; Plantilla: {calibration.template.name}</>}
-          </p>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Columna principal */}
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+        {/* Left wide — datos + ensayos + resultado */}
+        <div className="min-w-0 space-y-5">
           {/* Datos de la entrada */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Datos de la calibración</CardTitle>
-              <CardDescription>Valores registrados al crear la calibración</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="divide-y rounded-lg border">
-                {calibration.entry.record.fields
-                  .filter((f) => f.fieldType !== 'CALIBRATION_TEMPLATE')
-                  .map((field) => {
-                    const value = calibration.entry.data[field.id]
-                    return (
-                      <div key={field.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
-                        <span className="text-muted-foreground">{field.label}</span>
-                        <span className="font-mono">
-                          {value !== null && value !== undefined
-                            ? (typeof value === 'object'
-                              ? `${(value as { value?: number }).value ?? ''} ${(value as { unit?: string }).unit || ''}`.trim()
-                              : String(value))
-                            : '—'}
-                        </span>
-                      </div>
-                    )
-                  })}
+          <div className="syn-card">
+            <div className="syn-card-head">
+              <div>
+                <div className="eyebrow">· Datos de la calibración</div>
+                <h3 style={{ marginTop: 6 }}>
+                  Valores <span className="italic">registrados.</span>
+                </h3>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            <div>
+              {calibration.entry.record.fields
+                .filter((f) => f.fieldType !== 'CALIBRATION_TEMPLATE')
+                .map((field, i) => {
+                  const value = calibration.entry.data[field.id]
+                  return (
+                    <div
+                      key={field.id}
+                      className="flex items-center justify-between px-5 py-3 text-[13px]"
+                      style={{
+                        borderTop: i === 0 ? 'none' : '1px solid var(--line)',
+                      }}
+                    >
+                      <span style={{ color: 'var(--ink-3)' }}>{field.label}</span>
+                      <span className="font-mono" style={{ color: 'var(--ink-0)' }}>
+                        {value !== null && value !== undefined
+                          ? typeof value === 'object'
+                            ? `${(value as { value?: number }).value ?? ''} ${
+                                (value as { unit?: string }).unit || ''
+                              }`.trim()
+                            : String(value)
+                          : '—'}
+                      </span>
+                    </div>
+                  )
+                })}
+            </div>
+          </div>
 
-          {/* Ensayos de calibración */}
+          {/* Ensayos */}
           {tests.map((test) => {
             const testResult = getTestResult(test)
             const testResults = results[test.id] || {}
+            const opSymbol =
+              test.criteriaOperator === 'LTE'
+                ? '≤'
+                : test.criteriaOperator === 'LT'
+                  ? '<'
+                  : test.criteriaOperator === 'GTE'
+                    ? '≥'
+                    : test.criteriaOperator === 'GT'
+                      ? '>'
+                      : '='
 
             return (
-              <Card key={test.id}>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base flex items-center gap-2">
-                      <Ruler className="h-4 w-4" />
-                      {test.name}
+              <div key={test.id} className="syn-card">
+                <div className="syn-card-head">
+                  <div style={{ minWidth: 0 }}>
+                    <div className="eyebrow flex items-center gap-1.5">
+                      <Ruler className="h-3 w-3" /> Ensayo
                       {testResult !== null && (
-                        <Badge variant={testResult ? 'success' : 'destructive'} className="text-xs">
+                        <span
+                          className={
+                            testResult
+                              ? 'syn-chip syn-chip-ok'
+                              : 'syn-chip syn-chip-fail'
+                          }
+                          style={{ marginLeft: 6 }}
+                        >
                           {testResult ? 'Conforme' : 'No conforme'}
-                        </Badge>
+                        </span>
                       )}
-                    </CardTitle>
-                    <CardDescription>
-                      Tolerancia: {test.tolerance} {test.toleranceUnit} &middot; {test.readingsPerPoint} lecturas/punto &middot; Criterio: |Error| {test.criteriaOperator === 'LTE' ? '≤' : test.criteriaOperator === 'LT' ? '<' : test.criteriaOperator === 'GTE' ? '≥' : test.criteriaOperator === 'GT' ? '>' : '='} {test.tolerance}
-                      {test.formulaError && <> &middot; Error = {test.formulaError}</>}
-                      {test.description && <> &middot; {test.description}</>}
-                    </CardDescription>
+                    </div>
+                    <h3 style={{ marginTop: 6 }}>{test.name}</h3>
+                    <div
+                      className="mt-1 text-[12px]"
+                      style={{ color: 'var(--ink-3)' }}
+                    >
+                      Tolerancia{' '}
+                      <span className="font-mono" style={{ color: 'var(--ink-1)' }}>
+                        {test.tolerance} {test.toleranceUnit}
+                      </span>{' '}
+                      · {test.readingsPerPoint} lecturas/punto · |Error| {opSymbol}{' '}
+                      <span className="font-mono">{test.tolerance}</span>
+                      {test.formulaError && <> · Error = {test.formulaError}</>}
+                    </div>
+                    {test.description && (
+                      <p
+                        className="mt-1 text-[12px]"
+                        style={{ color: 'var(--ink-2)' }}
+                      >
+                        {test.description}
+                      </p>
+                    )}
                   </div>
                   {isEditable && dirty && (
-                    <Button
-                      size="sm"
+                    <button
+                      type="button"
                       onClick={() => saveResultsMutation.mutate()}
                       disabled={saveResultsMutation.isPending}
+                      className="syn-btn syn-btn-primary"
+                      style={{ padding: '6px 12px' }}
                     >
-                      {saveResultsMutation.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
+                      {saveResultsMutation.isPending ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Save className="h-3 w-3" />
+                      )}
                       Guardar
-                    </Button>
+                    </button>
                   )}
-                </CardHeader>
-                <CardContent>
-                  <div className="rounded-lg border overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b bg-muted/30">
-                          <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Punto</th>
-                          <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Carga</th>
-                          {Array.from({ length: test.readingsPerPoint }, (_, i) => (
-                            <th key={i} className="px-3 py-2.5 text-center font-medium text-muted-foreground">
-                              L{i + 1}
-                            </th>
-                          ))}
-                          <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Promedio</th>
-                          <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Error</th>
-                          <th className="px-3 py-2.5 text-center font-medium text-muted-foreground">Estado</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {test.points.map((point) => {
-                          const pointResult = testResults[point.id] || { readings: Array(test.readingsPerPoint).fill(0), average: 0, error: 0, passed: false }
-                          const readings = pointResult.readings.length >= test.readingsPerPoint
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="syn-table">
+                    <thead>
+                      <tr>
+                        <th>Punto</th>
+                        <th style={{ textAlign: 'right' }}>Carga</th>
+                        {Array.from({ length: test.readingsPerPoint }, (_, i) => (
+                          <th key={i} style={{ textAlign: 'center' }}>
+                            L{i + 1}
+                          </th>
+                        ))}
+                        <th style={{ textAlign: 'right' }}>Promedio</th>
+                        <th style={{ textAlign: 'right' }}>Error</th>
+                        <th style={{ textAlign: 'center' }}>Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {test.points.map((point) => {
+                        const pointResult = testResults[point.id] || {
+                          readings: Array(test.readingsPerPoint).fill(0),
+                          average: 0,
+                          error: 0,
+                          passed: false,
+                        }
+                        const readings =
+                          pointResult.readings.length >= test.readingsPerPoint
                             ? pointResult.readings
-                            : [...pointResult.readings, ...Array(test.readingsPerPoint - pointResult.readings.length).fill(0)]
-                          const hasValues = readings.some((r) => r !== 0 && !isNaN(r))
+                            : [
+                                ...pointResult.readings,
+                                ...Array(
+                                  test.readingsPerPoint - pointResult.readings.length,
+                                ).fill(0),
+                              ]
+                        const hasValues = readings.some((r) => r !== 0 && !isNaN(r))
 
-                          return (
-                            <tr key={point.id} className="hover:bg-muted/30 transition-colors">
-                              <td className="px-3 py-2.5 font-medium">{point.name}</td>
-                              <td className="px-3 py-2.5 text-right font-mono">{point.load} {point.unit}</td>
-                              {readings.map((reading, ri) => (
-                                <td key={ri} className="px-3 py-2.5 text-center">
-                                  {isEditable ? (
-                                    <input
-                                      type="number"
-                                      step="any"
-                                      value={reading ?? ''}
-                                      onChange={(e) => {
-                                        const newReadings = [...readings]
-                                        newReadings[ri] = e.target.value !== '' ? parseFloat(e.target.value) : 0
-                                        recalculate(test.id, point.id, newReadings, test, point)
-                                      }}
-                                      className="w-20 rounded-md border border-input bg-background px-2 py-1 text-sm font-mono text-center focus:outline-none focus:ring-1 focus:ring-ring"
-                                    />
-                                  ) : (
-                                    <span className="font-mono">{reading || '—'}</span>
-                                  )}
-                                </td>
-                              ))}
-                              <td className="px-3 py-2.5 text-right font-mono">
-                                {hasValues ? pointResult.average.toFixed(4) : '—'}
-                              </td>
-                              <td className="px-3 py-2.5 text-right font-mono">
-                                {hasValues ? `${pointResult.error.toFixed(4)} ${test.toleranceUnit}` : '—'}
-                              </td>
-                              <td className="px-3 py-2.5 text-center">
-                                {hasValues ? (
-                                  pointResult.passed ? (
-                                    <Badge variant="success" className="text-xs">OK</Badge>
-                                  ) : (
-                                    <Badge variant="destructive" className="text-xs">FALLO</Badge>
-                                  )
+                        return (
+                          <tr key={point.id}>
+                            <td data-label="Punto" data-role="identifier">
+                              <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
+                                {point.name}
+                              </span>
+                            </td>
+                            <td
+                              data-label="Carga"
+                              className="font-mono"
+                              style={{ textAlign: 'right', color: 'var(--ink-1)' }}
+                            >
+                              {point.load} {point.unit}
+                            </td>
+                            {readings.map((reading, ri) => (
+                              <td
+                                key={ri}
+                                data-label={`L${ri + 1}`}
+                                style={{ textAlign: 'center' }}
+                              >
+                                {isEditable ? (
+                                  <input
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="any"
+                                    value={reading ?? ''}
+                                    onChange={(e) => {
+                                      const newReadings = [...readings]
+                                      newReadings[ri] =
+                                        e.target.value !== ''
+                                          ? parseFloat(e.target.value)
+                                          : 0
+                                      recalculate(test.id, point.id, newReadings, test, point)
+                                    }}
+                                    className="syn-input font-mono"
+                                    style={{
+                                      width: 78,
+                                      minHeight: 32,
+                                      padding: '4px 8px',
+                                      textAlign: 'center',
+                                      fontSize: 12,
+                                    }}
+                                  />
                                 ) : (
-                                  <span className="text-xs text-muted-foreground">—</span>
+                                  <span className="font-mono">{reading || '—'}</span>
                                 )}
                               </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                  {test.notes && (
-                    <p className="mt-2 text-xs text-muted-foreground">Notas: {test.notes}</p>
-                  )}
-                </CardContent>
-              </Card>
+                            ))}
+                            <td
+                              data-label="Promedio"
+                              className="font-mono"
+                              style={{ textAlign: 'right', color: 'var(--ink-1)' }}
+                            >
+                              {hasValues ? pointResult.average.toFixed(4) : '—'}
+                            </td>
+                            <td
+                              data-label="Error"
+                              className="font-mono"
+                              style={{
+                                textAlign: 'right',
+                                color: hasValues && !pointResult.passed
+                                  ? 'var(--danger)'
+                                  : 'var(--ink-1)',
+                              }}
+                            >
+                              {hasValues
+                                ? `${pointResult.error.toFixed(4)} ${test.toleranceUnit}`
+                                : '—'}
+                            </td>
+                            <td
+                              data-label="Estado"
+                              data-role="status"
+                              style={{ textAlign: 'center' }}
+                            >
+                              {hasValues ? (
+                                pointResult.passed ? (
+                                  <span className="syn-chip syn-chip-ok">OK</span>
+                                ) : (
+                                  <span className="syn-chip syn-chip-fail">FALLO</span>
+                                )
+                              ) : (
+                                <span style={{ color: 'var(--ink-4)' }}>—</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {test.notes && (
+                  <p
+                    className="mt-1 px-5 pb-3 text-[12px]"
+                    style={{ color: 'var(--ink-3)' }}
+                  >
+                    Notas: {test.notes}
+                  </p>
+                )}
+              </div>
             )
           })}
 
           {tests.length === 0 && (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <Ruler className="mb-3 h-10 w-10 text-muted-foreground/50" />
-                <p className="text-sm text-muted-foreground">
-                  Esta calibración no tiene plantilla asignada o la plantilla no tiene ensayos.
+            <div className="syn-card">
+              <div
+                className="flex flex-col items-center gap-2 px-6 py-14 text-center"
+                style={{ color: 'var(--ink-2)' }}
+              >
+                <Ruler className="h-8 w-8" style={{ color: 'var(--ink-4)' }} />
+                <div
+                  className="text-[20px]"
+                  style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink-0)' }}
+                >
+                  Sin <span className="italic">plantilla asignada.</span>
+                </div>
+                <p className="max-w-sm text-[13px]" style={{ color: 'var(--ink-2)' }}>
+                  Esta calibración no tiene plantilla o la plantilla no tiene ensayos configurados.
                 </p>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
 
           {/* Resultado general */}
           {tests.length > 0 && (
-            <Card>
-              <CardContent className="py-6">
-                <div className="flex items-center justify-center gap-3">
-                  {overallResult === null ? (
-                    <>
-                      <ClipboardList className="h-6 w-6 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Complete todos los ensayos para ver el resultado general</span>
-                    </>
-                  ) : overallResult ? (
-                    <>
-                      <CheckCircle2 className="h-6 w-6 text-emerald-600" />
-                      <span className="text-lg font-bold text-emerald-600">CALIBRACIÓN APTA</span>
-                    </>
-                  ) : (
-                    <>
-                      <XCircle className="h-6 w-6 text-red-600" />
-                      <span className="text-lg font-bold text-red-600">CALIBRACIÓN NO APTA</span>
-                    </>
-                  )}
+            <div
+              className="rounded-[14px] border px-6 py-5 text-center"
+              style={{
+                background:
+                  overallResult === null
+                    ? 'var(--bg-1)'
+                    : overallResult
+                      ? 'var(--ok-soft)'
+                      : 'var(--danger-soft)',
+                borderColor:
+                  overallResult === null
+                    ? 'var(--line)'
+                    : overallResult
+                      ? 'var(--ok)'
+                      : 'var(--danger)',
+              }}
+            >
+              {overallResult === null ? (
+                <div
+                  className="flex items-center justify-center gap-3 text-[13px]"
+                  style={{ color: 'var(--ink-2)' }}
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  Completá todos los ensayos para ver el resultado general
                 </div>
-              </CardContent>
-            </Card>
+              ) : (
+                <div className="flex items-center justify-center gap-3">
+                  {overallResult ? (
+                    <CheckCircle2 className="h-6 w-6" style={{ color: 'var(--ok)' }} />
+                  ) : (
+                    <XCircle className="h-6 w-6" style={{ color: 'var(--danger)' }} />
+                  )}
+                  <span
+                    className="text-[22px]"
+                    style={{
+                      fontFamily: 'var(--font-serif)',
+                      color: overallResult ? 'var(--ok)' : 'var(--danger)',
+                    }}
+                  >
+                    Calibración{' '}
+                    <span className="italic">{overallResult ? 'apta.' : 'no apta.'}</span>
+                  </span>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
+        {/* Right narrow — patrones + info + acciones */}
+        <div className="space-y-5 min-w-0">
           {/* Patrones utilizados */}
           {(() => {
-            const statusBadge: Record<InstrumentStatus, { label: string; variant: 'success' | 'info' | 'destructive' | 'secondary' }> = {
-              ACTIVE: { label: 'Activo', variant: 'success' },
-              IN_CALIBRATION: { label: 'En calibracion', variant: 'info' },
-              OUT_OF_SERVICE: { label: 'Fuera de servicio', variant: 'destructive' },
-              DECOMMISSIONED: { label: 'De baja', variant: 'secondary' },
+            const instStatusChip: Record<InstrumentStatus, string> = {
+              ACTIVE: 'syn-chip-ok',
+              IN_CALIBRATION: 'syn-chip-active',
+              OUT_OF_SERVICE: 'syn-chip-fail',
+              DECOMMISSIONED: 'syn-chip-draft',
+            }
+            const instStatusLabel: Record<InstrumentStatus, string> = {
+              ACTIVE: 'Activo',
+              IN_CALIBRATION: 'En calibración',
+              OUT_OF_SERVICE: 'Fuera de servicio',
+              DECOMMISSIONED: 'De baja',
             }
             const isLocked = calibration.status === 'APPROVED'
             const usedIds = new Set(calibration.patterns.map((cp) => cp.pattern.id))
@@ -529,51 +733,87 @@ export default function CalibrationDetailPage() {
             })
 
             return (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Ruler className="h-4 w-4" />
-                    Patrones utilizados
-                    {calibration.patterns.length > 0 && (
-                      <span className="text-xs font-normal text-muted-foreground">({calibration.patterns.length})</span>
-                    )}
-                  </CardTitle>
-                  <CardDescription>Patrones de referencia usados en esta calibracion</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
+              <div className="syn-card">
+                <div className="syn-card-head">
+                  <div>
+                    <div className="eyebrow flex items-center gap-1.5">
+                      <Ruler className="h-3 w-3" /> Patrones · {calibration.patterns.length}
+                    </div>
+                    <h3 style={{ marginTop: 6 }}>Referencia</h3>
+                  </div>
+                </div>
+                <div style={{ padding: '12px 16px 14px' }} className="space-y-3">
                   {calibration.patterns.length === 0 && (
-                    <p className="text-xs text-muted-foreground italic">Sin patrones agregados</p>
+                    <p
+                      className="text-[12.5px] italic"
+                      style={{ color: 'var(--ink-3)' }}
+                    >
+                      Sin patrones agregados
+                    </p>
                   )}
 
                   {calibration.patterns.map((cp) => {
                     const inst = cp.pattern.instrument
                     const pCodigo = getCodigo(cp.pattern.data, cp.pattern.id.slice(0, 8))
-                    const pNext = inst?.nextCalibrationAt ? new Date(inst.nextCalibrationAt) : null
+                    const pNext = inst?.nextCalibrationAt
+                      ? new Date(inst.nextCalibrationAt)
+                      : null
                     const pOverdue = !!pNext && pNext.getTime() < Date.now()
-                    const pDays = pNext ? Math.ceil((pNext.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null
-                    const sb = inst ? statusBadge[inst.status] : null
+                    const pDays = pNext
+                      ? Math.ceil((pNext.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                      : null
 
                     return (
                       <div
                         key={cp.id}
-                        className={`rounded-md border p-3 text-xs space-y-2 ${pOverdue ? 'border-red-200 bg-red-50/50' : 'bg-muted/30'}`}
+                        className="space-y-2 rounded-[8px] border p-2.5 text-[12px]"
+                        style={{
+                          background: pOverdue ? 'var(--danger-soft)' : 'var(--bg-2)',
+                          borderColor: pOverdue ? 'var(--danger)' : 'var(--line)',
+                        }}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="font-medium text-foreground truncate">{pCodigo}</p>
-                            <p className="text-muted-foreground truncate">{cp.pattern.record.name}</p>
+                            <p
+                              className="truncate text-[13px] font-medium"
+                              style={{ color: 'var(--ink-0)' }}
+                            >
+                              {pCodigo}
+                            </p>
+                            <p
+                              className="truncate text-[11px]"
+                              style={{ color: 'var(--ink-3)' }}
+                            >
+                              {cp.pattern.record.name}
+                            </p>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
-                            {sb && <Badge variant={sb.variant} className="text-[10px]">{sb.label}</Badge>}
+                            {inst && (
+                              <span
+                                className={`syn-chip ${instStatusChip[inst.status]}`}
+                                style={{ fontSize: 9 }}
+                              >
+                                {instStatusLabel[inst.status]}
+                              </span>
+                            )}
                             {!isLocked && (
                               <button
                                 type="button"
                                 onClick={() => removePatternMutation.mutate(cp.id)}
                                 disabled={removePatternMutation.isPending}
-                                className="rounded p-1 text-muted-foreground hover:bg-background hover:text-destructive"
-                                title="Quitar patron"
+                                className="rounded p-1 transition-colors"
+                                style={{ color: 'var(--ink-3)' }}
+                                title="Quitar patrón"
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.color = 'var(--danger)'
+                                  e.currentTarget.style.background = 'var(--bg-3)'
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.color = 'var(--ink-3)'
+                                  e.currentTarget.style.background = 'transparent'
+                                }}
                               >
-                                <X className="h-3.5 w-3.5" />
+                                <X className="h-3 w-3" />
                               </button>
                             )}
                           </div>
@@ -582,7 +822,8 @@ export default function CalibrationDetailPage() {
                         {inst && (
                           <Link
                             href={`/instruments/${inst.id}`}
-                            className="block text-primary hover:underline"
+                            className="block font-mono text-[11px] uppercase tracking-[0.14em]"
+                            style={{ color: 'var(--primary-hex)' }}
                           >
                             Ver instrumento →
                           </Link>
@@ -590,24 +831,28 @@ export default function CalibrationDetailPage() {
 
                         {pNext && (
                           <div
-                            className={`flex items-center gap-1.5 ${
-                              pOverdue
-                                ? 'text-red-600 font-medium'
+                            className="flex items-center gap-1.5 font-mono text-[11px]"
+                            style={{
+                              color: pOverdue
+                                ? 'var(--danger)'
                                 : pDays !== null && pDays <= 30
-                                ? 'text-amber-600 font-medium'
-                                : 'text-muted-foreground'
-                            }`}
+                                  ? 'var(--warn)'
+                                  : 'var(--ink-3)',
+                              fontWeight: pOverdue ? 500 : 400,
+                            }}
                           >
                             {pOverdue ? (
-                              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
                             ) : (
-                              <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+                              <CalendarClock className="h-3 w-3 shrink-0" />
                             )}
                             <span>
-                              Proxima cal: {pNext.toLocaleDateString('es-AR')}
+                              Cal: {pNext.toLocaleDateString('es-AR')}
                               {pDays !== null && (
                                 <span className="ml-1 opacity-80">
-                                  ({pOverdue ? `${Math.abs(pDays)} d vencido` : `en ${pDays} d`})
+                                  (
+                                  {pOverdue ? `${Math.abs(pDays)}d venc` : `en ${pDays}d`}
+                                  )
                                 </span>
                               )}
                             </span>
@@ -618,50 +863,80 @@ export default function CalibrationDetailPage() {
                   })}
 
                   {anyOverdue && (
-                    <div className="flex items-start gap-1.5 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                      <span>Hay al menos un patron con su calibracion vencida. La trazabilidad de esta medicion puede no ser valida.</span>
+                    <div
+                      className="flex items-start gap-1.5 rounded-[8px] border p-2 text-[11.5px]"
+                      style={{
+                        background: 'var(--danger-soft)',
+                        borderColor: 'var(--danger)',
+                        color: 'var(--danger)',
+                      }}
+                    >
+                      <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                      <span>
+                        Hay patrones con calibración vencida. La trazabilidad puede no ser válida.
+                      </span>
                     </div>
                   )}
 
                   {!isLocked && (
                     <>
                       {!pickerOpen ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full"
+                        <button
+                          type="button"
                           onClick={() => setPickerOpen(true)}
+                          className="syn-btn syn-btn-ghost w-full justify-center"
+                          style={{ padding: '6px 10px', fontSize: 12 }}
                         >
-                          <Plus className="mr-1 h-3.5 w-3.5" />
-                          Agregar patron
-                        </Button>
+                          <Plus className="h-3 w-3" /> Agregar patrón
+                        </button>
                       ) : (
-                        <div className="rounded-md border bg-background p-2 space-y-2">
+                        <div
+                          className="space-y-2 rounded-[8px] border p-2"
+                          style={{
+                            background: 'var(--bg-1)',
+                            borderColor: 'var(--line)',
+                          }}
+                        >
                           <div className="relative">
-                            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Search
+                              className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2"
+                              style={{ color: 'var(--ink-3)' }}
+                            />
                             <input
                               autoFocus
-                              type="text"
-                              placeholder="Buscar por codigo o registro..."
+                              type="search"
+                              placeholder="Buscar por código o registro…"
                               value={pickerSearch}
                               onChange={(e) => setPickerSearch(e.target.value)}
-                              className="flex h-8 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                              className="syn-input"
+                              style={{
+                                minHeight: 30,
+                                padding: '4px 8px 4px 24px',
+                                fontSize: 12,
+                              }}
                             />
                           </div>
-                          <div className="max-h-60 overflow-y-auto rounded border divide-y">
+                          <div
+                            className="max-h-60 overflow-y-auto rounded-[6px] border"
+                            style={{ borderColor: 'var(--line)' }}
+                          >
                             {filteredAvailable.length === 0 ? (
-                              <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                              <p
+                                className="px-2 py-3 text-center text-[11px]"
+                                style={{ color: 'var(--ink-3)' }}
+                              >
                                 {patterns.length === 0
-                                  ? 'No hay patrones cargados en el sistema'
+                                  ? 'No hay patrones cargados'
                                   : usedIds.size === patterns.length
-                                  ? 'Todos los patrones ya estan agregados'
-                                  : 'No hay coincidencias'}
+                                    ? 'Todos ya agregados'
+                                    : 'Sin coincidencias'}
                               </p>
                             ) : (
-                              filteredAvailable.map((p) => {
+                              filteredAvailable.map((p, i) => {
                                 const codigo = getCodigo(p.entry.data, p.entry.id.slice(0, 8))
-                                const pNext = p.nextCalibrationAt ? new Date(p.nextCalibrationAt) : null
+                                const pNext = p.nextCalibrationAt
+                                  ? new Date(p.nextCalibrationAt)
+                                  : null
                                 const pOverdue = !!pNext && pNext.getTime() < Date.now()
                                 return (
                                   <button
@@ -669,185 +944,261 @@ export default function CalibrationDetailPage() {
                                     type="button"
                                     onClick={() => addPatternMutation.mutate(p.entry.id)}
                                     disabled={addPatternMutation.isPending}
-                                    className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs hover:bg-muted disabled:opacity-50"
+                                    className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-[12px] transition-colors disabled:opacity-50"
+                                    style={{
+                                      borderTop: i === 0 ? 'none' : '1px solid var(--line)',
+                                      color: 'var(--ink-1)',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.background = 'var(--bg-3)'
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = 'transparent'
+                                    }}
                                   >
                                     <div className="min-w-0">
-                                      <p className="font-medium truncate">{codigo}</p>
-                                      <p className="text-[10px] text-muted-foreground truncate">{p.record.name}</p>
+                                      <p
+                                        className="truncate font-medium"
+                                        style={{ color: 'var(--ink-0)' }}
+                                      >
+                                        {codigo}
+                                      </p>
+                                      <p
+                                        className="truncate text-[10px]"
+                                        style={{ color: 'var(--ink-3)' }}
+                                      >
+                                        {p.record.name}
+                                      </p>
                                     </div>
                                     {pOverdue && (
-                                      <Badge variant="destructive" className="text-[9px] shrink-0">VENCIDO</Badge>
+                                      <span
+                                        className="syn-chip syn-chip-fail shrink-0"
+                                        style={{ fontSize: 9 }}
+                                      >
+                                        VENCIDO
+                                      </span>
                                     )}
                                   </button>
                                 )
                               })
                             )}
                           </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full"
+                          <button
+                            type="button"
                             onClick={() => {
                               setPickerOpen(false)
                               setPickerSearch('')
                             }}
+                            className="syn-btn syn-btn-subtle w-full justify-center"
+                            style={{ padding: '4px 10px', fontSize: 12 }}
                           >
                             Cancelar
-                          </Button>
+                          </button>
                         </div>
                       )}
                     </>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )
           })()}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Informacion</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Estado</span>
-                <Badge variant={displayVariant}>{displayLabel}</Badge>
+          {/* Información */}
+          <div className="syn-card">
+            <div className="syn-card-head">
+              <div>
+                <div className="eyebrow">· Información</div>
+                <h3 style={{ marginTop: 6 }}>Datos clave</h3>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Registro</span>
-                <Link href={`/records/${calibration.entry.record.id}`} className="text-primary hover:underline">
-                  {calibration.entry.record.name}
-                </Link>
-              </div>
+            </div>
+            <div>
+              <InfoRow
+                label="Estado"
+                value={<span className={`syn-chip ${statusChipCls}`}>{displayLabel}</span>}
+              />
+              <InfoRow
+                label="Registro"
+                value={
+                  <Link
+                    href={`/records/${calibration.entry.record.id}`}
+                    className="underline-offset-2 hover:underline"
+                    style={{ color: 'var(--primary-hex)' }}
+                  >
+                    {calibration.entry.record.name}
+                  </Link>
+                }
+              />
               {calibration.template && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Plantilla</span>
-                  <span>{calibration.template.name}</span>
-                </div>
+                <InfoRow label="Plantilla" value={calibration.template.name} />
               )}
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Creada</span>
-                <span>{new Date(calibration.createdAt).toLocaleDateString('es-AR')}</span>
-              </div>
+              <InfoRow
+                label="Creada"
+                value={
+                  <span className="font-mono">
+                    {new Date(calibration.createdAt).toLocaleDateString('es-AR')}
+                  </span>
+                }
+              />
               {dueDate && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <CalendarClock className="h-3.5 w-3.5" />
-                    Vencimiento
-                  </span>
-                  <span className={isOverdue ? 'font-medium text-red-600' : daysUntilDue !== null && daysUntilDue <= 7 ? 'font-medium text-amber-600' : ''}>
-                    {dueDate.toLocaleDateString('es-AR')}
-                    {daysUntilDue !== null && (
-                      <span className="ml-1 text-xs text-muted-foreground">
-                        ({isOverdue ? `${Math.abs(daysUntilDue)} d vencida` : `en ${daysUntilDue} d`})
-                      </span>
-                    )}
-                  </span>
-                </div>
+                <InfoRow
+                  label="Vence"
+                  value={
+                    <span
+                      className="font-mono"
+                      style={{
+                        color: isOverdue
+                          ? 'var(--danger)'
+                          : daysUntilDue !== null && daysUntilDue <= 7
+                            ? 'var(--warn)'
+                            : 'var(--ink-0)',
+                        fontWeight: isOverdue ? 500 : 400,
+                      }}
+                    >
+                      {dueDate.toLocaleDateString('es-AR')}
+                    </span>
+                  }
+                />
               )}
               {calibration.completedAt && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Completada</span>
-                  <span>{new Date(calibration.completedAt).toLocaleDateString('es-AR')}</span>
-                </div>
+                <InfoRow
+                  label="Completada"
+                  value={
+                    <span className="font-mono">
+                      {new Date(calibration.completedAt).toLocaleDateString('es-AR')}
+                    </span>
+                  }
+                />
               )}
               {overallResult !== null && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Resultado</span>
-                  <Badge variant={overallResult ? 'success' : 'destructive'}>
-                    {overallResult ? 'Apta' : 'No apta'}
-                  </Badge>
-                </div>
+                <InfoRow
+                  label="Resultado"
+                  value={
+                    <span
+                      className={
+                        overallResult
+                          ? 'syn-chip syn-chip-ok'
+                          : 'syn-chip syn-chip-fail'
+                      }
+                    >
+                      {overallResult ? 'Apta' : 'No apta'}
+                    </span>
+                  }
+                />
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Acciones</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          {/* Acciones */}
+          <div className="syn-card">
+            <div className="syn-card-head">
+              <div>
+                <div className="eyebrow">· Acciones</div>
+                <h3 style={{ marginTop: 6 }}>
+                  Ciclo de <span className="italic">calibración.</span>
+                </h3>
+              </div>
+            </div>
+            <div style={{ padding: '14px 16px 16px' }} className="space-y-2">
               {calibration.status === 'IN_PROGRESS' && (
                 <>
                   {dirty && (
-                    <Button
-                      className="w-full"
-                      variant="outline"
+                    <button
+                      type="button"
                       onClick={() => saveResultsMutation.mutate()}
                       disabled={saveResultsMutation.isPending}
+                      className="syn-btn syn-btn-ghost w-full justify-center"
                     >
-                      <Save className="mr-2 h-4 w-4" />
-                      Guardar resultados
-                    </Button>
+                      <Save className="h-3.5 w-3.5" /> Guardar resultados
+                    </button>
                   )}
-                  <Button
-                    className="w-full"
+                  <button
+                    type="button"
                     onClick={() => {
                       if (dirty) {
-                        toast.error('Guarda los resultados antes de completar')
+                        toast.error('Guardá los resultados antes de completar')
                         return
                       }
                       changeStatusMutation.mutate('COMPLETED')
                     }}
                     disabled={changeStatusMutation.isPending}
+                    className="syn-btn syn-btn-primary w-full justify-center"
                   >
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Completar calibración
-                  </Button>
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Completar
+                  </button>
                 </>
               )}
 
               {calibration.status === 'COMPLETED' && (
                 <>
-                  <Button
-                    className="w-full"
+                  <button
+                    type="button"
                     onClick={() => changeStatusMutation.mutate('APPROVED')}
                     disabled={changeStatusMutation.isPending}
+                    className="syn-btn syn-btn-primary w-full justify-center"
                   >
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Aprobar
-                  </Button>
-                  <Button
-                    className="w-full"
-                    variant="destructive"
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Aprobar
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => changeStatusMutation.mutate('REJECTED')}
                     disabled={changeStatusMutation.isPending}
+                    className="syn-btn syn-btn-ghost w-full justify-center"
+                    style={{ color: 'var(--danger)' }}
                   >
-                    <XCircle className="mr-2 h-4 w-4" />
-                    Rechazar
-                  </Button>
-                  <Button
-                    className="w-full"
-                    variant="outline"
+                    <XCircle className="h-3.5 w-3.5" /> Rechazar
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => changeStatusMutation.mutate('IN_PROGRESS')}
                     disabled={changeStatusMutation.isPending}
+                    className="syn-btn syn-btn-ghost w-full justify-center"
                   >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Reiniciar
-                  </Button>
+                    <RotateCcw className="h-3.5 w-3.5" /> Reiniciar
+                  </button>
                 </>
               )}
 
               {calibration.status === 'APPROVED' && (
-                <p className="text-xs text-center text-muted-foreground">
-                  Calibración aprobada — sin acciones disponibles
+                <p
+                  className="text-center text-[12px]"
+                  style={{ color: 'var(--ink-3)' }}
+                >
+                  Calibración aprobada — sin acciones.
                 </p>
               )}
 
               {calibration.status === 'REJECTED' && (
-                <Button
-                  className="w-full"
-                  variant="outline"
+                <button
+                  type="button"
                   onClick={() => changeStatusMutation.mutate('IN_PROGRESS')}
                   disabled={changeStatusMutation.isPending}
+                  className="syn-btn syn-btn-ghost w-full justify-center"
                 >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Reiniciar
-                </Button>
+                  <RotateCcw className="h-3.5 w-3.5" /> Reiniciar
+                </button>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string
+  value: React.ReactNode
+}) {
+  return (
+    <div
+      className="flex items-center justify-between gap-4 px-5 py-2.5 text-[13px]"
+      style={{ borderTop: '1px solid var(--line)' }}
+    >
+      <span style={{ color: 'var(--ink-3)' }}>{label}</span>
+      <span style={{ color: 'var(--ink-0)' }}>{value}</span>
     </div>
   )
 }

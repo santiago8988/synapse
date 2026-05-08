@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="6" fill="#0C1324"/>
+  <g transform="translate(16 16) scale(0.045)">
+    <path d="M -200 -40 C -210 -90, -180 -150, -130 -180 C -70 -210, 10 -218, 80 -200 C 145 -184, 195 -148, 215 -90 C 230 -40, 232 10, 215 60 C 205 95, 180 115, 145 120 C 175 130, 195 155, 195 175 L 100 175 C 90 165, 70 158, 45 158 C 25 158, 5 168, -5 175 L -60 175 C -75 168, -90 152, -100 130 C -115 95, -135 80, -160 70 C -190 55, -210 25, -212 -5 Z"
+          fill="#1E3A8A" stroke="#5EEAFE" stroke-width="12"/>
+    <circle cx="-90" cy="-50" r="28" fill="#5EEAFE"/>
+    <circle cx="60" cy="-60" r="28" fill="#5EEAFE"/>
+    <circle cx="130" cy="-30" r="24" fill="#5EEAFE"/>
+  </g>
+</svg>

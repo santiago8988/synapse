@@ -2,11 +2,8 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Package, Search, Loader2, ChevronRight } from 'lucide-react'
+import { Package, Search, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -24,18 +21,24 @@ interface BatchItem {
   entry: { id: string; data: Record<string, unknown> }
 }
 
-const statusConfig: Record<BatchStatus, { label: string; variant: 'secondary' | 'info' | 'success' | 'warning' | 'destructive' }> = {
-  PLANNED: { label: 'Planificado', variant: 'secondary' },
-  IN_PROGRESS: { label: 'En producción', variant: 'info' },
-  COMPLETED: { label: 'Completado', variant: 'warning' },
-  APPROVED: { label: 'Aprobado', variant: 'success' },
-  REJECTED: { label: 'Rechazado', variant: 'destructive' },
+const statusChipCls: Record<BatchStatus, string> = {
+  PLANNED: 'syn-chip-draft',
+  IN_PROGRESS: 'syn-chip-active',
+  COMPLETED: 'syn-chip-warn',
+  APPROVED: 'syn-chip-ok',
+  REJECTED: 'syn-chip-fail',
 }
-
+const statusLabel: Record<BatchStatus, string> = {
+  PLANNED: 'Planificado',
+  IN_PROGRESS: 'En producción',
+  COMPLETED: 'Completado',
+  APPROVED: 'Aprobado',
+  REJECTED: 'Rechazado',
+}
 const nextStatus: Record<BatchStatus, { status: BatchStatus; label: string } | null> = {
-  PLANNED: { status: 'IN_PROGRESS', label: 'Iniciar producción' },
+  PLANNED: { status: 'IN_PROGRESS', label: 'Iniciar' },
   IN_PROGRESS: { status: 'COMPLETED', label: 'Completar' },
-  COMPLETED: null, // approve/reject are separate actions
+  COMPLETED: null,
   APPROVED: null,
   REJECTED: { status: 'PLANNED', label: 'Reiniciar' },
 }
@@ -45,13 +48,17 @@ export default function BatchesPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
 
-  const { data: batches = [], isLoading } = useQuery({
+  const { data: batches = [], isLoading } = useQuery<BatchItem[]>({
     queryKey: ['batches', statusFilter],
-    queryFn: () => api.batches.list(statusFilter ? { status: statusFilter } : undefined) as Promise<BatchItem[]>,
+    queryFn: () =>
+      api.batches.list(
+        statusFilter ? { status: statusFilter } : undefined,
+      ) as Promise<BatchItem[]>,
   })
 
   const changeStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => api.batches.changeStatus(id, { status }),
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
+      api.batches.changeStatus(id, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['batches'] })
       toast.success('Estado actualizado')
@@ -66,104 +73,197 @@ export default function BatchesPage() {
   )
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Lotes de Producción</h1>
-        <p className="mt-1 text-muted-foreground">Seguimiento de lotes y su estado</p>
+    <div className="mx-auto max-w-[1280px]">
+      <div className="syn-ph">
+        <div>
+          <div className="kicker mb-2">· Seguimiento · Lotes</div>
+          <h1>
+            Lotes de <span className="italic">producción.</span>
+          </h1>
+          <p className="sub">
+            Cada lote nace de una entrada en un registro tipo Lote. Seguí su ciclo: planificado → en producción → completado → aprobado / rechazado.
+          </p>
+        </div>
       </div>
 
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[240px] max-w-[420px]">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
+            style={{ color: 'var(--ink-3)' }}
+          />
           <input
+            type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por lote o registro..."
-            className="flex h-10 w-full rounded-md border border-input bg-background pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            placeholder="Buscar por lote o registro…"
+            className="h-[38px] w-full rounded-[10px] border pl-10 pr-3 text-[13px] outline-none"
+            style={{
+              background: 'var(--bg-1)',
+              borderColor: 'var(--line-2)',
+              color: 'var(--ink-0)',
+            }}
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          className="syn-select"
+          style={{ maxWidth: 200 }}
         >
-          <option value="">Todos</option>
+          <option value="">Todos los estados</option>
           <option value="PLANNED">Planificado</option>
           <option value="IN_PROGRESS">En producción</option>
           <option value="COMPLETED">Completado</option>
           <option value="APPROVED">Aprobado</option>
           <option value="REJECTED">Rechazado</option>
         </select>
+        <div
+          className="ml-auto font-mono text-[11px] uppercase tracking-[0.14em]"
+          style={{ color: 'var(--ink-3)' }}
+        >
+          {filtered.length} {filtered.length === 1 ? 'lote' : 'lotes'}
+        </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Package className="mb-3 h-10 w-10 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">
-              {search || statusFilter ? 'No se encontraron lotes' : 'No hay lotes creados. Creá una entrada en un registro tipo Lote.'}
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="divide-y rounded-lg border bg-card">
-          {filtered.map((batch) => {
-            const st = statusConfig[batch.status]
-            const next = nextStatus[batch.status]
-            return (
-              <div key={batch.id} className="flex items-center gap-4 px-4 py-3">
-                <Link href={`/batches/${batch.id}`} className="flex flex-1 items-center gap-4 transition-colors hover:opacity-80">
-                  <Package className="h-5 w-5 text-muted-foreground" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">Lote {batch.lotNumber}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {batch.record.name}
-                      {batch.recipe && <> · Receta: {batch.recipe.name}</>}
-                      {batch.startedAt && <> · Inicio: {new Date(batch.startedAt).toLocaleDateString('es-AR')}</>}
-                    </p>
-                  </div>
-                  <Badge variant={st.variant}>{st.label}</Badge>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </Link>
-                {batch.status === 'COMPLETED' && (
-                  <div className="flex gap-1">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-green-600"
-                      onClick={() => changeStatusMutation.mutate({ id: batch.id, status: 'APPROVED' })}
+      <div className="syn-card">
+        {isLoading ? (
+          <div className="p-8" style={{ color: 'var(--ink-3)' }}>
+            Cargando…
+          </div>
+        ) : filtered.length === 0 ? (
+          <EmptyState hasFilter={!!search || !!statusFilter} />
+        ) : (
+          <table className="syn-table">
+            <thead>
+              <tr>
+                <th>Lote</th>
+                <th>Registro</th>
+                <th>Receta</th>
+                <th>Inicio</th>
+                <th>Estado</th>
+                <th style={{ textAlign: 'right' }}>Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((b) => {
+                const next = nextStatus[b.status]
+                const isReviewable = b.status === 'COMPLETED'
+                return (
+                  <tr key={b.id}>
+                    <td data-label="Lote" data-role="identifier">
+                      <Link
+                        href={`/batches/${b.id}`}
+                        style={{ color: 'var(--ink-0)' }}
+                      >
+                        {b.lotNumber}
+                      </Link>
+                    </td>
+                    <td data-label="Registro" style={{ color: 'var(--ink-1)' }}>
+                      {b.record.name}
+                    </td>
+                    <td data-label="Receta" style={{ color: 'var(--ink-1)' }}>
+                      {b.recipe?.name ?? <span style={{ color: 'var(--ink-4)' }}>—</span>}
+                    </td>
+                    <td
+                      data-label="Inicio"
+                      className="font-mono text-[12px]"
+                      style={{ color: 'var(--ink-2)' }}
                     >
-                      Aprobar
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-red-600"
-                      onClick={() => changeStatusMutation.mutate({ id: batch.id, status: 'REJECTED' })}
-                    >
-                      Rechazar
-                    </Button>
-                  </div>
-                )}
-                {next && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => changeStatusMutation.mutate({ id: batch.id, status: next.status })}
-                    disabled={changeStatusMutation.isPending}
-                  >
-                    {next.label}
-                  </Button>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
+                      {b.startedAt ? (
+                        new Date(b.startedAt).toLocaleDateString('es-AR')
+                      ) : (
+                        <span style={{ color: 'var(--ink-4)' }}>—</span>
+                      )}
+                    </td>
+                    <td data-label="Estado" data-role="status">
+                      <span className={`syn-chip ${statusChipCls[b.status]}`}>
+                        {statusLabel[b.status]}
+                      </span>
+                    </td>
+                    <td data-label="" style={{ textAlign: 'right' }}>
+                      {isReviewable ? (
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              changeStatusMutation.mutate({ id: b.id, status: 'REJECTED' })
+                            }
+                            disabled={changeStatusMutation.isPending}
+                            className="syn-btn syn-btn-ghost"
+                            style={{ color: 'var(--danger)' }}
+                          >
+                            Rechazar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              changeStatusMutation.mutate({ id: b.id, status: 'APPROVED' })
+                            }
+                            disabled={changeStatusMutation.isPending}
+                            className="syn-btn syn-btn-primary"
+                          >
+                            Aprobar
+                          </button>
+                        </div>
+                      ) : next ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            changeStatusMutation.mutate({ id: b.id, status: next.status })
+                          }
+                          disabled={changeStatusMutation.isPending}
+                          className="syn-btn syn-btn-ghost"
+                        >
+                          {next.label}
+                        </button>
+                      ) : (
+                        <Link
+                          href={`/batches/${b.id}`}
+                          className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
+                          style={{ color: 'var(--primary-hex)' }}
+                        >
+                          Abrir <ArrowRight className="h-3 w-3" />
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({ hasFilter }: { hasFilter: boolean }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center"
+      style={{ color: 'var(--ink-2)' }}
+    >
+      <Package className="h-8 w-8" style={{ color: 'var(--ink-4)' }} />
+      <div
+        className="text-[24px]"
+        style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink-0)' }}
+      >
+        {hasFilter ? (
+          <>
+            Sin <span className="italic">coincidencias.</span>
+          </>
+        ) : (
+          <>
+            Aún no hay <span className="italic">lotes.</span>
+          </>
+        )}
+      </div>
+      <p className="max-w-sm text-[13px]" style={{ color: 'var(--ink-2)' }}>
+        {hasFilter
+          ? 'Probá cambiar los filtros o la búsqueda.'
+          : 'Creá una entrada en un registro tipo Lote para arrancar un ciclo de producción.'}
+      </p>
     </div>
   )
 }

@@ -2,10 +2,17 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { FlaskConical, Plus, Search, Trash2, Pencil, Loader2, X, Globe, Building2 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import {
+  FlaskConical,
+  Plus,
+  Search,
+  Trash2,
+  Pencil,
+  Loader2,
+  X,
+  Globe,
+  Building2,
+} from 'lucide-react'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -16,8 +23,6 @@ interface OrgMethod {
   name: string
   parameter: string
   unit: string | null
-  defaultMin: number | null
-  defaultMax: number | null
   isGlobal: boolean
   sourceRef: string | null
 }
@@ -38,7 +43,7 @@ export default function MethodsPage() {
     mutationFn: (id: string) => api.methods.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['methods'] })
-      toast.success('Metodo eliminado')
+      toast.success('Método eliminado')
     },
     onError: (err: Error) => toast.error(err.message),
   })
@@ -53,156 +58,279 @@ export default function MethodsPage() {
   const own = filtered.filter((m) => m.orgId !== null)
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-[1280px]">
+      <div className="syn-ph">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Metodos analiticos</h1>
-          <p className="mt-1 text-muted-foreground">Catalogo de metodos de tu organizacion y globales</p>
+          <div className="kicker mb-2">· Definición · Métodos</div>
+          <h1>
+            Métodos <span className="italic">analíticos.</span>
+          </h1>
+          <p className="sub">
+            Catálogo de tu organización + métodos globales compartidos. Los usás al configurar matrices de muestra.
+          </p>
         </div>
-        <Button onClick={() => { setEditing(null); setShowForm(true) }}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nuevo metodo
-        </Button>
+        <div className="syn-ph-actions">
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(null)
+              setShowForm(true)
+            }}
+            className="syn-btn syn-btn-primary"
+          >
+            <Plus className="h-3 w-3" /> Nuevo método
+          </button>
+        </div>
       </div>
 
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[240px] max-w-[420px]">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
+            style={{ color: 'var(--ink-3)' }}
+          />
           <input
+            type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por codigo, nombre o parametro..."
-            className="flex h-10 w-full rounded-md border border-input bg-background pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            placeholder="Buscar por código, nombre o parámetro…"
+            className="h-[38px] w-full rounded-[10px] border pl-10 pr-3 text-[13px] outline-none"
+            style={{
+              background: 'var(--bg-1)',
+              borderColor: 'var(--line-2)',
+              color: 'var(--ink-0)',
+            }}
           />
         </div>
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value as 'all' | 'global' | 'own')}
-          className="rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+        <div
+          className="inline-flex rounded-[10px] p-1"
+          style={{ background: 'var(--bg-3)' }}
         >
-          <option value="all">Todos</option>
-          <option value="global">Globales</option>
-          <option value="own">Propios</option>
-        </select>
+          {(
+            [
+              ['all', 'Todos'],
+              ['own', 'Propios'],
+              ['global', 'Globales'],
+            ] as const
+          ).map(([k, label]) => (
+            <button
+              type="button"
+              key={k}
+              onClick={() => setFilter(k)}
+              className="rounded-[7px] px-3 py-1.5 text-[12px] font-medium transition-colors"
+              style={{
+                background: filter === k ? 'var(--bg-1)' : 'transparent',
+                boxShadow: filter === k ? 'var(--shadow-xs)' : undefined,
+                color: filter === k ? 'var(--ink-0)' : 'var(--ink-2)',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div
+          className="ml-auto font-mono text-[11px] uppercase tracking-[0.14em]"
+          style={{ color: 'var(--ink-3)' }}
+        >
+          {filtered.length} {filtered.length === 1 ? 'método' : 'métodos'}
+        </div>
       </div>
 
       {(showForm || editing) && (
-        <MethodForm
-          method={editing}
-          onClose={() => { setShowForm(false); setEditing(null) }}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['methods'] })
-            setShowForm(false)
-            setEditing(null)
-          }}
-        />
+        <div className="mb-5">
+          <MethodForm
+            method={editing}
+            onClose={() => {
+              setShowForm(false)
+              setEditing(null)
+            }}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ['methods'] })
+              setShowForm(false)
+              setEditing(null)
+            }}
+          />
+        </div>
       )}
 
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div
+          className="rounded-[14px] border p-8"
+          style={{
+            background: 'var(--bg-1)',
+            borderColor: 'var(--line)',
+            color: 'var(--ink-3)',
+          }}
+        >
+          Cargando…
         </div>
       ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <FlaskConical className="mb-3 h-10 w-10 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">
-              {search ? 'No se encontraron metodos' : 'No hay metodos en el catalogo'}
+        <div className="syn-card">
+          <div
+            className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center"
+            style={{ color: 'var(--ink-2)' }}
+          >
+            <FlaskConical className="h-8 w-8" style={{ color: 'var(--ink-4)' }} />
+            <div
+              className="text-[24px]"
+              style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink-0)' }}
+            >
+              {search ? (
+                <>
+                  Sin <span className="italic">coincidencias.</span>
+                </>
+              ) : (
+                <>
+                  Catálogo <span className="italic">vacío.</span>
+                </>
+              )}
+            </div>
+            <p className="max-w-sm text-[13px]" style={{ color: 'var(--ink-2)' }}>
+              {search
+                ? 'Probá cambiar los filtros o la búsqueda.'
+                : 'Agregá métodos propios o importá del catálogo global.'}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-5">
           {own.length > 0 && (
-            <div>
-              <div className="mb-2 flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-muted-foreground">Tu organizacion ({own.length})</h2>
-              </div>
-              <div className="rounded-lg border bg-card">
-                <div className="grid grid-cols-[1fr_1fr_6rem_5rem_5rem_8rem] gap-2 px-4 py-2.5 text-xs font-medium text-muted-foreground bg-muted/30 border-b">
-                  <span>Codigo / Nombre</span>
-                  <span>Parametro</span>
-                  <span>Unidad</span>
-                  <span>Min</span>
-                  <span>Max</span>
-                  <span className="text-right">Acciones</span>
+            <div className="syn-card">
+              <div className="syn-card-head">
+                <div>
+                  <div className="eyebrow flex items-center gap-1.5">
+                    <Building2 className="h-3 w-3" /> Tu organización · {own.length}
+                  </div>
+                  <h3 style={{ marginTop: 6 }}>
+                    Métodos <span className="italic">propios.</span>
+                  </h3>
                 </div>
-                <div className="divide-y">
+              </div>
+              <table className="syn-table">
+                <thead>
+                  <tr>
+                    <th>Código · Nombre</th>
+                    <th>Parámetro</th>
+                    <th>Unidad</th>
+                    <th>Referencia</th>
+                    <th style={{ textAlign: 'right' }}>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {own.map((m) => (
-                    <div key={m.id} className="grid grid-cols-[1fr_1fr_6rem_5rem_5rem_8rem] gap-2 px-4 py-2.5 items-center text-sm">
-                      <div>
-                        <p className="font-medium">{m.code}</p>
-                        <p className="text-xs text-muted-foreground truncate">{m.name}</p>
-                      </div>
-                      <span>{m.parameter}</span>
-                      <span className="text-muted-foreground">{m.unit || '—'}</span>
-                      <span className="font-mono text-muted-foreground">{m.defaultMin != null ? m.defaultMin : '—'}</span>
-                      <span className="font-mono text-muted-foreground">{m.defaultMax != null ? m.defaultMax : '—'}</span>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7"
-                          onClick={() => { setEditing(m); setShowForm(false) }}
+                    <tr key={m.id}>
+                      <td data-label="Código · Nombre" data-role="identifier">
+                        <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
+                          {m.code}
+                        </span>
+                        <div
+                          className="mt-0.5 text-[11.5px]"
+                          style={{ color: 'var(--ink-3)' }}
                         >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-7 w-7 text-destructive"
-                          onClick={() => {
-                            if (confirm(`Eliminar el metodo "${m.code}"?`)) {
-                              deleteMutation.mutate(m.id)
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
+                          {m.name}
+                        </div>
+                      </td>
+                      <td data-label="Parámetro" style={{ color: 'var(--ink-1)' }}>
+                        {m.parameter}
+                      </td>
+                      <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
+                        {m.unit || <span style={{ color: 'var(--ink-4)' }}>—</span>}
+                      </td>
+                      <td data-label="Referencia">
+                        {m.sourceRef ? (
+                          <span className="syn-chip syn-chip-draft">{m.sourceRef}</span>
+                        ) : (
+                          <span style={{ color: 'var(--ink-4)' }}>—</span>
+                        )}
+                      </td>
+                      <td data-label="" style={{ textAlign: 'right' }}>
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditing(m)
+                              setShowForm(false)
+                            }}
+                            className="syn-btn syn-btn-subtle"
+                            style={{ padding: '6px 8px' }}
+                            title="Editar"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`¿Eliminar el método "${m.code}"?`)) {
+                                deleteMutation.mutate(m.id)
+                              }
+                            }}
+                            className="syn-btn syn-btn-subtle"
+                            style={{ padding: '6px 8px', color: 'var(--danger)' }}
+                            title="Eliminar"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              </div>
+                </tbody>
+              </table>
             </div>
           )}
 
           {globals.length > 0 && (
-            <div>
-              <div className="mb-2 flex items-center gap-2">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold text-muted-foreground">Globales ({globals.length})</h2>
-              </div>
-              <div className="rounded-lg border bg-card">
-                <div className="grid grid-cols-[1fr_1fr_6rem_5rem_5rem_8rem] gap-2 px-4 py-2.5 text-xs font-medium text-muted-foreground bg-muted/30 border-b">
-                  <span>Codigo / Nombre</span>
-                  <span>Parametro</span>
-                  <span>Unidad</span>
-                  <span>Min</span>
-                  <span>Max</span>
-                  <span className="text-right">Referencia</span>
+            <div className="syn-card">
+              <div className="syn-card-head">
+                <div>
+                  <div className="eyebrow flex items-center gap-1.5">
+                    <Globe className="h-3 w-3" /> Globales · {globals.length}
+                  </div>
+                  <h3 style={{ marginTop: 6 }}>
+                    Métodos <span className="italic">compartidos.</span>
+                  </h3>
                 </div>
-                <div className="divide-y">
+              </div>
+              <table className="syn-table">
+                <thead>
+                  <tr>
+                    <th>Código · Nombre</th>
+                    <th>Parámetro</th>
+                    <th>Unidad</th>
+                    <th style={{ textAlign: 'right' }}>Referencia</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {globals.map((m) => (
-                    <div key={m.id} className="grid grid-cols-[1fr_1fr_6rem_5rem_5rem_8rem] gap-2 px-4 py-2.5 items-center text-sm">
-                      <div>
-                        <p className="font-medium">{m.code}</p>
-                        <p className="text-xs text-muted-foreground truncate">{m.name}</p>
-                      </div>
-                      <span>{m.parameter}</span>
-                      <span className="text-muted-foreground">{m.unit || '—'}</span>
-                      <span className="font-mono text-muted-foreground">{m.defaultMin != null ? m.defaultMin : '—'}</span>
-                      <span className="font-mono text-muted-foreground">{m.defaultMax != null ? m.defaultMax : '—'}</span>
-                      <div className="text-right">
-                        {m.sourceRef && (
-                          <Badge variant="secondary" className="text-[10px] font-normal">{m.sourceRef}</Badge>
+                    <tr key={m.id}>
+                      <td data-label="Código · Nombre" data-role="identifier">
+                        <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
+                          {m.code}
+                        </span>
+                        <div
+                          className="mt-0.5 text-[11.5px]"
+                          style={{ color: 'var(--ink-3)' }}
+                        >
+                          {m.name}
+                        </div>
+                      </td>
+                      <td data-label="Parámetro" style={{ color: 'var(--ink-1)' }}>
+                        {m.parameter}
+                      </td>
+                      <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
+                        {m.unit || <span style={{ color: 'var(--ink-4)' }}>—</span>}
+                      </td>
+                      <td data-label="Referencia" style={{ textAlign: 'right' }}>
+                        {m.sourceRef ? (
+                          <span className="syn-chip syn-chip-draft">{m.sourceRef}</span>
+                        ) : (
+                          <span style={{ color: 'var(--ink-4)' }}>—</span>
                         )}
-                      </div>
-                    </div>
+                      </td>
+                    </tr>
                   ))}
-                </div>
-              </div>
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -211,7 +339,9 @@ export default function MethodsPage() {
   )
 }
 
-// --- Formulario de metodo ---
+// ============================================================================
+// MethodForm
+// ============================================================================
 
 function MethodForm({
   method,
@@ -227,8 +357,6 @@ function MethodForm({
   const [methodName, setMethodName] = useState(method?.name || '')
   const [parameter, setParameter] = useState(method?.parameter || '')
   const [unit, setUnit] = useState(method?.unit || '')
-  const [defaultMin, setDefaultMin] = useState(method?.defaultMin != null ? String(method.defaultMin) : '')
-  const [defaultMax, setDefaultMax] = useState(method?.defaultMax != null ? String(method.defaultMax) : '')
   const [sourceRef, setSourceRef] = useState(method?.sourceRef || '')
   const [saving, setSaving] = useState(false)
 
@@ -241,16 +369,14 @@ function MethodForm({
         name: methodName.trim(),
         parameter: parameter.trim(),
         unit: unit.trim() || undefined,
-        defaultMin: defaultMin ? parseFloat(defaultMin) : undefined,
-        defaultMax: defaultMax ? parseFloat(defaultMax) : undefined,
         sourceRef: sourceRef.trim() || undefined,
       }
       if (isEditing) {
         await api.methods.update(method!.id, data)
-        toast.success('Metodo actualizado')
+        toast.success('Método actualizado')
       } else {
         await api.methods.create(data)
-        toast.success('Metodo creado')
+        toast.success('Método creado')
       }
       onSuccess()
     } catch (e) {
@@ -261,96 +387,114 @@ function MethodForm({
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+    <div className="syn-card">
+      <div className="syn-card-head">
         <div>
-          <CardTitle>{isEditing ? 'Editar metodo' : 'Nuevo metodo'}</CardTitle>
-          <CardDescription>
-            {isEditing ? 'Modifica los datos del metodo' : 'Agrega un metodo propio a tu catalogo'}
-          </CardDescription>
+          <div className="eyebrow">
+            · {isEditing ? 'Editar método' : 'Nuevo método'}
+          </div>
+          <h3 style={{ marginTop: 6 }}>
+            {isEditing ? (
+              <>
+                Modificá <span className="italic">los datos.</span>
+              </>
+            ) : (
+              <>
+                Agregar al <span className="italic">catálogo propio.</span>
+              </>
+            )}
+          </h3>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Codigo *</label>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg p-2 transition-colors hover:bg-[var(--bg-3)]"
+          aria-label="Cerrar"
+        >
+          <X className="h-4 w-4" style={{ color: 'var(--ink-2)' }} />
+        </button>
+      </div>
+      <div style={{ padding: '16px 20px 18px' }} className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="syn-field">
+            <span className="syn-field-label">
+              Código <span className="req">*</span>
+            </span>
             <input
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="Ej: APHA 4500-H"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="syn-input"
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Parametro *</label>
+          <div className="syn-field">
+            <span className="syn-field-label">
+              Parámetro <span className="req">*</span>
+            </span>
             <input
               value={parameter}
               onChange={(e) => setParameter(e.target.value)}
               placeholder="Ej: pH"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="syn-input"
             />
           </div>
         </div>
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Nombre del metodo *</label>
+        <div className="syn-field">
+          <span className="syn-field-label">
+            Nombre del método <span className="req">*</span>
+          </span>
           <input
             value={methodName}
             onChange={(e) => setMethodName(e.target.value)}
-            placeholder="Ej: Potencial de Hidrogeno - Electrometrico"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            placeholder="Ej: Potencial de Hidrógeno — Electrométrico"
+            className="syn-input"
           />
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Unidad</label>
-            <input
-              value={unit}
-              onChange={(e) => setUnit(e.target.value)}
-              placeholder="Ej: mg/L"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Min por defecto</label>
-            <input
-              type="number"
-              value={defaultMin}
-              onChange={(e) => setDefaultMin(e.target.value)}
-              placeholder="—"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Max por defecto</label>
-            <input
-              type="number"
-              value={defaultMax}
-              onChange={(e) => setDefaultMax(e.target.value)}
-              placeholder="—"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
+        <div className="syn-field">
+          <span className="syn-field-label">Unidad</span>
+          <input
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            placeholder="Ej: mg/L"
+            className="syn-input"
+          />
+          <p
+            className="mt-1 text-[11px]"
+            style={{ color: 'var(--ink-3)' }}
+          >
+            Las tolerancias (min/max) no se definen acá — viven en cada matriz que use este método.
+          </p>
         </div>
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Referencia</label>
+        <div className="syn-field">
+          <span className="syn-field-label">Referencia</span>
           <input
             value={sourceRef}
             onChange={(e) => setSourceRef(e.target.value)}
             placeholder="Ej: APHA Standard Methods 24th Ed."
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="syn-input"
           />
         </div>
-        <div className="flex gap-2">
-          <Button onClick={handleSave} disabled={saving || !code.trim() || !methodName.trim() || !parameter.trim()}>
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {isEditing ? 'Guardar cambios' : 'Crear metodo'}
-          </Button>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+        <div className="flex gap-2 pt-2">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={
+              saving || !code.trim() || !methodName.trim() || !parameter.trim()
+            }
+            className="syn-btn syn-btn-primary"
+          >
+            {saving && <Loader2 className="h-3 w-3 animate-spin" />}
+            {isEditing ? 'Guardar cambios' : 'Crear método'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="syn-btn syn-btn-ghost"
+          >
+            Cancelar
+          </button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

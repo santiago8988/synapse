@@ -22,8 +22,11 @@ import {
   ChevronDown,
   type LucideIcon,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { BrainMark } from '@/components/brand/brain-mark'
+import { useMe, initials, roleLabel } from '@/lib/use-me'
+import { api } from '@/lib/api'
 
 interface NavItem {
   href: string
@@ -37,54 +40,108 @@ interface NavGroup {
   items: NavItem[]
 }
 
-const navigation: NavGroup[] = [
-  {
-    label: 'Definición',
-    items: [
-      { href: '/dashboard', name: 'Dashboard', icon: LayoutDashboard },
-      { href: '/records', name: 'Registros', icon: ClipboardList },
-      { href: '/documents', name: 'Documentos', icon: FileText },
-      { href: '/recipes', name: 'Recetas', icon: FlaskConical },
-      { href: '/matrices', name: 'Matrices', icon: Microscope },
-      { href: '/methods', name: 'Métodos', icon: FlaskRound },
-      { href: '/calibration-templates', name: 'Plantillas calib.', icon: Ruler },
-    ],
-  },
-  {
-    label: 'Seguimiento',
-    items: [
-      { href: '/batches', name: 'Lotes', icon: Package },
-      { href: '/samples', name: 'Muestras', icon: TestTube2 },
-      { href: '/instruments', name: 'Instrumental', icon: Wrench },
-      { href: '/calibrations', name: 'Calibraciones', icon: ScanLine },
-      { href: '/stock', name: 'Stock', icon: Warehouse },
-    ],
-  },
-  {
-    label: 'Calidad',
-    items: [
-      { href: '/non-conformities', name: 'No conformidades', icon: AlertTriangle, badge: '4' },
-      { href: '/approvals', name: 'Aprobaciones', icon: CheckCircle2, badge: '5', warn: true },
-      { href: '/audit', name: 'Auditoría', icon: Shield },
-    ],
-  },
-  {
-    label: 'Configuración',
-    items: [{ href: '/settings', name: 'Ajustes', icon: Settings }],
-  },
-]
+function buildNavigation(counts: { ncOpen: number; approvalsPending: number }): NavGroup[] {
+  const fmt = (n: number) => (n > 99 ? '99+' : String(n))
+  return [
+    {
+      label: 'Definición',
+      items: [
+        { href: '/dashboard', name: 'Dashboard', icon: LayoutDashboard },
+        { href: '/records', name: 'Registros', icon: ClipboardList },
+        { href: '/documents', name: 'Documentos', icon: FileText },
+        { href: '/recipes', name: 'Recetas', icon: FlaskConical },
+        { href: '/matrices', name: 'Matrices', icon: Microscope },
+        { href: '/methods', name: 'Métodos', icon: FlaskRound },
+        { href: '/calibration-templates', name: 'Plantillas calib.', icon: Ruler },
+      ],
+    },
+    {
+      label: 'Seguimiento',
+      items: [
+        { href: '/batches', name: 'Lotes', icon: Package },
+        { href: '/samples', name: 'Muestras', icon: TestTube2 },
+        { href: '/instruments', name: 'Instrumental', icon: Wrench },
+        { href: '/calibrations', name: 'Calibraciones', icon: ScanLine },
+        { href: '/stock', name: 'Stock', icon: Warehouse },
+      ],
+    },
+    {
+      label: 'Calidad',
+      items: [
+        {
+          href: '/non-conformities',
+          name: 'No conformidades',
+          icon: AlertTriangle,
+          badge: counts.ncOpen > 0 ? fmt(counts.ncOpen) : undefined,
+        },
+        {
+          href: '/approvals',
+          name: 'Aprobaciones',
+          icon: CheckCircle2,
+          badge: counts.approvalsPending > 0 ? fmt(counts.approvalsPending) : undefined,
+          warn: counts.approvalsPending > 0,
+        },
+        { href: '/audit', name: 'Auditoría', icon: Shield },
+      ],
+    },
+    {
+      label: 'Configuración',
+      items: [{ href: '/settings', name: 'Ajustes', icon: Settings }],
+    },
+  ]
+}
 
-export function Sidebar() {
+interface SidebarProps {
+  open?: boolean
+  onNavigate?: () => void
+}
+
+export function Sidebar({ open = false, onNavigate }: SidebarProps) {
   const pathname = usePathname()
+  const { data: me } = useMe()
+
+  // Dashboard stats: ya cachea contador de NCs abiertas (incluye OPEN + IN_PROGRESS).
+  const { data: dashStats } = useQuery<{
+    nonConformities: { open: number; inProgress: number; total: number }
+  }>({
+    queryKey: ['dashboard-stats'],
+    queryFn: () => api.dashboard.stats() as Promise<{
+      nonConformities: { open: number; inProgress: number; total: number }
+    }>,
+    staleTime: 60 * 1000,
+  })
+
+  // Pendientes de aprobación/revisión del usuario actual.
+  const { data: pendingApprovals } = useQuery<unknown[]>({
+    queryKey: ['approval', 'pending'],
+    queryFn: () => api.approval.getPending() as Promise<unknown[]>,
+    staleTime: 60 * 1000,
+  })
+
+  const navigation = buildNavigation({
+    ncOpen: dashStats?.nonConformities.total ?? 0,
+    approvalsPending: pendingApprovals?.length ?? 0,
+  })
+
+  const orgName = me?.organizationName ?? '—'
+  const orgInitial = (orgName ?? '·').slice(0, 1).toUpperCase()
+  const userName = me?.name ?? '—'
+  const userInitials = initials(me?.name)
+  const userRoleText = me?.role ? roleLabel[me.role] : '—'
+  const userAreaText = me?.areaName ? ` · ${me.areaName}` : ''
 
   return (
     <aside
-      className="synapse-sidebar flex h-screen flex-col border-r"
+      className={cn(
+        'synapse-sidebar flex h-screen flex-col border-r',
+        open && 'open',
+      )}
       style={{ width: 'var(--sidebar-w)', borderColor: 'rgba(255,255,255,0.05)' }}
     >
       {/* Brand */}
       <Link
         href="/dashboard"
+        onClick={onNavigate}
         className="flex items-center gap-3 border-b border-white/5 px-5 pb-[22px] pt-5"
       >
         <BrainMark size={36} animated />
@@ -119,17 +176,17 @@ export function Sidebar() {
             fontSize: 15,
           }}
         >
-          L
+          {orgInitial}
         </div>
         <div className="min-w-0 flex-1 text-left">
           <div className="truncate text-[13px] font-medium" style={{ color: '#F3F6FC' }}>
-            Laboratorio Alfa
+            {orgName}
           </div>
           <div
-            className="mt-0.5 text-[9px] uppercase tracking-[0.14em]"
+            className="mt-0.5 truncate text-[9px] uppercase tracking-[0.14em]"
             style={{ fontFamily: 'var(--font-mono)', color: '#6A7797' }}
           >
-            Multitenant · V4.2
+            Multitenant{userAreaText}
           </div>
         </div>
         <ChevronDown className="h-3 w-3 shrink-0" style={{ color: '#6A7797' }} />
@@ -152,6 +209,7 @@ export function Sidebar() {
                 <Link
                   key={item.href}
                   href={item.href}
+                  onClick={onNavigate}
                   className={cn(
                     'relative mx-2.5 flex items-center gap-3 rounded-[8px] py-[9px] pl-6 pr-4 text-[13.5px] transition-colors',
                     'text-[#A9B4CC] hover:bg-white/5 hover:text-[#F3F6FC]',
@@ -177,24 +235,33 @@ export function Sidebar() {
 
       {/* User */}
       <div className="flex items-center gap-2.5 border-t border-white/5 px-4 py-3.5">
-        <div
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-medium"
-          style={{
-            background: 'linear-gradient(135deg, #7AB8FF, #1E3A8A)',
-            color: '#F3F6FC',
-          }}
-        >
-          SD
-        </div>
+        {me?.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={me.avatarUrl}
+            alt={userName}
+            className="h-8 w-8 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <div
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-medium"
+            style={{
+              background: 'linear-gradient(135deg, #7AB8FF, #1E3A8A)',
+              color: '#F3F6FC',
+            }}
+          >
+            {userInitials}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px]" style={{ color: '#F3F6FC' }}>
-            Sofía Domínguez
+            {userName}
           </div>
           <div
-            className="mt-0.5 text-[9px] uppercase tracking-[0.14em]"
+            className="mt-0.5 truncate text-[9px] uppercase tracking-[0.14em]"
             style={{ fontFamily: 'var(--font-mono)', color: '#6A7797' }}
           >
-            Quality Manager
+            {me?.positionName ?? userRoleText}
           </div>
         </div>
         <ChevronDown className="h-3 w-3 shrink-0" style={{ color: '#6A7797' }} />

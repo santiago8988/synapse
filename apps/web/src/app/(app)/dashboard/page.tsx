@@ -1,20 +1,10 @@
 'use client'
 
+import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
+import { Plus, ArrowRight, Check, X } from 'lucide-react'
 import { api } from '@/lib/api'
-import {
-  ClipboardList,
-  AlertTriangle,
-  Wrench,
-  FileText,
-  TrendingUp,
-  Clock,
-  CheckCircle2,
-  ArrowUpRight,
-} from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { useMe, firstName, greeting, initials } from '@/lib/use-me'
 
 interface DashboardStats {
   activeRecords: number
@@ -36,94 +26,37 @@ interface DashboardStats {
   }>
 }
 
-const statusConfig: Record<string, { label: string; variant: 'success' | 'secondary' | 'warning' | 'info' }> = {
-  DRAFT: { label: 'Borrador', variant: 'secondary' },
-  COMPLETED: { label: 'Completada', variant: 'success' },
+function todayDateLabel() {
+  return new Intl.DateTimeFormat('es-AR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+  })
+    .format(new Date())
+    .replace(/^\w/, (c) => c.toUpperCase())
 }
 
-function formatRelativeDate(dateStr: string): string {
-  const date = new Date(dateStr)
+function formatDueRelative(dateStr: string) {
+  const d = new Date(dateStr)
   const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMs / 3600000)
-  const diffDays = Math.floor(diffMs / 86400000)
-
-  if (diffMins < 1) return 'Hace un momento'
-  if (diffMins < 60) return `Hace ${diffMins} min`
-  if (diffHours < 24) return `Hace ${diffHours} ${diffHours === 1 ? 'hora' : 'horas'}`
-  if (diffDays < 7) return `Hace ${diffDays} ${diffDays === 1 ? 'día' : 'días'}`
-  return date.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
-
-function formatDueDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const dateStart = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  const diffDays = Math.round((dateStart.getTime() - todayStart.getTime()) / 86400000)
-
-  if (diffDays < 0) return `Vencido hace ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'día' : 'días'}`
-  if (diffDays === 0) return 'Hoy'
-  if (diffDays === 1) return 'Mañana'
-  return `En ${diffDays} días`
-}
-
-function Skeleton({ className }: { className?: string }) {
-  return <div className={`animate-pulse rounded bg-muted ${className ?? ''}`} />
-}
-
-function StatsLoadingSkeleton() {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <Card key={i} className="relative overflow-hidden">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <Skeleton className="h-10 w-10 rounded-lg" />
-            </div>
-            <div className="mt-4">
-              <Skeleton className="h-8 w-16" />
-              <Skeleton className="mt-2 h-4 w-28" />
-            </div>
-            <Skeleton className="mt-2 h-3 w-20" />
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+  const days = Math.round(
+    (new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() -
+      new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) /
+      86400000,
   )
+  if (days < 0) return { label: `VENC ${Math.abs(days)}D`, urgent: true }
+  if (days === 0) return { label: 'HOY', urgent: true }
+  if (days === 1) return { label: 'MAÑANA', urgent: true }
+  if (days <= 7) return { label: `${days} DÍAS`, urgent: true }
+  return { label: `${days} DÍAS`, urgent: false }
 }
 
-function EntriesLoadingSkeleton({ count = 5 }: { count?: number }) {
+function Skeleton({ className = '' }: { className?: string }) {
   return (
-    <div className="space-y-1">
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="flex items-center gap-4 rounded-lg px-3 py-3">
-          <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
-          <div className="min-w-0 flex-1 space-y-2">
-            <Skeleton className="h-4 w-48" />
-            <Skeleton className="h-3 w-32" />
-          </div>
-          <Skeleton className="h-5 w-20 rounded-full" />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function UpcomingLoadingSkeleton({ count = 3 }: { count?: number }) {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="flex items-start gap-3 rounded-lg border p-3">
-          <Skeleton className="mt-0.5 h-2 w-2 shrink-0 rounded-full" />
-          <div className="min-w-0 flex-1 space-y-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-3 w-20" />
-          </div>
-        </div>
-      ))}
-    </div>
+    <div
+      className={`animate-pulse rounded ${className}`}
+      style={{ background: 'var(--bg-3)' }}
+    />
   )
 }
 
@@ -132,220 +65,374 @@ export default function DashboardPage() {
     queryKey: ['dashboard-stats'],
     queryFn: () => api.dashboard.stats() as Promise<DashboardStats>,
   })
+  const { data: me } = useMe()
+  const firstNameText = firstName(me?.name) || 'vos'
+  const orgNameText = me?.organizationName ?? 'tu organización'
+  const greetingText = greeting()
 
   const totalInstruments = data
-    ? Object.values(data.instruments).reduce((sum, n) => sum + n, 0)
+    ? Object.values(data.instruments).reduce((a, b) => a + b, 0)
+    : 0
+  const calibratingCount =
+    data?.instruments?.CALIBRATING ?? data?.instruments?.IN_CALIBRATION ?? 0
+  const inRepairCount = data?.instruments?.IN_REPAIR ?? 0
+  const activePct = totalInstruments
+    ? Math.round(((calibratingCount + inRepairCount) / totalInstruments) * 1000) / 10
     : 0
 
-  const calibratingCount = data?.instruments?.CALIBRATING ?? data?.instruments?.IN_CALIBRATION ?? 0
-
-  const stats = data
-    ? [
-        {
-          label: 'Registros activos',
-          value: String(data.activeRecords),
-          change: '',
-          trend: 'up' as const,
-          icon: ClipboardList,
-          color: 'text-blue-600',
-          bg: 'bg-blue-50 dark:bg-blue-950/30',
-        },
-        {
-          label: 'Entradas vencidas',
-          value: String(data.overdueEntries),
-          change: data.overdueEntries > 0 ? 'Requieren atención' : 'Sin vencimientos',
-          trend: 'warning' as const,
-          icon: Clock,
-          color: 'text-amber-600',
-          bg: 'bg-amber-50 dark:bg-amber-950/30',
-        },
-        {
-          label: 'No conformidades',
-          value: String(data.nonConformities.total),
-          change: `${data.nonConformities.open} abiertas, ${data.nonConformities.inProgress} en progreso`,
-          trend: 'down' as const,
-          icon: AlertTriangle,
-          color: 'text-red-600',
-          bg: 'bg-red-50 dark:bg-red-950/30',
-        },
-        {
-          label: 'Instrumentos',
-          value: String(totalInstruments),
-          change: calibratingCount > 0 ? `${calibratingCount} en calibración` : 'Todos operativos',
-          trend: 'neutral' as const,
-          icon: Wrench,
-          color: 'text-emerald-600',
-          bg: 'bg-emerald-50 dark:bg-emerald-950/30',
-        },
-      ]
-    : []
-
   return (
-    <div className="mx-auto max-w-[1240px] space-y-10">
-      {/* Header */}
-      <div className="flex items-end justify-between">
+    <div className="mx-auto max-w-[1280px]">
+      {/* Page header */}
+      <div className="syn-ph">
         <div>
-          <div className="kicker mb-2">· Dashboard · Laboratorio Alfa</div>
-          <h1
-            className="text-[40px] leading-[1.08] tracking-tight"
-            style={{ color: 'var(--ink-0)' }}
-          >
-            Buenos días,{' '}
-            <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--primary-hex)' }}>
-              Sofía.
-            </span>
+          <div className="kicker mb-2">· {todayDateLabel()} · {orgNameText}</div>
+          <h1>
+            {greetingText}, <span className="italic">{firstNameText}.</span>
           </h1>
-          <p className="mt-2 max-w-[52ch] text-[14px]" style={{ color: 'var(--ink-2)' }}>
-            Resumen del estado de calidad de tu organización — entradas, instrumental, no conformidades y documentos activos.
+          <p className="sub">
+            {data
+              ? `${data.activeRecords} registros activos · ${data.overdueEntries} entradas vencidas · ${data.nonConformities.total} no conformidades abiertas.`
+              : 'Resumen diario del estado de calidad — entradas, instrumental, no conformidades y documentos activos.'}
           </p>
         </div>
-        <Button>
-          <FileText className="mr-2 h-4 w-4" />
-          Nueva entrada
-        </Button>
+        <div className="syn-ph-actions">
+          <Link href="/records/new" className="syn-btn syn-btn-ghost">
+            Nuevo registro
+          </Link>
+          <button type="button" className="syn-btn syn-btn-primary">
+            <Plus className="h-3 w-3" /> Nueva entrada
+          </button>
+        </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* KPI grid */}
       {isLoading ? (
-        <StatsLoadingSkeleton />
-      ) : isError ? (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            Error al cargar las estadísticas del dashboard
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => (
-            <Card key={stat.label} className="relative overflow-hidden">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.bg}`}>
-                    <stat.icon className={`h-5 w-5 ${stat.color}`} />
-                  </div>
-                  {stat.trend === 'up' && (
-                    <TrendingUp className="h-4 w-4 text-emerald-500" />
-                  )}
-                </div>
-                <div className="mt-4">
-                  <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
-                </div>
-                {stat.change && (
-                  <p className="mt-2 text-xs text-muted-foreground">{stat.change}</p>
-                )}
-              </CardContent>
-            </Card>
+        <div className="syn-kpi-grid">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="syn-kpi">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="mt-4 h-12 w-16" />
+              <Skeleton className="mt-4 h-3 w-full" />
+            </div>
           ))}
+        </div>
+      ) : isError ? (
+        <div className="syn-card mb-6">
+          <div className="syn-card-body" style={{ color: 'var(--danger)' }}>
+            Error al cargar las estadísticas del dashboard.
+          </div>
+        </div>
+      ) : (
+        <div className="syn-kpi-grid">
+          <div className="syn-kpi accent">
+            <div className="klabel">Vencen en 7 días</div>
+            <div className="kval">
+              {data!.overdueEntries || data!.upcomingEntries?.length || 0}
+            </div>
+            <div className="kfoot">
+              <span>requieren atención</span>
+              <Link
+                href="/records"
+                className="font-mono text-[11px]"
+                style={{ color: 'var(--primary-hex)' }}
+              >
+                VER TODAS →
+              </Link>
+            </div>
+          </div>
+
+          <div className="syn-kpi">
+            <div className="klabel">Instrumentos calibrando</div>
+            <div className="kval">
+              <span className="italic">{calibratingCount}</span>
+            </div>
+            {calibratingCount > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <span className="syn-chip syn-chip-active">
+                  <span className="pulse" /> en proceso
+                </span>
+              </div>
+            )}
+            <div className="kfoot">
+              <span>De {totalInstruments} activos</span>
+              <span
+                className="font-mono text-[11px]"
+                style={{ color: 'var(--ink-3)' }}
+              >
+                {activePct}%
+              </span>
+            </div>
+          </div>
+
+          <div className="syn-kpi">
+            <div className="klabel">NCs abiertas</div>
+            <div className="kval">{data!.nonConformities.total}</div>
+            <div className="kfoot">
+              <span>
+                {data!.nonConformities.inProgress} en progreso ·{' '}
+                {data!.nonConformities.open} por asignar
+              </span>
+              <Link
+                href="/non-conformities"
+                className="font-mono text-[11px]"
+                style={{ color: 'var(--warn)' }}
+              >
+                VER →
+              </Link>
+            </div>
+          </div>
+
+          <div className="syn-kpi">
+            <div className="klabel">Registros activos</div>
+            <div className="kval">{data!.activeRecords}</div>
+            <div
+              className="mt-3 text-[12px]"
+              style={{ color: 'var(--ink-2)' }}
+            >
+              Templates publicados
+            </div>
+            <div className="kfoot">
+              <span>Organización</span>
+              <Link href="/records" className="syn-chip syn-chip-draft">
+                VER TODOS
+              </Link>
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Entradas recientes */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
+      {/* Tasks + activity */}
+      <div className="syn-dash-grid">
+        {/* Tasks (recent + upcoming entries) */}
+        <div className="syn-card">
+          <div className="syn-card-head">
             <div>
-              <CardTitle>Entradas recientes</CardTitle>
-              <CardDescription>Últimas entradas realizadas en la organización</CardDescription>
+              <div className="eyebrow">· 01 Mis tareas</div>
+              <h3 style={{ marginTop: 6 }}>Para hoy y esta semana</h3>
             </div>
-            <Button variant="ghost" size="sm" className="text-primary">
-              Ver todas
-              <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
-            </Button>
-          </CardHeader>
-          <CardContent>
+            <Link href="/records" className="syn-btn syn-btn-subtle">
+              Ver todas <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+
+          <div className="flex flex-col">
             {isLoading ? (
-              <EntriesLoadingSkeleton />
-            ) : isError ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                Error al cargar las entradas recientes
-              </p>
-            ) : !data?.recentEntries?.length ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                No hay entradas recientes
-              </p>
+              <div className="p-6">
+                <Skeleton className="mb-3 h-12 w-full" />
+                <Skeleton className="mb-3 h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
             ) : (
-              <div className="space-y-1">
-                {data.recentEntries.map((entry) => {
-                  const config = statusConfig[entry.status] ?? {
-                    label: entry.status,
-                    variant: 'secondary' as const,
-                  }
-                  return (
-                    <div
-                      key={entry.id}
-                      className="flex items-center gap-4 rounded-lg px-3 py-3 transition-colors hover:bg-muted/50"
+              <>
+                {data?.upcomingEntries?.length ? (
+                  <>
+                    <div className="syn-task-group">📅 Próximas a vencer</div>
+                    {data.upcomingEntries.slice(0, 4).map((item) => {
+                      const due = formatDueRelative(item.dueDate)
+                      return (
+                        <Link
+                          href={`/records`}
+                          key={item.id}
+                          className={`syn-task ${due.urgent ? 'fail' : ''}`}
+                        >
+                          <div className="syn-task-check">
+                            {due.urgent ? (
+                              <X className="h-2.5 w-2.5" />
+                            ) : (
+                              <Check className="h-2.5 w-2.5" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="syn-task-name">{item.recordName}</div>
+                            <div className="syn-task-meta">ID {item.id.slice(-6)}</div>
+                          </div>
+                          <span
+                            className={
+                              'syn-chip ' +
+                              (due.urgent ? 'syn-chip-warn' : 'syn-chip-draft')
+                            }
+                          >
+                            {due.label}
+                          </span>
+                          <span className="syn-task-meta">
+                            {new Date(item.dueDate).toLocaleDateString('es-AR', {
+                              day: '2-digit',
+                              month: 'short',
+                            })}
+                          </span>
+                        </Link>
+                      )
+                    })}
+                  </>
+                ) : null}
+
+                {data?.recentEntries?.length ? (
+                  <>
+                    <div className="syn-task-group">📅 Recientes</div>
+                    {data.recentEntries.slice(0, 4).map((entry) => (
+                      <Link
+                        href={`/records`}
+                        key={entry.id}
+                        className="syn-task done"
+                      >
+                        <div className="syn-task-check">
+                          <Check className="h-2.5 w-2.5" />
+                        </div>
+                        <div>
+                          <div className="syn-task-name">{entry.recordName}</div>
+                          <div className="syn-task-meta">
+                            {new Date(entry.createdAt).toLocaleString('es-AR', {
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        </div>
+                        <span className="syn-chip syn-chip-completed">
+                          {entry.status}
+                        </span>
+                        <span className="syn-task-meta">—</span>
+                      </Link>
+                    ))}
+                  </>
+                ) : null}
+
+                {!data?.upcomingEntries?.length && !data?.recentEntries?.length && (
+                  <div
+                    className="px-6 py-10 text-center text-[13px]"
+                    style={{ color: 'var(--ink-3)' }}
+                  >
+                    Sin entradas aún — creá un registro para empezar.
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Activity feed — placeholder visual hasta que haya endpoint dedicado */}
+        <div className="syn-card">
+          <div className="syn-card-head">
+            <div>
+              <div className="eyebrow">· 02 Actividad</div>
+              <h3 style={{ marginTop: 6 }}>En el hub</h3>
+            </div>
+          </div>
+          <div>
+            <div className="syn-feed">
+              <div className="av">{initials(me?.name)}</div>
+              <div>
+                <div className="text">
+                  <b>{firstNameText}</b> revisó {data?.nonConformities.total ?? 0} NCs abiertas
+                </div>
+                <div className="time">hace un momento</div>
+              </div>
+            </div>
+            {data?.recentEntries?.slice(0, 3).map((e) => (
+              <div className="syn-feed" key={e.id}>
+                <div
+                  className="av"
+                  style={{ background: 'linear-gradient(135deg,#7AB8FF,#0891B2)' }}
+                >
+                  {e.recordName?.slice(0, 2).toUpperCase() || 'EN'}
+                </div>
+                <div>
+                  <div className="text">
+                    Entrada{' '}
+                    <code
+                      className="font-mono text-[11px]"
+                      style={{ color: 'var(--primary-hex)' }}
                     >
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted">
-                        <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{entry.recordName}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatRelativeDate(entry.createdAt)}
-                          {entry.dueDate && (
-                            <> &middot; Vence: {formatDueDate(entry.dueDate)}</>
-                          )}
-                        </p>
-                      </div>
-                      <Badge variant={config.variant}>{config.label}</Badge>
-                    </div>
-                  )
-                })}
+                      {e.id.slice(-6).toUpperCase()}
+                    </code>{' '}
+                    marcada como <b>{e.status}</b>
+                  </div>
+                  <div className="time">
+                    {new Date(e.createdAt).toLocaleString('es-AR', {
+                      day: '2-digit',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {calibratingCount > 0 && (
+              <div className="syn-feed">
+                <div
+                  className="av"
+                  style={{ background: 'linear-gradient(135deg,#B45309,#FFB86B)' }}
+                >
+                  !
+                </div>
+                <div>
+                  <div className="text">
+                    {calibratingCount} instrumento(s) actualmente{' '}
+                    <span className="syn-chip syn-chip-active" style={{ fontSize: 9 }}>
+                      <span className="pulse" /> IN_CALIBRATION
+                    </span>
+                  </div>
+                  <div className="time">monitoreo continuo</div>
+                </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+      </div>
 
-        {/* Próximas a vencer */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Próximas a vencer</CardTitle>
-            <CardDescription>Entradas periódicas que requieren atención</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <UpcomingLoadingSkeleton />
-            ) : isError ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                Error al cargar las entradas próximas
-              </p>
-            ) : !data?.upcomingEntries?.length ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">
-                No hay entradas próximas a vencer
-              </p>
+      {/* Bottom row: instrument mix (full width) */}
+      <div>
+        <div className="syn-card">
+          <div className="syn-card-head">
+            <div>
+              <div className="eyebrow">· 03 Estado instrumental</div>
+              <h3 style={{ marginTop: 6 }}>
+                Distribución por <span className="italic">estado.</span>
+              </h3>
+            </div>
+            <Link href="/instruments" className="syn-btn syn-btn-subtle">
+              Ver todos <ArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <div className="syn-card-body">
+            {isLoading || !data ? (
+              <Skeleton className="h-24 w-full" />
             ) : (
-              <div className="space-y-3">
-                {data.upcomingEntries.map((item) => {
-                  const dueLabel = formatDueDate(item.dueDate)
-                  const isUrgent = dueLabel === 'Hoy' || dueLabel.startsWith('Vencido')
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex items-start gap-3 rounded-lg border p-3"
-                    >
-                      <div
-                        className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${
-                          isUrgent ? 'bg-red-500' : 'bg-amber-400'
-                        }`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium leading-snug">{item.recordName}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Vence: {dueLabel}
-                        </p>
-                      </div>
+              Object.entries(data.instruments).map(([status, count]) => {
+                const pct = totalInstruments ? (count / totalInstruments) * 100 : 0
+                const color =
+                  status === 'ACTIVE'
+                    ? 'var(--ok)'
+                    : status === 'IN_CALIBRATION' || status === 'CALIBRATING'
+                      ? 'var(--info)'
+                      : status === 'IN_REPAIR'
+                        ? 'var(--warn)'
+                        : 'var(--ink-3)'
+                return (
+                  <div key={status} className="mb-4">
+                    <div className="mb-1.5 flex items-center justify-between text-[13px]">
+                      <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
+                        {status.replace('_', ' ')}
+                      </span>
+                      <span
+                        className="font-mono text-[12px]"
+                        style={{ color: 'var(--ink-2)' }}
+                      >
+                        {count} · {pct.toFixed(0)}%
+                      </span>
                     </div>
-                  )
-                })}
-              </div>
+                    <div className="syn-progress">
+                      <span style={{ width: pct + '%', background: color }} />
+                    </div>
+                  </div>
+                )
+              })
             )}
+          </div>
+        </div>
 
-            <Button variant="outline" className="mt-4 w-full" size="sm">
-              Ver todas las pendientes
-            </Button>
-          </CardContent>
-        </Card>
       </div>
     </div>
   )

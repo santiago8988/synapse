@@ -2,10 +2,17 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Ruler, Plus, Search, Trash2, Pencil, ChevronRight, Loader2, X, Send } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import {
+  Ruler,
+  Plus,
+  Search,
+  Trash2,
+  Pencil,
+  ChevronRight,
+  Loader2,
+  X,
+  Send,
+} from 'lucide-react'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -45,10 +52,15 @@ interface CalibrationTemplate {
   _count?: { calibrations: number }
 }
 
-const statusLabels: Record<string, { label: string; variant: 'secondary' | 'warning' | 'success' }> = {
-  DRAFT: { label: 'Borrador', variant: 'secondary' },
-  IN_REVIEW: { label: 'En revisión', variant: 'warning' },
-  ACTIVE: { label: 'Activa', variant: 'success' },
+const statusChipCls: Record<string, string> = {
+  DRAFT: 'syn-chip-draft',
+  IN_REVIEW: 'syn-chip-warn',
+  ACTIVE: 'syn-chip-ok',
+}
+const statusLabel: Record<string, string> = {
+  DRAFT: 'Borrador',
+  IN_REVIEW: 'En revisión',
+  ACTIVE: 'Activa',
 }
 
 export default function CalibrationTemplatesPage() {
@@ -73,7 +85,8 @@ export default function CalibrationTemplatesPage() {
   })
 
   const submitMutation = useMutation({
-    mutationFn: (id: string) => api.approval.submit({ entityType: 'CALIBRATION_TEMPLATE', entityId: id }),
+    mutationFn: (id: string) =>
+      api.approval.submit({ entityType: 'CALIBRATION_TEMPLATE', entityId: id }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['calibration-templates'] })
       toast.success('Plantilla enviada a revisión')
@@ -88,77 +101,157 @@ export default function CalibrationTemplatesPage() {
   )
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="mx-auto max-w-[1280px]">
+      <div className="syn-ph">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Plantillas de calibración</h1>
-          <p className="mt-1 text-muted-foreground">Templates para verificaciones internas de equipos</p>
+          <div className="kicker mb-2">· Definición · Plantillas de calibración</div>
+          <h1>
+            Plantillas de <span className="italic">verificación.</span>
+          </h1>
+          <p className="sub">
+            Templates para calibraciones internas — cada plantilla define ensayos con puntos, tolerancia y fórmula de error.
+          </p>
         </div>
-        <Button onClick={() => setShowForm(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva plantilla
-        </Button>
+        <div className="syn-ph-actions">
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="syn-btn syn-btn-primary"
+          >
+            <Plus className="h-3 w-3" /> Nueva plantilla
+          </button>
+        </div>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar plantillas..."
-          className="flex h-10 w-full rounded-md border border-input bg-background pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        />
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <div className="relative flex-1 min-w-[240px] max-w-[420px]">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
+            style={{ color: 'var(--ink-3)' }}
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar plantillas…"
+            className="h-[38px] w-full rounded-[10px] border pl-10 pr-3 text-[13px] outline-none"
+            style={{
+              background: 'var(--bg-1)',
+              borderColor: 'var(--line-2)',
+              color: 'var(--ink-0)',
+            }}
+          />
+        </div>
+        <div
+          className="ml-auto font-mono text-[11px] uppercase tracking-[0.14em]"
+          style={{ color: 'var(--ink-3)' }}
+        >
+          {filtered.length} {filtered.length === 1 ? 'plantilla' : 'plantillas'}
+        </div>
       </div>
 
       {(showForm || editingTemplate) && (
-        <CalibrationTemplateForm
-          template={editingTemplate}
-          onClose={() => { setShowForm(false); setEditingTemplate(null) }}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['calibration-templates'] })
-            setShowForm(false)
-            setEditingTemplate(null)
-          }}
-        />
+        <div className="mb-5">
+          <CalibrationTemplateForm
+            template={editingTemplate}
+            onClose={() => {
+              setShowForm(false)
+              setEditingTemplate(null)
+            }}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ['calibration-templates'] })
+              setShowForm(false)
+              setEditingTemplate(null)
+            }}
+          />
+        </div>
       )}
 
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <div
+          className="rounded-[14px] border p-8"
+          style={{
+            background: 'var(--bg-1)',
+            borderColor: 'var(--line)',
+            color: 'var(--ink-3)',
+          }}
+        >
+          Cargando…
         </div>
       ) : filtered.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-            <Ruler className="mb-3 h-10 w-10 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">
-              {search ? 'No se encontraron plantillas' : 'No hay plantillas creadas'}
+        <div className="syn-card">
+          <div
+            className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center"
+            style={{ color: 'var(--ink-2)' }}
+          >
+            <Ruler className="h-8 w-8" style={{ color: 'var(--ink-4)' }} />
+            <div
+              className="text-[24px]"
+              style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink-0)' }}
+            >
+              {search ? (
+                <>
+                  Sin <span className="italic">coincidencias.</span>
+                </>
+              ) : (
+                <>
+                  Aún no hay <span className="italic">plantillas.</span>
+                </>
+              )}
+            </div>
+            <p className="max-w-sm text-[13px]" style={{ color: 'var(--ink-2)' }}>
+              {search
+                ? 'Probá cambiar la búsqueda.'
+                : 'Creá tu primera plantilla para estandarizar las verificaciones internas de tus equipos.'}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       ) : (
-        <div className="divide-y rounded-lg border bg-card">
-          {filtered.map((template) => {
-            const status = statusLabels[template.status] || statusLabels.DRAFT
+        <div className="syn-card">
+          {filtered.map((t, idx) => {
+            const chipCls = statusChipCls[t.status] ?? 'syn-chip-draft'
             return (
               <button
-                key={template.id}
-                onClick={() => setViewingTemplate(template)}
-                className="flex w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-muted/50"
+                type="button"
+                key={t.id}
+                onClick={() => setViewingTemplate(t)}
+                className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-[var(--bg-3)]"
+                style={{ borderTop: idx === 0 ? 'none' : '1px solid var(--line)' }}
               >
-                <Ruler className="h-5 w-5 text-muted-foreground" />
-                <div className="flex-1">
+                <Ruler className="h-5 w-5" style={{ color: 'var(--ink-3)' }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">{template.name}</p>
-                    <span className="text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{template.code}</span>
+                    <span
+                      className="text-[14px] font-medium"
+                      style={{ color: 'var(--ink-0)' }}
+                    >
+                      {t.name}
+                    </span>
+                    <span
+                      className="rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em]"
+                      style={{
+                        background: 'var(--bg-3)',
+                        color: 'var(--ink-3)',
+                      }}
+                    >
+                      {t.code}
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    v{template.version} &middot; {template.tests.length} ensayos
-                    {template.periodicity && <> &middot; cada {template.periodicity}d</>}
-                    {template._count && template._count.calibrations > 0 && <> &middot; {template._count.calibrations} calibraciones</>}
-                  </p>
+                  <div
+                    className="mt-0.5 font-mono text-[11px]"
+                    style={{ color: 'var(--ink-3)' }}
+                  >
+                    v{t.version} · {t.tests.length} ensayos
+                    {t.periodicity && <> · cada {t.periodicity}d</>}
+                    {t._count && t._count.calibrations > 0 && (
+                      <> · {t._count.calibrations} calibraciones</>
+                    )}
+                  </div>
                 </div>
-                <Badge variant={status.variant}>{status.label}</Badge>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <span className={`syn-chip ${chipCls}`}>
+                  {statusLabel[t.status] ?? t.status}
+                </span>
+                <ChevronRight className="h-4 w-4" style={{ color: 'var(--ink-3)' }} />
               </button>
             )
           })}
@@ -169,10 +262,16 @@ export default function CalibrationTemplatesPage() {
         <CalibrationTemplateDetailDialog
           template={viewingTemplate}
           onClose={() => setViewingTemplate(null)}
-          onEdit={() => { setEditingTemplate(viewingTemplate); setViewingTemplate(null) }}
-          onSubmit={() => { submitMutation.mutate(viewingTemplate.id); setViewingTemplate(null) }}
+          onEdit={() => {
+            setEditingTemplate(viewingTemplate)
+            setViewingTemplate(null)
+          }}
+          onSubmit={() => {
+            submitMutation.mutate(viewingTemplate.id)
+            setViewingTemplate(null)
+          }}
           onDelete={() => {
-            if (confirm(`Eliminar la plantilla "${viewingTemplate.name}"?`)) {
+            if (confirm(`¿Eliminar la plantilla "${viewingTemplate.name}"?`)) {
               deleteMutation.mutate(viewingTemplate.id)
               setViewingTemplate(null)
             }
@@ -183,7 +282,9 @@ export default function CalibrationTemplatesPage() {
   )
 }
 
-// ─── Dialog de detalle ───────────────────
+// ============================================================================
+// Detail dialog
+// ============================================================================
 
 function CalibrationTemplateDetailDialog({
   template,
@@ -198,112 +299,252 @@ function CalibrationTemplateDetailDialog({
   onSubmit: () => void
   onDelete: () => void
 }) {
-  const status = statusLabels[template.status] || statusLabels.DRAFT
+  const chipCls = statusChipCls[template.status] ?? 'syn-chip-draft'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
-      <div className="w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-lg border bg-background shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-stretch justify-center sm:items-center sm:p-4"
+      style={{ background: 'rgba(4,7,15,0.55)', backdropFilter: 'blur(3px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[100dvh] w-full flex-col bg-[var(--bg-1)] shadow-[var(--shadow-lg)] sm:max-w-3xl sm:rounded-[14px]"
+        style={{ border: '1px solid var(--line)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <Ruler className="h-5 w-5 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">{template.name}</h2>
-              <Badge variant={status.variant}>{status.label}</Badge>
+        <div
+          className="flex items-start justify-between gap-4 border-b px-5 py-4 sm:px-6"
+          style={{ borderColor: 'var(--line)' }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div className="kicker mb-1 flex items-center gap-2">
+              <Ruler className="h-3 w-3" /> Plantilla
+              <span
+                className="rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.1em]"
+                style={{
+                  background: 'var(--bg-3)',
+                  color: 'var(--ink-3)',
+                }}
+              >
+                {template.code}
+              </span>
             </div>
-            <div className="mt-1 flex items-center gap-4 text-sm text-muted-foreground">
-              <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-xs">{template.code}</span>
-              <span>v{template.version}</span>
-              {template.description && <span>{template.description}</span>}
+            <h2
+              className="truncate"
+              style={{
+                fontFamily: 'var(--font-serif)',
+                fontSize: 22,
+                color: 'var(--ink-0)',
+                marginTop: 2,
+              }}
+            >
+              {template.name}
+            </h2>
+            <div
+              className="mt-2 flex flex-wrap items-center gap-3 text-[12px]"
+              style={{ color: 'var(--ink-3)' }}
+            >
+              <span className={`syn-chip ${chipCls}`}>
+                {statusLabel[template.status]}
+              </span>
+              <span className="font-mono">v{template.version}</span>
               {template.unitMain && <span>Unidad: {template.unitMain}</span>}
-              {template.periodicity && <span>Cada {template.periodicity} dias</span>}
-              {template.notifyDaysBefore && <span>Aviso: {template.notifyDaysBefore}d</span>}
+              {template.periodicity && <span>Cada {template.periodicity}d</span>}
+              {template.notifyDaysBefore && (
+                <span>Aviso: {template.notifyDaysBefore}d antes</span>
+              )}
             </div>
+            {template.description && (
+              <p
+                className="mt-2 text-[13px]"
+                style={{ color: 'var(--ink-2)' }}
+              >
+                {template.description}
+              </p>
+            )}
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 transition-colors hover:bg-[var(--bg-3)]"
+            aria-label="Cerrar"
+          >
+            <X className="h-4 w-4" style={{ color: 'var(--ink-2)' }} />
+          </button>
         </div>
 
         {/* Content */}
-        <div className="px-6 py-5 space-y-5">
-          {template.tests.length > 0 && template.tests.map((test, ti) => (
-            <div key={ti}>
-              <h4 className="mb-2 text-sm font-semibold flex items-center gap-2">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                  {test.order}
-                </span>
-                {test.name}
-                {test.tolerance > 0 && (
-                  <Badge variant="secondary" className="text-[10px]">Tolerancia: {test.tolerance} {test.toleranceUnit}</Badge>
-                )}
-              </h4>
-              {test.description && (
-                <p className="mb-2 text-xs text-muted-foreground">{test.description}</p>
-              )}
-              <div className="text-xs text-muted-foreground mb-2">
-                {test.readingsPerPoint} lecturas por punto &middot; Error: {test.formulaError} &middot; Criterio: {test.criteriaOperator}
-                {test.notes && <> &middot; {test.notes}</>}
-              </div>
-              {test.points.length > 0 && (
-                <div className="rounded-lg border">
-                  <div className="grid grid-cols-[2rem_1fr_6rem_4rem] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground bg-muted/30 border-b">
-                    <span>#</span>
-                    <span>Punto</span>
-                    <span className="text-right">Carga</span>
-                    <span>Unidad</span>
-                  </div>
-                  <div className="divide-y">
-                    {test.points.map((point, pi) => (
-                      <div key={pi} className="grid grid-cols-[2rem_1fr_6rem_4rem] gap-2 px-3 py-2.5 text-sm items-center">
-                        <span className="text-xs text-muted-foreground">{point.order}</span>
-                        <span className="font-medium">{point.name}</span>
-                        <span className="text-right font-mono">{point.load}</span>
-                        <span className="text-muted-foreground">{point.unit}</span>
-                      </div>
-                    ))}
-                  </div>
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+          {template.tests.length === 0 ? (
+            <p
+              className="py-4 text-center text-[13px]"
+              style={{ color: 'var(--ink-3)' }}
+            >
+              No hay ensayos definidos
+            </p>
+          ) : (
+            template.tests.map((test, ti) => (
+              <div key={ti}>
+                <div className="mb-2 flex items-center gap-2">
+                  <span
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-semibold"
+                    style={{
+                      background: 'var(--primary-soft)',
+                      color: 'var(--primary-hex)',
+                    }}
+                  >
+                    {test.order}
+                  </span>
+                  <span
+                    className="text-[14px] font-medium"
+                    style={{ color: 'var(--ink-0)' }}
+                  >
+                    {test.name}
+                  </span>
+                  {test.tolerance > 0 && (
+                    <span className="syn-chip syn-chip-draft">
+                      Tol: {test.tolerance} {test.toleranceUnit}
+                    </span>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
-
-          {template.tests.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">No hay ensayos definidos</p>
+                {test.description && (
+                  <p
+                    className="mb-2 text-[12px]"
+                    style={{ color: 'var(--ink-2)' }}
+                  >
+                    {test.description}
+                  </p>
+                )}
+                <p
+                  className="mb-2 text-[11.5px]"
+                  style={{ color: 'var(--ink-3)' }}
+                >
+                  {test.readingsPerPoint} lecturas/punto · Error:{' '}
+                  <code
+                    className="font-mono"
+                    style={{ color: 'var(--ink-2)' }}
+                  >
+                    {test.formulaError}
+                  </code>{' '}
+                  · Criterio: {test.criteriaOperator}
+                  {test.notes && <> · {test.notes}</>}
+                </p>
+                {test.points.length > 0 && (
+                  <div
+                    className="rounded-[8px] border"
+                    style={{ borderColor: 'var(--line)' }}
+                  >
+                    <table className="syn-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: 40 }}>#</th>
+                          <th>Punto</th>
+                          <th style={{ textAlign: 'right' }}>Carga</th>
+                          <th>Unidad</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {test.points.map((p, pi) => (
+                          <tr key={pi}>
+                            <td
+                              data-label="#"
+                              className="font-mono"
+                              style={{ color: 'var(--ink-3)' }}
+                            >
+                              {p.order}
+                            </td>
+                            <td data-label="Punto" data-role="identifier">
+                              <span
+                                style={{
+                                  color: 'var(--ink-0)',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {p.name}
+                              </span>
+                            </td>
+                            <td
+                              data-label="Carga"
+                              className="font-mono"
+                              style={{ textAlign: 'right', color: 'var(--ink-1)' }}
+                            >
+                              {p.load}
+                            </td>
+                            <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
+                              {p.unit}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex gap-2 border-t px-6 py-4">
+        <div
+          className="flex flex-wrap gap-2 border-t px-5 py-4 sm:px-6"
+          style={{ borderColor: 'var(--line)' }}
+        >
           {template.status !== 'IN_REVIEW' && (
-            <Button size="sm" variant="outline" onClick={onEdit}>
-              <Pencil className="mr-1 h-3 w-3" />
-              Editar
-            </Button>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="syn-btn syn-btn-ghost"
+            >
+              <Pencil className="h-3 w-3" /> Editar
+            </button>
           )}
           {template.status === 'DRAFT' && (
-            <Button size="sm" onClick={onSubmit}>
-              <Send className="mr-1 h-3 w-3" />
-              Enviar a revision
-            </Button>
-          )}
-          {template.status === 'DRAFT' && (
-            <Button size="sm" variant="destructive" onClick={onDelete}>
-              <Trash2 className="mr-1 h-3 w-3" />
-              Eliminar
-            </Button>
+            <>
+              <button
+                type="button"
+                onClick={onSubmit}
+                className="syn-btn syn-btn-primary"
+              >
+                <Send className="h-3 w-3" /> Enviar a revisión
+              </button>
+              <button
+                type="button"
+                onClick={onDelete}
+                className="syn-btn syn-btn-ghost"
+                style={{ color: 'var(--danger)' }}
+              >
+                <Trash2 className="h-3 w-3" /> Eliminar
+              </button>
+            </>
           )}
           <div className="flex-1" />
-          <Button variant="ghost" size="sm" onClick={onClose}>Cerrar</Button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="syn-btn syn-btn-subtle"
+          >
+            Cerrar
+          </button>
         </div>
       </div>
     </div>
   )
 }
 
-// ─── Formulario de plantilla ───────────────────
+// ============================================================================
+// Form
+// ============================================================================
 
-function CalibrationTemplateForm({ template, onClose, onSuccess }: { template?: CalibrationTemplate | null; onClose: () => void; onSuccess: () => void }) {
+function CalibrationTemplateForm({
+  template,
+  onClose,
+  onSuccess,
+}: {
+  template?: CalibrationTemplate | null
+  onClose: () => void
+  onSuccess: () => void
+}) {
   const isEditing = !!template
   const isDraft = template?.status === 'DRAFT'
   const nameCodeLocked = isEditing && !isDraft
@@ -313,11 +554,18 @@ function CalibrationTemplateForm({ template, onClose, onSuccess }: { template?: 
   const [description, setDescription] = useState(template?.description || '')
   const [unitMain, setUnitMain] = useState(template?.unitMain || '')
   const [unitTolerance, setUnitTolerance] = useState(template?.unitTolerance || '')
-  const [periodicity, setPeriodicity] = useState<number>(template?.periodicity || 365)
-  const [notifyDaysBefore, setNotifyDaysBefore] = useState<number>(template?.notifyDaysBefore || 30)
+  const [periodicity, setPeriodicity] = useState<number | ''>(
+    template?.periodicity ?? '',
+  )
+  const [notifyDaysBefore, setNotifyDaysBefore] = useState<number | ''>(
+    template?.notifyDaysBefore ?? '',
+  )
   const [tests, setTests] = useState<CalibrationTest[]>(
     template?.tests?.length
-      ? template.tests.map((t) => ({ ...t, points: t.points?.length ? [...t.points] : [] }))
+      ? template.tests.map((t) => ({
+          ...t,
+          points: t.points?.length ? [...t.points] : [],
+        }))
       : [],
   )
   const [saving, setSaving] = useState(false)
@@ -355,12 +603,19 @@ function CalibrationTemplateForm({ template, onClose, onSuccess }: { template?: 
     const points = updated[testIndex].points
     updated[testIndex] = {
       ...updated[testIndex],
-      points: [...points, { name: '', order: points.length + 1, load: 0, unit: unitMain || '' }],
+      points: [
+        ...points,
+        { name: '', order: points.length + 1, load: 0, unit: unitMain || '' },
+      ],
     }
     setTests(updated)
   }
 
-  const updatePoint = (testIndex: number, pointIndex: number, updates: Partial<CalibrationPoint>) => {
+  const updatePoint = (
+    testIndex: number,
+    pointIndex: number,
+    updates: Partial<CalibrationPoint>,
+  ) => {
     const updated = [...tests]
     const points = [...updated[testIndex].points]
     points[pointIndex] = { ...points[pointIndex], ...updates }
@@ -380,21 +635,27 @@ function CalibrationTemplateForm({ template, onClose, onSuccess }: { template?: 
   const handleSave = async () => {
     if (!name.trim()) return toast.error('El nombre es obligatorio')
     if (!code.trim()) return toast.error('El código es obligatorio')
-    if (tests.length === 0) return toast.error('Agrega al menos un ensayo')
+    if (tests.length === 0) return toast.error('Agregá al menos un ensayo')
     for (const t of tests) {
       if (!t.name.trim()) return toast.error('Todos los ensayos deben tener nombre')
-      if (t.points.length === 0) return toast.error(`El ensayo "${t.name}" necesita al menos un punto`)
+      if (t.points.length === 0)
+        return toast.error(`El ensayo "${t.name}" necesita al menos un punto`)
     }
 
     setSaving(true)
     try {
       const payload = {
-        ...(isDraft || !isEditing ? { name: name.trim().toUpperCase(), code: code.trim().toUpperCase() } : {}),
+        ...(isDraft || !isEditing
+          ? {
+              name: name.trim().toUpperCase(),
+              code: code.trim().toUpperCase(),
+            }
+          : {}),
         description: description.trim().toUpperCase() || undefined,
         unitMain: unitMain.trim() || undefined,
         unitTolerance: unitTolerance.trim() || undefined,
-        periodicity: periodicity || undefined,
-        notifyDaysBefore: notifyDaysBefore || undefined,
+        periodicity: periodicity === '' ? undefined : periodicity,
+        notifyDaysBefore: notifyDaysBefore === '' ? undefined : notifyDaysBefore,
         tests: tests.map((t, ti) => ({
           name: t.name.trim().toUpperCase(),
           description: t.description?.trim().toUpperCase() || undefined,
@@ -416,7 +677,9 @@ function CalibrationTemplateForm({ template, onClose, onSuccess }: { template?: 
 
       if (isEditing) {
         await api.calibrationTemplates.update(template!.id, payload)
-        toast.success(isDraft ? 'Plantilla actualizada' : 'Plantilla actualizada (nueva version)')
+        toast.success(
+          isDraft ? 'Plantilla actualizada' : 'Plantilla actualizada (nueva versión)',
+        )
       } else {
         await api.calibrationTemplates.create(payload)
         toast.success('Plantilla creada')
@@ -430,129 +693,185 @@ function CalibrationTemplateForm({ template, onClose, onSuccess }: { template?: 
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+    <div className="syn-card">
+      <div className="syn-card-head">
         <div>
-          <CardTitle>{isEditing ? `Editar ${template!.name}` : 'Nueva plantilla de calibración'}</CardTitle>
-          <CardDescription>
-            {isEditing
-              ? (isDraft ? 'Edicion directa en borrador' : `Se creara la version v${template!.version + 1}`)
-              : 'Defini ensayos y puntos de calibración'}
-          </CardDescription>
+          <div className="eyebrow">
+            · {isEditing ? 'Editar plantilla' : 'Nueva plantilla'}
+          </div>
+          <h3 style={{ marginTop: 6 }}>
+            {isEditing ? (
+              <>
+                {isDraft ? 'Edición en ' : 'Nueva versión · '}
+                <span className="italic">
+                  {isDraft ? 'borrador.' : `v${template!.version + 1}.`}
+                </span>
+              </>
+            ) : (
+              <>
+                Definí ensayos y <span className="italic">puntos.</span>
+              </>
+            )}
+          </h3>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-4 w-4" />
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-6">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-lg p-2 transition-colors hover:bg-[var(--bg-3)]"
+          aria-label="Cerrar"
+        >
+          <X className="h-4 w-4" style={{ color: 'var(--ink-2)' }} />
+        </button>
+      </div>
+      <div style={{ padding: '16px 20px 18px' }} className="space-y-5">
         {/* Datos básicos */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Nombre *</label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="syn-field">
+            <span className="syn-field-label">
+              Nombre <span className="req">*</span>
+            </span>
             <input
               value={name}
               onChange={(e) => !nameCodeLocked && setName(e.target.value)}
               readOnly={nameCodeLocked}
               placeholder="Ej: Balanza analítica"
-              className={`uppercase flex h-10 w-full rounded-md border border-input px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring ${nameCodeLocked ? 'bg-muted cursor-not-allowed' : 'bg-background'}`}
+              className="syn-input"
+              style={nameCodeLocked ? { background: 'var(--bg-3)', cursor: 'not-allowed' } : undefined}
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Código *</label>
+          <div className="syn-field">
+            <span className="syn-field-label">
+              Código <span className="req">*</span>
+            </span>
             <input
               value={code}
               onChange={(e) => !nameCodeLocked && setCode(e.target.value)}
               readOnly={nameCodeLocked}
               placeholder="Ej: CAL-BAL-001"
-              className={`uppercase flex h-10 w-full rounded-md border border-input px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring ${nameCodeLocked ? 'bg-muted cursor-not-allowed' : 'bg-background'}`}
+              className="syn-input"
+              style={nameCodeLocked ? { background: 'var(--bg-3)', cursor: 'not-allowed' } : undefined}
             />
           </div>
         </div>
 
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Descripción</label>
+        <div className="syn-field">
+          <span className="syn-field-label">Descripción</span>
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Descripción de la plantilla"
-            className="uppercase flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            className="syn-input"
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Unidad principal</label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="syn-field">
+            <span className="syn-field-label">Unidad principal</span>
             <input
               value={unitMain}
               onChange={(e) => setUnitMain(e.target.value)}
               placeholder="Ej: g, kg, mL"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="syn-input"
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Unidad tolerancia</label>
+          <div className="syn-field">
+            <span className="syn-field-label">Unidad tolerancia</span>
             <input
               value={unitTolerance}
               onChange={(e) => setUnitTolerance(e.target.value)}
               placeholder="Ej: %, g"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="syn-input"
             />
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Periodicidad (dias) *</label>
-            <input
-              type="number"
-              value={periodicity}
-              onChange={(e) => setPeriodicity(Number(e.target.value))}
-              min={1}
-              placeholder="Ej: 365"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-            <p className="text-[10px] text-muted-foreground">Cada cuantos dias se debe recalibrar</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="syn-field">
+            <span className="syn-field-label">
+              Periodicidad <span className="hint">días entre recalibraciones</span>
+            </span>
+            <div className="syn-unit-input">
+              <input
+                type="number"
+                inputMode="numeric"
+                value={periodicity}
+                onChange={(e) =>
+                  setPeriodicity(e.target.value === '' ? '' : Number(e.target.value))
+                }
+                min={1}
+                placeholder="—"
+              />
+              <span className="unit">días</span>
+            </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Notificar dias antes</label>
-            <input
-              type="number"
-              value={notifyDaysBefore}
-              onChange={(e) => setNotifyDaysBefore(Number(e.target.value))}
-              min={0}
-              placeholder="Ej: 30"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-            <p className="text-[10px] text-muted-foreground">Dias de aviso previo a la calibracion</p>
+          <div className="syn-field">
+            <span className="syn-field-label">
+              Notificar <span className="hint">días antes</span>
+            </span>
+            <div className="syn-unit-input">
+              <input
+                type="number"
+                inputMode="numeric"
+                value={notifyDaysBefore}
+                onChange={(e) =>
+                  setNotifyDaysBefore(e.target.value === '' ? '' : Number(e.target.value))
+                }
+                min={0}
+                placeholder="—"
+              />
+              <span className="unit">día antes</span>
+            </div>
           </div>
         </div>
 
         {/* Ensayos */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <label className="text-sm font-semibold">Ensayos *</label>
-            <Button size="sm" variant="outline" onClick={addTest}>
-              <Plus className="mr-1 h-3 w-3" />
-              Agregar ensayo
-            </Button>
+            <div className="kicker">
+              · Ensayos <span className="req">*</span>
+            </div>
+            <button
+              type="button"
+              onClick={addTest}
+              className="syn-btn syn-btn-ghost"
+              style={{ padding: '6px 10px' }}
+            >
+              <Plus className="h-3 w-3" /> Agregar ensayo
+            </button>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {tests.map((test, ti) => (
-              <div key={ti} className="rounded-lg border p-3 space-y-3">
+              <div
+                key={ti}
+                className="space-y-3 rounded-[8px] border p-3"
+                style={{ borderColor: 'var(--line)', background: 'var(--bg-2)' }}
+              >
                 <div className="flex items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                  <span
+                    className="flex h-6 w-6 items-center justify-center rounded-full font-mono text-[11px] font-semibold"
+                    style={{
+                      background: 'var(--primary-soft)',
+                      color: 'var(--primary-hex)',
+                    }}
+                  >
                     {ti + 1}
                   </span>
                   <input
                     value={test.name}
                     onChange={(e) => updateTest(ti, { name: e.target.value })}
                     placeholder="Nombre del ensayo (ej: Exactitud)"
-                    className="uppercase flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="syn-input"
+                    style={{ flex: 1 }}
                   />
                   {tests.length > 1 && (
-                    <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => removeTest(ti)}>
+                    <button
+                      type="button"
+                      onClick={() => removeTest(ti)}
+                      className="syn-btn syn-btn-subtle"
+                      style={{ padding: '6px 8px', color: 'var(--danger)' }}
+                    >
                       <Trash2 className="h-3 w-3" />
-                    </Button>
+                    </button>
                   )}
                 </div>
 
@@ -560,63 +879,86 @@ function CalibrationTemplateForm({ template, onClose, onSuccess }: { template?: 
                   value={test.description || ''}
                   onChange={(e) => updateTest(ti, { description: e.target.value })}
                   placeholder="Descripción del ensayo"
-                  className="uppercase w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="syn-input"
                 />
 
                 <div className="grid gap-2 sm:grid-cols-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Tolerancia</label>
+                  <div className="syn-field">
+                    <span className="syn-field-label" style={{ fontSize: 11 }}>
+                      Tolerancia
+                    </span>
                     <input
                       type="number"
+                      inputMode="decimal"
                       step="any"
                       value={test.tolerance ?? ''}
-                      onChange={(e) => updateTest(ti, { tolerance: e.target.value !== '' ? parseFloat(e.target.value) : 0 })}
+                      onChange={(e) =>
+                        updateTest(ti, {
+                          tolerance: e.target.value !== '' ? parseFloat(e.target.value) : 0,
+                        })
+                      }
                       placeholder="0"
-                      className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="syn-input font-mono"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Unidad tol.</label>
+                  <div className="syn-field">
+                    <span className="syn-field-label" style={{ fontSize: 11 }}>
+                      Unidad tol.
+                    </span>
                     <input
                       value={test.toleranceUnit}
                       onChange={(e) => updateTest(ti, { toleranceUnit: e.target.value })}
                       placeholder="%"
-                      className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="syn-input"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Lecturas/punto</label>
+                  <div className="syn-field">
+                    <span className="syn-field-label" style={{ fontSize: 11 }}>
+                      Lecturas/punto
+                    </span>
                     <input
                       type="number"
+                      inputMode="numeric"
                       value={test.readingsPerPoint || ''}
-                      onChange={(e) => updateTest(ti, { readingsPerPoint: parseInt(e.target.value) || 1 })}
+                      onChange={(e) =>
+                        updateTest(ti, {
+                          readingsPerPoint: parseInt(e.target.value) || 1,
+                        })
+                      }
                       min={1}
-                      className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                      className="syn-input font-mono"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-muted-foreground">Criterio</label>
+                  <div className="syn-field">
+                    <span className="syn-field-label" style={{ fontSize: 11 }}>
+                      Criterio
+                    </span>
                     <select
                       value={test.criteriaOperator}
-                      onChange={(e) => updateTest(ti, { criteriaOperator: e.target.value })}
-                      className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                      onChange={(e) =>
+                        updateTest(ti, { criteriaOperator: e.target.value })
+                      }
+                      className="syn-select"
                     >
-                      <option value="LTE">{'<='} Menor o igual</option>
+                      <option value="LTE">≤ Menor o igual</option>
                       <option value="LT">{'<'} Menor que</option>
-                      <option value="GTE">{'>='} Mayor o igual</option>
+                      <option value="GTE">≥ Mayor o igual</option>
                       <option value="GT">{'>'} Mayor que</option>
                       <option value="EQ">= Igual</option>
                     </select>
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-muted-foreground">Fórmula de error</label>
+                <div className="syn-field">
+                  <span className="syn-field-label">
+                    Fórmula de error{' '}
+                    <span className="hint">mathjs · LOAD, AVERAGE</span>
+                  </span>
                   <input
                     value={test.formulaError}
                     onChange={(e) => updateTest(ti, { formulaError: e.target.value })}
                     placeholder="((AVERAGE - LOAD) / LOAD) * 100"
-                    className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="syn-input font-mono"
                   />
                 </div>
 
@@ -624,72 +966,121 @@ function CalibrationTemplateForm({ template, onClose, onSuccess }: { template?: 
                   value={test.notes || ''}
                   onChange={(e) => updateTest(ti, { notes: e.target.value })}
                   placeholder="Notas"
-                  className="uppercase w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="syn-input"
                 />
 
                 {/* Puntos */}
                 <div>
-                  <div className="mb-1 flex items-center justify-between">
-                    <label className="text-xs font-semibold">Puntos de calibración</label>
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => addPoint(ti)}>
-                      <Plus className="mr-1 h-3 w-3" />
-                      Punto
-                    </Button>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <div className="kicker" style={{ color: 'var(--ink-2)' }}>
+                      · Puntos de calibración
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => addPoint(ti)}
+                      className="syn-btn syn-btn-subtle"
+                      style={{ padding: '4px 10px', fontSize: 12 }}
+                    >
+                      <Plus className="h-3 w-3" /> Punto
+                    </button>
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     {test.points.map((point, pi) => (
                       <div key={pi} className="flex items-center gap-2">
-                        <span className="w-5 text-center text-xs text-muted-foreground">{pi + 1}</span>
+                        <span
+                          className="w-5 text-center font-mono text-[11px]"
+                          style={{ color: 'var(--ink-3)' }}
+                        >
+                          {pi + 1}
+                        </span>
                         <input
                           value={point.name}
-                          onChange={(e) => updatePoint(ti, pi, { name: e.target.value })}
+                          onChange={(e) =>
+                            updatePoint(ti, pi, { name: e.target.value })
+                          }
                           placeholder="Nombre del punto"
-                          className="uppercase flex-1 rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                          className="syn-input"
+                          style={{ flex: 1, minHeight: 32, padding: '6px 10px' }}
                         />
                         <input
                           type="number"
+                          inputMode="decimal"
                           step="any"
                           value={point.load ?? ''}
-                          onChange={(e) => updatePoint(ti, pi, { load: e.target.value !== '' ? parseFloat(e.target.value) : 0 })}
+                          onChange={(e) =>
+                            updatePoint(ti, pi, {
+                              load: e.target.value !== '' ? parseFloat(e.target.value) : 0,
+                            })
+                          }
                           placeholder="Carga"
-                          className="w-24 rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                          className="syn-input font-mono"
+                          style={{ width: 110, minHeight: 32, padding: '6px 10px' }}
                         />
                         <input
                           value={point.unit}
-                          onChange={(e) => updatePoint(ti, pi, { unit: e.target.value })}
+                          onChange={(e) =>
+                            updatePoint(ti, pi, { unit: e.target.value })
+                          }
                           placeholder="Unidad"
-                          className="w-16 rounded-md border border-input bg-background px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                          className="syn-input"
+                          style={{ width: 80, minHeight: 32, padding: '6px 10px' }}
                         />
                         {test.points.length > 1 && (
-                          <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => removePoint(ti, pi)}>
+                          <button
+                            type="button"
+                            onClick={() => removePoint(ti, pi)}
+                            className="syn-btn syn-btn-subtle"
+                            style={{ padding: '6px 8px', color: 'var(--danger)' }}
+                          >
                             <Trash2 className="h-3 w-3" />
-                          </Button>
+                          </button>
                         )}
                       </div>
                     ))}
                     {test.points.length === 0 && (
-                      <p className="text-xs text-muted-foreground py-2 text-center">Sin puntos — agrega al menos uno</p>
+                      <p
+                        className="py-2 text-center text-[12px]"
+                        style={{ color: 'var(--ink-3)' }}
+                      >
+                        Sin puntos — agregá al menos uno
+                      </p>
                     )}
                   </div>
                 </div>
               </div>
             ))}
             {tests.length === 0 && (
-              <div className="rounded-lg border border-dashed py-6 text-center">
-                <p className="text-sm text-muted-foreground">Agrega ensayos de calibración</p>
+              <div
+                className="rounded-[8px] border border-dashed py-6 text-center"
+                style={{ borderColor: 'var(--line-2)' }}
+              >
+                <p className="text-[13px]" style={{ color: 'var(--ink-3)' }}>
+                  Agregá ensayos de calibración
+                </p>
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <Button onClick={handleSave} disabled={saving || !name.trim() || !code.trim()}>
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            {isEditing ? (isDraft ? 'Guardar cambios' : 'Guardar nueva version') : 'Crear plantilla'}
-          </Button>
-          <Button variant="outline" onClick={onClose}>Cancelar</Button>
+        <div className="flex gap-2 pt-2">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || !name.trim() || !code.trim()}
+            className="syn-btn syn-btn-primary"
+          >
+            {saving && <Loader2 className="h-3 w-3 animate-spin" />}
+            {isEditing
+              ? isDraft
+                ? 'Guardar cambios'
+                : 'Guardar nueva versión'
+              : 'Crear plantilla'}
+          </button>
+          <button type="button" onClick={onClose} className="syn-btn syn-btn-ghost">
+            Cancelar
+          </button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }

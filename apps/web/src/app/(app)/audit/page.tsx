@@ -2,11 +2,8 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Search, ChevronLeft, ChevronRight, Shield } from 'lucide-react'
+import { api } from '@/lib/api'
 
 interface AuditLog {
   id: string
@@ -29,13 +26,21 @@ interface AuditResponse {
   }
 }
 
-const actionLabels: Record<string, { label: string; variant: 'default' | 'success' | 'warning' | 'destructive' | 'info' }> = {
-  CREATE: { label: 'Creado', variant: 'success' },
-  UPDATE: { label: 'Actualizado', variant: 'info' },
-  DELETE: { label: 'Eliminado', variant: 'destructive' },
-  STATUS_CHANGE: { label: 'Cambio de estado', variant: 'warning' },
-  COMPLETE: { label: 'Completado', variant: 'success' },
-  APPROVE: { label: 'Aprobado', variant: 'info' },
+const actionChipCls: Record<string, string> = {
+  CREATE: 'syn-chip-ok',
+  UPDATE: 'syn-chip-active',
+  DELETE: 'syn-chip-fail',
+  STATUS_CHANGE: 'syn-chip-warn',
+  COMPLETE: 'syn-chip-ok',
+  APPROVE: 'syn-chip-active',
+}
+const actionLabel: Record<string, string> = {
+  CREATE: 'Creado',
+  UPDATE: 'Actualizado',
+  DELETE: 'Eliminado',
+  STATUS_CHANGE: 'Cambio estado',
+  COMPLETE: 'Completado',
+  APPROVE: 'Aprobado',
 }
 
 const entityTypeLabels: Record<string, string> = {
@@ -50,8 +55,7 @@ const entityTypeLabels: Record<string, string> = {
 }
 
 function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('es-AR', {
+  return new Date(dateStr).toLocaleString('es-AR', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -81,10 +85,7 @@ export default function AuditPage() {
     queryFn: () => api.audit.list(filters) as Promise<AuditResponse>,
   })
 
-  const handleFilter = () => {
-    setPage(1)
-  }
-
+  const handleFilter = () => setPage(1)
   const handleClearFilters = () => {
     setEntityType('')
     setDateFrom('')
@@ -95,30 +96,48 @@ export default function AuditPage() {
 
   const pagination = data?.pagination
   const logs = data?.data ?? []
+  const hasActiveFilters = entityType || dateFrom || dateTo || userId
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Registro de auditoría</h1>
-        <p className="mt-1 text-muted-foreground">
-          Historial de acciones realizadas en la organización
-        </p>
+    <div className="mx-auto max-w-[1280px]">
+      <div className="syn-ph">
+        <div>
+          <div className="kicker mb-2">· Calidad · Auditoría</div>
+          <h1>
+            Registro <span className="italic">inmutable.</span>
+          </h1>
+          <p className="sub">
+            Historial de todas las acciones realizadas en la organización. Append-only — ningún evento puede modificarse ni eliminarse.
+          </p>
+        </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base">Filtros</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">Tipo de entidad</label>
+      {/* Filtros */}
+      <div className="syn-card mb-5">
+        <div className="syn-card-head">
+          <div>
+            <div className="eyebrow">· Filtros</div>
+            <h3 style={{ marginTop: 6 }}>Acotar la búsqueda</h3>
+          </div>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClearFilters}
+              className="syn-btn syn-btn-subtle"
+              style={{ padding: '6px 12px' }}
+            >
+              Limpiar
+            </button>
+          )}
+        </div>
+        <div style={{ padding: '14px 20px 18px' }}>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="syn-field">
+              <span className="syn-field-label">Tipo de entidad</span>
               <select
                 value={entityType}
                 onChange={(e) => setEntityType(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="syn-select"
               >
                 <option value="">Todos</option>
                 <option value="RECORD">Registro</option>
@@ -131,153 +150,228 @@ export default function AuditPage() {
                 <option value="AREA">Área</option>
               </select>
             </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">Fecha desde</label>
+            <div className="syn-field">
+              <span className="syn-field-label">Desde</span>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="syn-input"
               />
             </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">Fecha hasta</label>
+            <div className="syn-field">
+              <span className="syn-field-label">Hasta</span>
               <input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="syn-input"
               />
             </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-muted-foreground">ID de usuario</label>
+            <div className="syn-field">
+              <span className="syn-field-label">ID usuario</span>
               <input
                 type="text"
-                placeholder="ID del usuario..."
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                placeholder="cmnxyz…"
+                className="syn-input font-mono"
+                style={{ fontSize: 12 }}
               />
             </div>
-
-            <div className="flex items-end gap-2">
-              <Button size="sm" onClick={handleFilter} className="h-9">
-                <Search className="mr-1.5 h-3.5 w-3.5" />
-                Filtrar
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleClearFilters} className="h-9">
-                Limpiar
-              </Button>
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={handleFilter}
+                className="syn-btn syn-btn-primary w-full justify-center"
+              >
+                <Search className="h-3.5 w-3.5" /> Filtrar
+              </button>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+      {/* Tabla */}
+      <div className="syn-card">
+        {isLoading ? (
+          <table className="syn-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Usuario</th>
+                <th>Acción</th>
+                <th>Tipo</th>
+                <th>ID entidad</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 8 }).map((_, i) => (
+                <tr key={i}>
+                  <td>
+                    <div
+                      className="h-4 w-32 animate-pulse rounded"
+                      style={{ background: 'var(--bg-3)' }}
+                    />
+                  </td>
+                  <td>
+                    <div
+                      className="h-4 w-24 animate-pulse rounded"
+                      style={{ background: 'var(--bg-3)' }}
+                    />
+                  </td>
+                  <td>
+                    <div
+                      className="h-5 w-20 animate-pulse rounded-full"
+                      style={{ background: 'var(--bg-3)' }}
+                    />
+                  </td>
+                  <td>
+                    <div
+                      className="h-4 w-20 animate-pulse rounded"
+                      style={{ background: 'var(--bg-3)' }}
+                    />
+                  </td>
+                  <td>
+                    <div
+                      className="h-4 w-16 animate-pulse rounded"
+                      style={{ background: 'var(--bg-3)' }}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : isError ? (
+          <div
+            className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center"
+            style={{ color: 'var(--ink-2)' }}
+          >
+            <Shield className="h-8 w-8" style={{ color: 'var(--danger)' }} />
+            <p className="text-[13px]">Error al cargar los registros de auditoría.</p>
+          </div>
+        ) : logs.length === 0 ? (
+          <div
+            className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center"
+            style={{ color: 'var(--ink-2)' }}
+          >
+            <Shield className="h-8 w-8" style={{ color: 'var(--ink-4)' }} />
+            <div
+              className="text-[24px]"
+              style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink-0)' }}
+            >
+              Sin <span className="italic">eventos.</span>
+            </div>
+            <p className="max-w-sm text-[13px]" style={{ color: 'var(--ink-2)' }}>
+              {hasActiveFilters
+                ? 'Probá cambiar los filtros para ver otros eventos.'
+                : 'Cuando haya actividad en la organización se va a registrar acá.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            <table className="syn-table">
               <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Fecha</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Usuario</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Acción</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Tipo</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">ID Entidad</th>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Usuario</th>
+                  <th>Acción</th>
+                  <th>Tipo</th>
+                  <th>ID entidad</th>
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
-                  Array.from({ length: 8 }).map((_, i) => (
-                    <tr key={i} className="border-b">
-                      <td className="px-4 py-3"><div className="h-4 w-32 animate-pulse rounded bg-muted" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-24 animate-pulse rounded bg-muted" /></td>
-                      <td className="px-4 py-3"><div className="h-5 w-20 animate-pulse rounded-full bg-muted" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-muted" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-16 animate-pulse rounded bg-muted" /></td>
+                {logs.map((log) => {
+                  const chipCls = actionChipCls[log.action] ?? 'syn-chip-draft'
+                  const label = actionLabel[log.action] ?? log.action
+                  const entityLabel =
+                    entityTypeLabels[log.entityType] ?? log.entityType
+                  return (
+                    <tr key={log.id}>
+                      <td
+                        data-label="Fecha"
+                        data-role="identifier"
+                        className="font-mono"
+                        style={{ color: 'var(--ink-0)', whiteSpace: 'nowrap' }}
+                      >
+                        {formatDate(log.createdAt)}
+                      </td>
+                      <td data-label="Usuario" style={{ color: 'var(--ink-1)' }}>
+                        {log.userName ?? (
+                          <span
+                            className="font-mono text-[11px]"
+                            style={{ color: 'var(--ink-3)' }}
+                          >
+                            {log.userId.slice(0, 8)}…
+                          </span>
+                        )}
+                      </td>
+                      <td data-label="Acción" data-role="status">
+                        <span className={`syn-chip ${chipCls}`}>{label}</span>
+                      </td>
+                      <td data-label="Tipo" style={{ color: 'var(--ink-2)' }}>
+                        {entityLabel}
+                      </td>
+                      <td data-label="ID entidad">
+                        <code
+                          className="rounded px-1.5 py-0.5 font-mono text-[11px]"
+                          style={{ background: 'var(--bg-3)', color: 'var(--ink-2)' }}
+                        >
+                          {log.entityId.slice(0, 8)}…
+                        </code>
+                      </td>
                     </tr>
-                  ))
-                ) : isError ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
-                      Error al cargar los registros de auditoría
-                    </td>
-                  </tr>
-                ) : logs.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
-                      <Shield className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
-                      No se encontraron registros de auditoría
-                    </td>
-                  </tr>
-                ) : (
-                  logs.map((log) => {
-                    const actionConfig = actionLabels[log.action] ?? { label: log.action, variant: 'secondary' as const }
-                    const entityLabel = entityTypeLabels[log.entityType] ?? log.entityType
-                    return (
-                      <tr key={log.id} className="border-b transition-colors hover:bg-muted/50">
-                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                          {formatDate(log.createdAt)}
-                        </td>
-                        <td className="px-4 py-3 font-medium">
-                          {log.userName ?? log.userId.slice(0, 8) + '...'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge variant={actionConfig.variant}>{actionConfig.label}</Badge>
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground">{entityLabel}</td>
-                        <td className="px-4 py-3">
-                          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                            {log.entityId.slice(0, 8)}...
-                          </code>
-                        </td>
-                      </tr>
-                    )
-                  })
-                )}
+                  )
+                })}
               </tbody>
             </table>
-          </div>
-
-          {/* Pagination */}
-          {pagination && pagination.totalPages > 0 && (
-            <div className="flex items-center justify-between border-t px-4 py-3">
-              <p className="text-sm text-muted-foreground">
-                Mostrando {(pagination.page - 1) * pagination.pageSize + 1}-
-                {Math.min(pagination.page * pagination.pageSize, pagination.total)} de{' '}
-                {pagination.total} registros
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={pagination.page <= 1}
+            {pagination && pagination.totalPages > 0 && (
+              <div
+                className="flex flex-wrap items-center justify-between gap-2 border-t px-5 py-3"
+                style={{ borderColor: 'var(--line)' }}
+              >
+                <p
+                  className="font-mono text-[11px] uppercase tracking-[0.14em]"
+                  style={{ color: 'var(--ink-3)' }}
                 >
-                  <ChevronLeft className="mr-1 h-3.5 w-3.5" />
-                  Anterior
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  Página {pagination.page} de {pagination.totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.min(pagination.totalPages, p + 1))}
-                  disabled={pagination.page >= pagination.totalPages}
-                >
-                  Siguiente
-                  <ChevronRight className="ml-1 h-3.5 w-3.5" />
-                </Button>
+                  {(pagination.page - 1) * pagination.pageSize + 1}–
+                  {Math.min(
+                    pagination.page * pagination.pageSize,
+                    pagination.total,
+                  )}{' '}
+                  de {pagination.total}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={pagination.page <= 1}
+                    className="syn-btn syn-btn-ghost"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+                  </button>
+                  <span
+                    className="font-mono text-[12px]"
+                    style={{ color: 'var(--ink-2)' }}
+                  >
+                    {pagination.page} / {pagination.totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPage((p) => Math.min(pagination.totalPages, p + 1))
+                    }
+                    disabled={pagination.page >= pagination.totalPages}
+                    className="syn-btn syn-btn-ghost"
+                  >
+                    Siguiente <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }

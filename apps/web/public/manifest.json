@@ -1,23 +1,27 @@
 {
-  "name": "QualitTab",
-  "short_name": "QualitTab",
-  "description": "Sistema de gestión de calidad para laboratorios",
-  "theme_color": "#2563eb",
-  "background_color": "#ffffff",
+  "name": "Synapse · by NosisHub",
+  "short_name": "Synapse",
+  "description": "Gestión de calidad para laboratorios y empresas — ISO 17025 / 9001",
+  "theme_color": "#0C1324",
+  "background_color": "#F6F7FB",
   "display": "standalone",
   "orientation": "portrait",
   "start_url": "/dashboard",
   "scope": "/",
+  "lang": "es-AR",
+  "categories": ["business", "productivity", "utilities"],
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }

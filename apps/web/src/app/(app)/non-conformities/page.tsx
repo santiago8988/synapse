@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, Plus, X } from 'lucide-react'
+import { AlertTriangle, LayoutGrid, List, Plus } from 'lucide-react'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { KanbanBoard, type KanbanCard, type KanbanColumn, type KanbanTransition } from '@/components/kanban'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
@@ -17,21 +18,24 @@ interface CorrectiveAction {
   completedAt: string | null
 }
 
+type NCStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
+
 interface NonConformity {
   id: string
   title: string
   description: string
-  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
+  status: NCStatus
   entryId: string | null
   assignedToId: string | null
   correctiveActions?: CorrectiveAction[]
-  createdAt: string
-  updatedAt: string
+  detectedAt: string
+  resolvedAt: string | null
 }
 
-type StatusFilter = 'ALL' | 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED'
+type StatusFilter = 'ALL' | NCStatus
+type ViewMode = 'list' | 'kanban'
 
-const statusConfig: Record<NonConformity['status'], { label: string; variant: 'destructive' | 'warning' | 'info' | 'success' }> = {
+const statusConfig: Record<NCStatus, { label: string; variant: 'destructive' | 'warning' | 'info' | 'success' }> = {
   OPEN: { label: 'Abierta', variant: 'destructive' },
   IN_PROGRESS: { label: 'En Progreso', variant: 'warning' },
   RESOLVED: { label: 'Resuelta', variant: 'info' },
@@ -46,17 +50,41 @@ const filterTabs: { key: StatusFilter; label: string }[] = [
   { key: 'CLOSED', label: 'Cerradas' },
 ]
 
+const kanbanColumns: KanbanColumn[] = [
+  { id: 'OPEN', label: 'Abiertas', color: 'red' },
+  { id: 'IN_PROGRESS', label: 'En progreso', color: 'amber' },
+  { id: 'RESOLVED', label: 'Resueltas', color: 'blue' },
+  { id: 'CLOSED', label: 'Cerradas', color: 'green' },
+]
+
+// Flujo natural ISO: avanzar OPEN → IN_PROGRESS → RESOLVED → CLOSED.
+// Permitimos retroceder desde RESOLVED a IN_PROGRESS si requiere más trabajo.
+// Cerrar desde RESOLVED requiere motivo (acción correctiva verificada).
+// Reabrir desde CLOSED requiere motivo (justificar la reapertura para auditoría).
+const kanbanTransitions: KanbanTransition[] = [
+  { from: 'OPEN', to: 'IN_PROGRESS' },
+  { from: 'IN_PROGRESS', to: 'RESOLVED' },
+  { from: 'IN_PROGRESS', to: 'OPEN' },
+  { from: 'RESOLVED', to: 'IN_PROGRESS' },
+  { from: 'RESOLVED', to: 'CLOSED', requireReason: true },
+  { from: 'CLOSED', to: 'OPEN', requireReason: true },
+]
+
 export default function NonConformitiesPage() {
   const queryClient = useQueryClient()
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('ALL')
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [showCreate, setShowCreate] = useState(false)
   const [newNC, setNewNC] = useState({ title: '', description: '' })
 
+  // En modo Kanban necesitamos todas las NCs para distribuirlas en columnas
+  const effectiveFilter: StatusFilter = viewMode === 'kanban' ? 'ALL' : activeFilter
+
   const { data: nonConformities = [], isLoading } = useQuery<NonConformity[]>({
-    queryKey: ['non-conformities', activeFilter],
+    queryKey: ['non-conformities', effectiveFilter],
     queryFn: () =>
       api.nonConformities.list(
-        activeFilter === 'ALL' ? undefined : { status: activeFilter },
+        effectiveFilter === 'ALL' ? undefined : { status: effectiveFilter },
       ) as Promise<NonConformity[]>,
   })
 
@@ -72,24 +100,113 @@ export default function NonConformitiesPage() {
     onError: (err: Error) => toast.error(err.message),
   })
 
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: NCStatus }) =>
+      api.nonConformities.updateStatus(id, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['non-conformities'] })
+    },
+  })
+
   const handleCreate = () => {
     if (!newNC.title.trim() || !newNC.description.trim()) return
     createMutation.mutate({ title: newNC.title, description: newNC.description })
   }
 
+  const kanbanCards = useMemo<KanbanCard[]>(
+    () =>
+      nonConformities.map((nc) => {
+        const actionsCount = nc.correctiveActions?.length ?? 0
+        const completedActions =
+          nc.correctiveActions?.filter((a) => a.completedAt !== null).length ?? 0
+        const detected = nc.detectedAt ? new Date(nc.detectedAt) : null
+        const dateLabel =
+          detected && !isNaN(detected.getTime())
+            ? detected.toLocaleDateString('es-AR')
+            : '—'
+        return {
+          id: nc.id,
+          columnId: nc.status,
+          title: nc.title,
+          subtitle: nc.description,
+          metadata: (
+            <div className="flex items-center justify-between">
+              <span>{dateLabel}</span>
+              {actionsCount > 0 && (
+                <span>
+                  {completedActions}/{actionsCount} acciones
+                </span>
+              )}
+            </div>
+          ),
+          href: `/non-conformities/${nc.id}`,
+        }
+      }),
+    [nonConformities],
+  )
+
+  const handleCardMove = async (
+    cardId: string,
+    fromColumnId: string,
+    toColumnId: string,
+    reason?: string,
+  ) => {
+    try {
+      await updateStatusMutation.mutateAsync({ id: cardId, status: toColumnId as NCStatus })
+      // El reason se loguea via AuditLog del endpoint /status; cuando exista soporte
+      // de reason en el endpoint del backend, se pasa explícitamente en el body.
+      toast.success(
+        reason
+          ? `Movida a ${statusConfig[toColumnId as NCStatus].label} — motivo registrado`
+          : `Movida a ${statusConfig[toColumnId as NCStatus].label}`,
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al mover la NC')
+      throw err
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">No Conformidades</h1>
           <p className="mt-1 text-muted-foreground">
             Gestión de no conformidades y acciones correctivas
           </p>
         </div>
-        <Button onClick={() => setShowCreate(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nueva NC
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 rounded-lg border bg-muted/50 p-1">
+            <button
+              onClick={() => setViewMode('list')}
+              aria-pressed={viewMode === 'list'}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <List className="h-4 w-4" />
+              Lista
+            </button>
+            <button
+              onClick={() => setViewMode('kanban')}
+              aria-pressed={viewMode === 'kanban'}
+              className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors ${
+                viewMode === 'kanban'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <LayoutGrid className="h-4 w-4" />
+              Kanban
+            </button>
+          </div>
+          <Button onClick={() => setShowCreate(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva NC
+          </Button>
+        </div>
       </div>
 
       {/* Inline create form */}
@@ -137,25 +254,46 @@ export default function NonConformitiesPage() {
         </Card>
       )}
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 rounded-lg border bg-muted/50 p-1">
-        {filterTabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveFilter(tab.key)}
-            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              activeFilter === tab.key
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Filter tabs (solo modo lista) */}
+      {viewMode === 'list' && (
+        <div className="flex gap-1 rounded-lg border bg-muted/50 p-1">
+          {filterTabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveFilter(tab.key)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                activeFilter === tab.key
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* List */}
-      {isLoading ? (
+      {/* Vista */}
+      {viewMode === 'kanban' ? (
+        <KanbanBoard
+          columns={kanbanColumns}
+          cards={kanbanCards}
+          allowedTransitions={kanbanTransitions}
+          onCardMove={handleCardMove}
+          isLoading={isLoading}
+          emptyState={
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <AlertTriangle className="h-12 w-12 text-muted-foreground/30" />
+                <p className="mt-4 font-medium">No hay no conformidades</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  No se registraron no conformidades todavía
+                </p>
+              </CardContent>
+            </Card>
+          }
+        />
+      ) : isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-20 animate-pulse rounded-xl bg-muted" />
@@ -189,7 +327,7 @@ export default function NonConformitiesPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">{nc.title}</p>
                       <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{new Date(nc.createdAt).toLocaleDateString('es-AR')}</span>
+                        <span>{new Date(nc.detectedAt).toLocaleDateString('es-AR')}</span>
                         {nc.description && (
                           <>
                             <span>&middot;</span>

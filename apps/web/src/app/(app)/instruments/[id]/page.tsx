@@ -4,20 +4,14 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams } from 'next/navigation'
 import {
-  Wrench,
   ArrowLeft,
   Clock,
   CheckCircle2,
   AlertTriangle,
   XCircle,
   Settings,
-  CalendarClock,
   ExternalLink,
 } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -113,12 +107,6 @@ function getCalibrationIndicator(
   return 'green'
 }
 
-const calibrationBadge: Record<string, { label: string; variant: 'success' | 'warning' | 'destructive' }> = {
-  green: { label: 'Vigente', variant: 'success' },
-  amber: { label: 'Próxima', variant: 'warning' },
-  red: { label: 'Vencida', variant: 'destructive' },
-}
-
 function formatFieldValue(value: unknown): string {
   if (value === undefined || value === null || value === '') return '—'
   if (typeof value === 'boolean') return value ? 'Sí' : 'No'
@@ -164,16 +152,18 @@ export default function InstrumentDetailPage() {
     })
   }
 
-  const inputClass =
-    'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
-
   // ---- Loading state ----
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="h-8 w-48 animate-pulse rounded bg-muted" />
-        <div className="h-64 animate-pulse rounded-xl bg-muted" />
-        <div className="h-48 animate-pulse rounded-xl bg-muted" />
+      <div className="mx-auto max-w-[1280px] space-y-5">
+        <div
+          className="h-32 animate-pulse rounded-[14px]"
+          style={{ background: 'var(--bg-3)' }}
+        />
+        <div
+          className="h-48 animate-pulse rounded-[14px]"
+          style={{ background: 'var(--bg-3)' }}
+        />
       </div>
     )
   }
@@ -181,230 +171,133 @@ export default function InstrumentDetailPage() {
   // ---- Error / not found ----
   if (error || !instrument) {
     return (
-      <div className="space-y-6">
-        <Link href="/instruments">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Volver a instrumentos
-          </Button>
+      <div className="mx-auto max-w-[1280px]">
+        <Link
+          href="/instruments"
+          className="syn-btn syn-btn-ghost mb-4 inline-flex"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> Volver a instrumental
         </Link>
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <XCircle className="h-12 w-12 text-muted-foreground/30" />
-            <p className="mt-4 font-medium">Instrumento no encontrado</p>
-            <p className="mt-1 text-sm text-muted-foreground">
+        <div className="syn-card">
+          <div
+            className="flex flex-col items-center gap-2 px-6 py-14 text-center"
+            style={{ color: 'var(--ink-2)' }}
+          >
+            <XCircle className="h-8 w-8" style={{ color: 'var(--ink-4)' }} />
+            <div
+              className="text-[20px]"
+              style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink-0)' }}
+            >
+              Instrumento <span className="italic">no encontrado.</span>
+            </div>
+            <p className="max-w-sm text-[13px]" style={{ color: 'var(--ink-2)' }}>
               El instrumento solicitado no existe o fue eliminado.
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     )
   }
 
   const currentStatus = statusConfig[instrument.status]
-  const StatusIcon = currentStatus.icon
+  const statusChipCls: Record<InstrumentStatus, string> = {
+    ACTIVE: 'syn-chip-ok',
+    IN_CALIBRATION: 'syn-chip-active',
+    IN_REPAIR: 'syn-chip-warn',
+    DECOMMISSIONED: 'syn-chip-draft',
+  }
   const availableStatuses = allStatuses.filter((s) => s !== instrument.status)
   const identifier = getIdentifier(instrument)
   const calInd = getCalibrationIndicator(
     instrument.nextCalibrationAt,
     instrument.record.notifyDaysBefore,
   )
+  const calColor: Record<string, string> = {
+    green: 'var(--ok)',
+    amber: 'var(--warn)',
+    red: 'var(--danger)',
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Back button and header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/instruments">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Instrumentos
-            </Button>
-          </Link>
-          <Separator orientation="vertical" className="h-6" />
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50 dark:bg-violet-950/30">
-              <Wrench className="h-5 w-5 text-violet-600" />
+    <div className="mx-auto max-w-[1280px] fade-in">
+      {/* Hero */}
+      <div className="syn-rec-hero">
+        <div>
+          <div className="kicker mb-1.5 flex items-center gap-2">
+            <Link href="/instruments" className="flex items-center gap-1 hover:text-ink-0">
+              <ArrowLeft className="h-3 w-3" /> Instrumental
+            </Link>
+            <span>·</span>
+            <span>{identifier}</span>
+          </div>
+          <h2>
+            Instrumento <span className="italic">{identifier}.</span>
+          </h2>
+          <div className="syn-rec-hero-meta">
+            <div className="m">
+              <span className="mk">ESTADO</span>
+              <span className="mv">
+                <span className={`syn-chip ${statusChipCls[instrument.status]}`}>
+                  {currentStatus.label}
+                </span>
+              </span>
             </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">{identifier}</h1>
-              <p className="text-sm text-muted-foreground">{instrument.record.name}</p>
+            <div className="m">
+              <span className="mk">REGISTRO</span>
+              <span className="mv">{instrument.record.name}</span>
+            </div>
+            {instrument.record.periodicity && (
+              <div className="m">
+                <span className="mk">PERIODICIDAD</span>
+                <span className="mv">Cada {instrument.record.periodicity} días</span>
+              </div>
+            )}
+            {instrument.nextCalibrationAt && (
+              <div className="m">
+                <span className="mk">PRÓXIMA CAL.</span>
+                <span
+                  className="mv font-mono"
+                  style={{
+                    color: calInd ? calColor[calInd] : 'var(--ink-1)',
+                  }}
+                >
+                  {new Date(instrument.nextCalibrationAt).toLocaleDateString('es-AR')}
+                </span>
+              </div>
+            )}
+            <div className="m">
+              <span className="mk">ALTA</span>
+              <span className="mv font-mono">
+                {new Date(instrument.createdAt).toLocaleDateString('es-AR')}
+              </span>
             </div>
           </div>
         </div>
-        <Badge variant={currentStatus.variant} className="text-sm px-3 py-1">
-          <StatusIcon className="mr-1.5 h-3.5 w-3.5" />
-          {currentStatus.label}
-        </Badge>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main content */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Dynamic OWN fields */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Datos del instrumento</CardTitle>
-              <CardDescription>
-                Campos propios del registro &ldquo;{instrument.record.name}&rdquo;
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {instrument.record.fields.map((field) => (
-                  <div key={field.id}>
-                    <p className="text-sm text-muted-foreground">
-                      {field.label}
-                      {field.isIdentifier && (
-                        <span className="ml-1.5 text-xs font-medium text-violet-600 dark:text-violet-400">
-                          (Identificador)
-                        </span>
-                      )}
-                    </p>
-                    <p className="mt-0.5 font-medium">
-                      {formatFieldValue(instrument.entry.data[field.id])}
-                    </p>
-                  </div>
-                ))}
-
-                {/* Calibration info */}
-                {instrument.nextCalibrationAt && (
-                  <div>
-                    <p className="text-sm text-muted-foreground">Próxima calibración</p>
-                    <div className="mt-0.5 flex items-center gap-2">
-                      <CalendarClock className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">
-                        {new Date(instrument.nextCalibrationAt).toLocaleDateString('es-AR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                        })}
-                      </span>
-                      {calInd && (
-                        <Badge variant={calibrationBadge[calInd].variant} className="text-xs">
-                          {calibrationBadge[calInd].label}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <p className="text-sm text-muted-foreground">Fecha de alta</p>
-                  <p className="mt-0.5 font-medium">
-                    {new Date(instrument.createdAt).toLocaleDateString('es-AR', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </p>
-                </div>
+      <div className="syn-rec-grid">
+        {/* Left — cambiar estado */}
+        <div className="space-y-5 min-w-0">
+          <div className="syn-card">
+            <div className="syn-card-head">
+              <div>
+                <div className="eyebrow">· Cambiar estado</div>
+                <h3 style={{ marginTop: 6 }}>
+                  Actualizá el <span className="italic">operativo.</span>
+                </h3>
               </div>
-
-              {/* Link to record */}
-              <div className="mt-6">
-                <Link
-                  href={`/records/${instrument.recordId}`}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-violet-600 hover:underline dark:text-violet-400"
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  Ver registro: {instrument.record.name}
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Status history timeline */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Historial de estados</CardTitle>
-              <CardDescription>
-                Registro de todos los cambios de estado del instrumento
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!instrument.statusLogs || instrument.statusLogs.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8">
-                  <Clock className="h-10 w-10 text-muted-foreground/30" />
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    No hay cambios de estado registrados
-                  </p>
-                </div>
-              ) : (
-                <div className="relative space-y-0">
-                  {/* Vertical line */}
-                  <div className="absolute left-[17px] top-2 bottom-2 w-px bg-border" />
-
-                  {instrument.statusLogs.map((log) => {
-                    const toConfig = statusConfig[log.toStatus]
-                    const fromConfig = log.fromStatus ? statusConfig[log.fromStatus] : null
-                    const LogIcon = toConfig.icon
-
-                    return (
-                      <div key={log.id} className="relative flex gap-4 pb-6 last:pb-0">
-                        {/* Timeline dot */}
-                        <div className="relative z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-background bg-muted">
-                          <LogIcon className="h-4 w-4 text-muted-foreground" />
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 pt-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {fromConfig && (
-                              <>
-                                <Badge variant={fromConfig.variant} className="text-xs">
-                                  {fromConfig.label}
-                                </Badge>
-                                <span className="text-xs text-muted-foreground">&rarr;</span>
-                              </>
-                            )}
-                            <Badge variant={toConfig.variant} className="text-xs">
-                              {toConfig.label}
-                            </Badge>
-                          </div>
-                          {log.reason && (
-                            <p className="mt-1 text-sm text-foreground">{log.reason}</p>
-                          )}
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {new Date(log.changedAt).toLocaleDateString('es-AR', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Status change */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Cambiar estado</CardTitle>
-              <CardDescription>
-                Actualizá el estado operativo del instrumento
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Nuevo estado</label>
+            </div>
+            <div style={{ padding: '14px 20px 16px' }} className="space-y-3">
+              <div className="syn-field">
+                <span className="syn-field-label">Nuevo estado</span>
                 <select
                   value={newStatus}
-                  onChange={(e) => setNewStatus(e.target.value as InstrumentStatus | '')}
-                  className={inputClass}
+                  onChange={(e) =>
+                    setNewStatus(e.target.value as InstrumentStatus | '')
+                  }
+                  className="syn-select"
                 >
-                  <option value="">Seleccionar estado...</option>
+                  <option value="">Seleccionar estado…</option>
                   {availableStatuses.map((s) => (
                     <option key={s} value={s}>
                       {statusConfig[s].label}
@@ -412,71 +305,247 @@ export default function InstrumentDetailPage() {
                   ))}
                 </select>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">
-                  Motivo{' '}
-                  <span className="font-normal text-muted-foreground">(opcional)</span>
-                </label>
+              <div className="syn-field">
+                <span className="syn-field-label">
+                  Motivo <span className="hint">Opcional</span>
+                </span>
                 <textarea
                   value={statusReason}
                   onChange={(e) => setStatusReason(e.target.value)}
-                  placeholder="Ej: Enviado a calibración externa en laboratorio XYZ"
+                  placeholder="Ej: Enviado a calibración externa…"
                   rows={3}
-                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="syn-textarea"
                 />
               </div>
-              <Button
+              <button
+                type="button"
                 onClick={handleStatusChange}
                 disabled={!newStatus || statusMutation.isPending}
-                className="w-full"
+                className="syn-btn syn-btn-primary w-full justify-center"
               >
-                {statusMutation.isPending ? 'Actualizando...' : 'Cambiar estado'}
-              </Button>
-            </CardContent>
-          </Card>
+                {statusMutation.isPending ? 'Actualizando…' : 'Cambiar estado'}
+              </button>
+            </div>
+          </div>
 
-          {/* Summary card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Resumen</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Estado actual</span>
-                <Badge variant={currentStatus.variant}>{currentStatus.label}</Badge>
+          {/* Resumen */}
+          <div className="syn-card">
+            <div className="syn-card-head">
+              <div>
+                <div className="eyebrow">· Resumen</div>
+                <h3 style={{ marginTop: 6 }}>Datos clave</h3>
               </div>
-              <Separator />
+            </div>
+            <div>
+              <InfoRow
+                label="Estado"
+                value={
+                  <span className={`syn-chip ${statusChipCls[instrument.status]}`}>
+                    {currentStatus.label}
+                  </span>
+                }
+              />
               {instrument.nextCalibrationAt && (
-                <>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Próxima calibración</span>
-                    <span className="font-medium">
-                      {new Date(instrument.nextCalibrationAt).toLocaleDateString('es-AR')}
+                <InfoRow
+                  label="Próxima calibración"
+                  value={
+                    <span
+                      className="font-mono"
+                      style={{
+                        color: calInd ? calColor[calInd] : 'var(--ink-0)',
+                      }}
+                    >
+                      {new Date(instrument.nextCalibrationAt).toLocaleDateString(
+                        'es-AR',
+                      )}
                     </span>
-                  </div>
-                  <Separator />
-                </>
+                  }
+                />
               )}
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Tipo de registro</span>
-                <span className="font-medium">{instrument.record.name}</span>
+              <InfoRow label="Tipo de registro" value={instrument.record.name} />
+              <InfoRow
+                label="Cambios de estado"
+                value={
+                  <span className="font-mono">
+                    {instrument.statusLogs?.length || 0}
+                  </span>
+                }
+              />
+              <InfoRow
+                label="Alta"
+                value={
+                  <span className="font-mono">
+                    {new Date(instrument.createdAt).toLocaleDateString('es-AR')}
+                  </span>
+                }
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Right — OWN fields + historial */}
+        <div className="space-y-5 min-w-0">
+          {/* Datos del instrumento */}
+          <div className="syn-card">
+            <div className="syn-card-head">
+              <div>
+                <div className="eyebrow">· Datos del instrumento</div>
+                <h3 style={{ marginTop: 6 }}>
+                  Campos del <span className="italic">{instrument.record.name}.</span>
+                </h3>
               </div>
-              <Separator />
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Cambios de estado</span>
-                <span className="font-medium">{instrument.statusLogs?.length || 0}</span>
+              <Link
+                href={`/records/${instrument.recordId}`}
+                className="syn-btn syn-btn-ghost"
+                style={{ padding: '6px 10px' }}
+              >
+                <ExternalLink className="h-3 w-3" /> Registro
+              </Link>
+            </div>
+            <div>
+              {instrument.record.fields.map((field, i) => (
+                <div
+                  key={field.id}
+                  className="flex items-start justify-between gap-4 px-5 py-3 text-[13px]"
+                  style={{
+                    borderTop: i === 0 ? 'none' : '1px solid var(--line)',
+                  }}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span style={{ color: 'var(--ink-3)' }}>{field.label}</span>
+                    {field.isIdentifier && (
+                      <span
+                        className="font-mono text-[9px] uppercase tracking-[0.14em]"
+                        style={{
+                          background: 'var(--primary-soft)',
+                          color: 'var(--primary-hex)',
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                        }}
+                      >
+                        ID
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className="font-mono"
+                    style={{ color: 'var(--ink-0)', textAlign: 'right' }}
+                  >
+                    {formatFieldValue(instrument.entry.data[field.id])}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Historial de estados */}
+          <div className="syn-card">
+            <div className="syn-card-head">
+              <div>
+                <div className="eyebrow">
+                  · Historial · {instrument.statusLogs?.length || 0}
+                </div>
+                <h3 style={{ marginTop: 6 }}>Cambios de estado</h3>
               </div>
-              <Separator />
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Alta</span>
-                <span className="font-medium">
-                  {new Date(instrument.createdAt).toLocaleDateString('es-AR')}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+            <div style={{ padding: '12px 20px 16px' }}>
+              {!instrument.statusLogs || instrument.statusLogs.length === 0 ? (
+                <div
+                  className="flex flex-col items-center gap-2 py-8 text-center"
+                  style={{ color: 'var(--ink-3)' }}
+                >
+                  <Clock className="h-6 w-6" style={{ color: 'var(--ink-4)' }} />
+                  <p className="text-[13px]">No hay cambios registrados.</p>
+                </div>
+              ) : (
+                <div className="relative space-y-0">
+                  <div
+                    className="absolute top-2 bottom-2 w-px"
+                    style={{ left: 13, background: 'var(--line)' }}
+                  />
+                  {instrument.statusLogs.map((log) => {
+                    const toConfig = statusConfig[log.toStatus]
+                    const fromConfig = log.fromStatus ? statusConfig[log.fromStatus] : null
+                    const toChipCls = statusChipCls[log.toStatus]
+                    return (
+                      <div key={log.id} className="relative flex gap-3 pb-5 last:pb-0">
+                        <div
+                          className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2"
+                          style={{
+                            background: 'var(--bg-1)',
+                            borderColor: 'var(--line-2)',
+                          }}
+                        >
+                          <Clock
+                            className="h-3 w-3"
+                            style={{ color: 'var(--ink-3)' }}
+                          />
+                        </div>
+                        <div className="flex-1 pt-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {fromConfig && (
+                              <>
+                                <span
+                                  className={`syn-chip ${statusChipCls[log.fromStatus!]}`}
+                                >
+                                  {fromConfig.label}
+                                </span>
+                                <span
+                                  style={{
+                                    color: 'var(--ink-4)',
+                                    fontSize: 11,
+                                  }}
+                                >
+                                  →
+                                </span>
+                              </>
+                            )}
+                            <span className={`syn-chip ${toChipCls}`}>
+                              {toConfig.label}
+                            </span>
+                          </div>
+                          {log.reason && (
+                            <p
+                              className="mt-1 text-[12.5px]"
+                              style={{ color: 'var(--ink-1)' }}
+                            >
+                              {log.reason}
+                            </p>
+                          )}
+                          <p
+                            className="mt-1 font-mono text-[11px]"
+                            style={{ color: 'var(--ink-3)' }}
+                          >
+                            {new Date(log.changedAt).toLocaleString('es-AR')}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string
+  value: React.ReactNode
+}) {
+  return (
+    <div
+      className="flex items-center justify-between gap-4 px-5 py-2.5 text-[13px]"
+      style={{ borderTop: '1px solid var(--line)' }}
+    >
+      <span style={{ color: 'var(--ink-3)' }}>{label}</span>
+      <span style={{ color: 'var(--ink-0)' }}>{value}</span>
     </div>
   )
 }
