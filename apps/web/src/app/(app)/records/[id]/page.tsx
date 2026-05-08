@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -758,6 +758,7 @@ function SynEntriesTabbedCard({
   calibrationTemplatesMap,
   onNewEntry,
   onOpenEntry,
+  onTabChange,
 }: {
   record: RecordDetail
   entries: SynEntryLite[]
@@ -766,6 +767,7 @@ function SynEntriesTabbedCard({
   calibrationTemplatesMap: Record<string, { name: string; code: string | null }>
   onNewEntry: () => void
   onOpenEntry: (id: string) => void
+  onTabChange?: (tab: 'entries' | 'versions' | 'audit' | 'kanban' | 'flows') => void
 }) {
   // Workflow engine v2: detectar field DROPDOWN-as-status. Si existe, se
   // habilita la pestaña Kanban con drag-drop entre columnas = options del
@@ -843,9 +845,20 @@ function SynEntriesTabbedCard({
     }
   }
 
-  const [tab, setTab] = useState<'entries' | 'versions' | 'audit' | 'kanban' | 'flows'>(
+  const [tab, setTabInner] = useState<'entries' | 'versions' | 'audit' | 'kanban' | 'flows'>(
     hasStatusField ? 'kanban' : 'entries',
   )
+  // Notificar al padre el cambio de tab para que pueda adaptar el layout
+  // (ej. cuando tab==='flows' el padre oculta la sidebar izquierda).
+  const setTab = (next: 'entries' | 'versions' | 'audit' | 'kanban' | 'flows') => {
+    setTabInner(next)
+    onTabChange?.(next)
+  }
+  // Notificación inicial: al montar, propagamos el tab default.
+  useEffect(() => {
+    onTabChange?.(tab)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const visibleFields = record.fields.filter(
     (f) => f.fieldType !== 'FORMULA' && f.fieldType !== 'COMPARISON',
   )
@@ -1215,6 +1228,10 @@ export default function RecordDetailPage() {
   const [entryMeta, setEntryMeta] = useState<{ lotNumber?: string; sampleCode?: string; client?: string }>({})
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
   const [viewingEntry, setViewingEntry] = useState<boolean>(false)
+  // Tab activo del SynEntriesTabbedCard. Lo trackeamos acá para adaptar el
+  // layout (cuando el tab es 'flows', la columna izquierda con campos/cascade/
+  // cumplimiento se oculta y el editor visual ocupa todo el ancho).
+  const [recordTab, setRecordTab] = useState<'entries' | 'versions' | 'audit' | 'kanban' | 'flows'>('entries')
 
   const { data: record, isLoading } = useQuery<RecordDetail>({
     queryKey: ['record', recordId],
@@ -1692,8 +1709,18 @@ export default function RecordDetailPage() {
         </div>
       )}
 
-      <div className={editing ? 'grid gap-5 lg:grid-cols-3' : 'syn-rec-grid'}>
-        {/* Left column wrapper */}
+      <div
+        className={
+          editing
+            ? 'grid gap-5 lg:grid-cols-3'
+            : recordTab === 'flows'
+              ? 'flex flex-col gap-5'
+              : 'syn-rec-grid'
+        }
+      >
+        {/* Left column wrapper — se oculta cuando el tab activo es 'flows'
+            para que el editor visual ocupe todo el ancho disponible. */}
+        {!(recordTab === 'flows' && !editing) && (
         <div className={editing ? 'space-y-5 min-w-0 lg:col-span-2' : 'space-y-5 min-w-0'}>
         {/* Campos — read-only Synapse card en non-editing */}
         {!editing && <SynFieldsReadOnlyCard record={record} />}
@@ -1723,7 +1750,8 @@ export default function RecordDetailPage() {
         {!editing && <SynCascadeCard record={record} allRecords={allRecords} />}
         {!editing && <SynComplianceCard entries={entries} />}
 
-        </div> {/* close left column wrapper */}
+        </div>
+        )} {/* close left column wrapper / hide on flows tab */}
 
         {/* Right column */}
         {!editing && (
@@ -1751,6 +1779,7 @@ export default function RecordDetailPage() {
                 setShowNewEntry(true)
                 if (e) setEntryData(e.data as Record<string, unknown>)
               }}
+              onTabChange={setRecordTab}
             />
           </div>
         )}
