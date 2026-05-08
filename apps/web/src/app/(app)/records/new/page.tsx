@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
-import { ArrowRight, Camera, Monitor, Paperclip, Smartphone } from 'lucide-react'
+import { ArrowRight, Camera, ChevronDown, Monitor, Paperclip, Plus, Smartphone, X } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 import { DynamicRecordForm } from '@/components/forms/dynamic-record-form'
@@ -331,71 +331,7 @@ export default function NewRecordPage() {
                 )}
                 <div className="syn-field" style={{ gridColumn: 'span 2' }}>
                   <span className="syn-field-label">Áreas</span>
-                  <div
-                    className="rounded-[10px] border"
-                    style={{
-                      background: 'var(--bg-1)',
-                      borderColor: 'var(--line-2)',
-                      maxHeight: 180,
-                      overflowY: 'auto',
-                    }}
-                  >
-                    {flatAreas.length === 0 ? (
-                      <div style={{ padding: 12, fontSize: 12.5, color: 'var(--ink-3)' }}>
-                        No hay áreas en la organización.
-                      </div>
-                    ) : (
-                      flatAreas.map((a) => {
-                        const checked = areaIds.includes(a.id)
-                        return (
-                          <button
-                            type="button"
-                            key={a.id}
-                            onClick={() =>
-                              setAreaIds((prev) =>
-                                checked ? prev.filter((x) => x !== a.id) : [...prev, a.id],
-                              )
-                            }
-                            className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition"
-                            style={{
-                              fontSize: 13,
-                              color: 'var(--ink-0)',
-                              borderBottom: '1px solid var(--line-3)',
-                              background: checked ? 'var(--info-soft)' : 'transparent',
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!checked) e.currentTarget.style.background = 'var(--bg-2)'
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!checked) e.currentTarget.style.background = 'transparent'
-                            }}
-                          >
-                            <span
-                              aria-hidden
-                              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border"
-                              style={{
-                                borderColor: checked ? 'var(--info)' : 'var(--line-1)',
-                                background: checked ? 'var(--info)' : 'transparent',
-                                color: 'white',
-                                fontSize: 10,
-                                fontWeight: 700,
-                              }}
-                            >
-                              {checked ? '✓' : ''}
-                            </span>
-                            <span style={{ paddingLeft: a.depth * 14, color: 'var(--ink-0)' }}>
-                              {a.name}
-                            </span>
-                          </button>
-                        )
-                      })
-                    )}
-                  </div>
-                  <span className="syn-field-hint" style={{ color: 'var(--ink-3)', fontSize: 11, marginTop: 4 }}>
-                    {areaIds.length === 0
-                      ? 'Sin selección — el registro queda visible para toda la organización'
-                      : `${areaIds.length} ${areaIds.length === 1 ? 'área seleccionada' : 'áreas seleccionadas'}`}
-                  </span>
+                  <AreaPicker areaIds={areaIds} setAreaIds={setAreaIds} flatAreas={flatAreas} />
                 </div>
               </div>
             </div>
@@ -608,3 +544,160 @@ export default function NewRecordPage() {
   )
 }
 
+
+// ───────────────────────────────────────────────────────────────────────────
+// AreaPicker — multi-area picker con chips + dropdown popover
+// ───────────────────────────────────────────────────────────────────────────
+
+function AreaPicker({
+  areaIds,
+  setAreaIds,
+  flatAreas,
+}: {
+  areaIds: string[]
+  setAreaIds: React.Dispatch<React.SetStateAction<string[]>>
+  flatAreas: Array<{ id: string; name: string; depth: number }>
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Click afuera → cerrar
+  useEffect(() => {
+    if (!isOpen) return
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen])
+
+  // Map id → datos de área para resolver los chips desde areaIds.
+  const byId = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; depth: number }>()
+    flatAreas.forEach((a) => m.set(a.id, a))
+    return m
+  }, [flatAreas])
+
+  function toggle(id: string) {
+    setAreaIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
+  function remove(id: string) {
+    setAreaIds((prev) => prev.filter((x) => x !== id))
+  }
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}>
+      {/* Trigger: chips + botón "+ Agregar" */}
+      <div
+        className="rounded-[10px] border px-2 py-1.5 flex flex-wrap items-center gap-1.5 cursor-pointer min-h-[38px]"
+        style={{ background: 'var(--bg-1)', borderColor: 'var(--line-2)' }}
+        onClick={() => setIsOpen((v) => !v)}
+      >
+        {areaIds.length === 0 ? (
+          <span style={{ color: 'var(--ink-3)', fontSize: 12.5, paddingLeft: 4 }}>
+            Toda la organización · click para asignar áreas
+          </span>
+        ) : (
+          areaIds.map((id) => {
+            const a = byId.get(id)
+            if (!a) return null
+            return (
+              <span
+                key={id}
+                className="inline-flex items-center gap-1 rounded-[6px] px-2 py-0.5 text-[11.5px]"
+                style={{
+                  background: 'var(--info-soft)',
+                  color: 'var(--info)',
+                  fontWeight: 500,
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {a.name}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    remove(id)
+                  }}
+                  aria-label={`Quitar ${a.name}`}
+                  style={{ display: 'inline-flex', alignItems: 'center' }}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )
+          })
+        )}
+        <span className="ml-auto inline-flex items-center gap-1 text-[11.5px]" style={{ color: 'var(--ink-3)' }}>
+          {areaIds.length === 0 ? <Plus className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        </span>
+      </div>
+
+      {/* Popover absoluto — no afecta el layout debajo */}
+      {isOpen && (
+        <div
+          className="rounded-[10px] border shadow-lg"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            right: 0,
+            zIndex: 50,
+            background: 'var(--bg-1)',
+            borderColor: 'var(--line-1)',
+            maxHeight: 240,
+            overflowY: 'auto',
+          }}
+        >
+          {flatAreas.length === 0 ? (
+            <div style={{ padding: 12, fontSize: 12.5, color: 'var(--ink-3)' }}>
+              No hay áreas en la organización.
+            </div>
+          ) : (
+            flatAreas.map((a) => {
+              const checked = areaIds.includes(a.id)
+              return (
+                <button
+                  type="button"
+                  key={a.id}
+                  onClick={() => toggle(a.id)}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition"
+                  style={{
+                    fontSize: 13,
+                    color: 'var(--ink-0)',
+                    borderBottom: '1px solid var(--line-3)',
+                    background: checked ? 'var(--info-soft)' : 'transparent',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!checked) e.currentTarget.style.background = 'var(--bg-2)'
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!checked) e.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border"
+                    style={{
+                      borderColor: checked ? 'var(--info)' : 'var(--line-1)',
+                      background: checked ? 'var(--info)' : 'transparent',
+                      color: 'white',
+                      fontSize: 10,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {checked ? '✓' : ''}
+                  </span>
+                  <span style={{ paddingLeft: a.depth * 14 }}>{a.name}</span>
+                </button>
+              )
+            })
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
