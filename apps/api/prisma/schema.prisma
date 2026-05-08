@@ -125,6 +125,19 @@ enum SampleStatus {
   COMPLETED
 }
 
+// Trigger que dispara una RecordAction. ENTRY_COMPLETED es el comportamiento
+// histórico (default para back-compat); los demás se introducen con el motor
+// de workflows configurable. Pivot v2: FIELD_VALUE_CHANGED reemplaza al
+// ENTRY_STATE_CHANGED del spec original — el estado vive como DROPDOWN OWN
+// field, no como columna separada de Entry.
+enum TriggerType {
+  ENTRY_CREATED
+  ENTRY_COMPLETED
+  FIELD_VALUE_CHANGED
+  COMPARISON_FAILED
+  INSTRUMENT_STATUS_CHANGED
+}
+
 // ─────────────────────────────────────────────
 // ORGANIZACIÓN Y USUARIOS
 // ─────────────────────────────────────────────
@@ -323,11 +336,20 @@ model RecordField {
 }
 
 model RecordAction {
-  id             String   @id @default(cuid())
+  id             String      @id @default(cuid())
   sourceRecordId String
   targetRecordId String
   fieldMapping   Json
-  createdAt      DateTime @default(now())
+  // Evento que dispara esta acción. Default ENTRY_COMPLETED para retrocompatibilidad
+  // con las acciones existentes pre-workflow-engine.
+  trigger        TriggerType @default(ENTRY_COMPLETED)
+  // Filtro opcional sobre el payload del evento. Forma: ActionCondition.
+  // Ver packages/types/src/field-types.ts.
+  condition      Json?
+  // Si false, la acción no se dispara cuando el evento que la activa fue
+  // generado por otra acción en cascada. Previene loops infinitos.
+  allowCascade   Boolean     @default(false)
+  createdAt      DateTime    @default(now())
 
   sourceRecord Record @relation("SourceRecord", fields: [sourceRecordId], references: [id])
   targetRecord Record @relation("TargetRecord", fields: [targetRecordId], references: [id])

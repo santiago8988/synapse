@@ -4,7 +4,9 @@ import { PrismaService } from '../../prisma/prisma.service'
 import { Prisma } from '@prisma/client'
 import { ComparisonEvaluatorService } from './services/comparison-evaluator.service'
 import { FormulaEvaluatorService } from './services/formula-evaluator.service'
-import { EntryCreatedEvent, EntryCompletedEvent } from '../../common/events/domain-events'
+import { TransitionValidatorService } from './services/transition-validator.service'
+import { EntryCreatedEvent, EntryCompletedEvent, EntryFieldValueChangedEvent } from '../../common/events/domain-events'
+import type { UserRole } from '@synapse/types'
 
 @Injectable()
 export class EntriesService {
@@ -13,6 +15,7 @@ export class EntriesService {
     private eventEmitter: EventEmitter2,
     private comparisonEvaluator: ComparisonEvaluatorService,
     private formulaEvaluator: FormulaEvaluatorService,
+    private transitionValidator: TransitionValidatorService,
   ) {}
 
   async findAll(recordId: string, organizationId: string) {
@@ -114,6 +117,19 @@ export class EntriesService {
       }
     }
 
+    // Autocompletar el estado inicial de fields DROPDOWN-as-status que no
+    // vinieron en el body. Esto evita que el usuario tenga que conocer las
+    // options al crear y resuelve la regla "exactamente un option es initial".
+    for (const field of record.fields) {
+      const current = data[field.id]
+      if (current === undefined || current === null || current === '') {
+        const initial = this.transitionValidator.getInitialValueForField(field)
+        if (initial !== null) {
+          data[field.id] = initial
+        }
+      }
+    }
+
     // Validar campos requeridos
     for (const field of record.fields) {
       if (field.isRequired && field.fieldType !== 'FORMULA' && field.fieldType !== 'COMPARISON') {
@@ -180,13 +196,25 @@ export class EntriesService {
     }
 
     // Estos tipos se auto-completan al crear
-    const autoComplete =
+    let autoComplete =
       record.type === 'INSTRUMENTAL' ||
       record.type === 'NOT_PERIODIC' ||
       record.type === 'NOT_PERIODIC_WITH_REVISION' ||
       record.type === 'STOCK'
     // BATCH no se auto-completa: tiene lifecycle PLANNED → IN_PROGRESS → COMPLETED
     // SAMPLE no se auto-completa: se completa cuando su muestra asociada se completa
+
+    // Workflow engine v2: si el Record tiene un DROPDOWN con isStatus, el
+    // lifecycle lo maneja el field, no el enum status legacy. La entry queda
+    // en DRAFT y el "estado" real vive en data[fieldId].
+    const hasStatusField = record.fields.some((f) => {
+      if (f.fieldType !== 'DROPDOWN') return false
+      const cfg = f.comparisonConfig as { isStatus?: boolean } | null
+      return cfg?.isStatus === true
+    })
+    if (hasStatusField) {
+      autoComplete = false
+    }
 
     // Crear la entrada (lógica core)
     const entry = await this.prisma.entry.create({
@@ -314,17 +342,24 @@ export class EntriesService {
     entryId: string,
     recordId: string,
     data: Record<string, unknown>,
+    changedById: string,
+    userRole: UserRole,
+    transitionReason?: string,
   ) {
     const entry = await this.findById(entryId, recordId)
 
-    if (entry.status === 'COMPLETED') {
-      const record = await this.prisma.record.findUniqueOrThrow({
-        where: { id: recordId },
-        include: { fields: { where: { isActive: true } } },
-      })
-      const identifierIds = record.fields.filter((f) => f.isIdentifier).map((f) => f.id)
-      const existingData = entry.data as Record<string, unknown>
+    // Cargar el record con sus fields activos — lo necesitamos para validar
+    // identifiers (si está COMPLETED), validar transitions (DROPDOWN-as-status)
+    // y para tener organizationId al emitir eventos.
+    const record = await this.prisma.record.findUniqueOrThrow({
+      where: { id: recordId },
+      include: { fields: { where: { isActive: true } } },
+    })
+    const existingData = entry.data as Record<string, unknown>
 
+    // 1. Identifiers no se pueden modificar en entries COMPLETED.
+    if (entry.status === 'COMPLETED') {
+      const identifierIds = record.fields.filter((f) => f.isIdentifier).map((f) => f.id)
       for (const idField of identifierIds) {
         if (data[idField] !== undefined && data[idField] !== existingData[idField]) {
           throw new BadRequestException('No se pueden modificar campos identificadores de una entrada completada')
@@ -332,10 +367,58 @@ export class EntriesService {
       }
     }
 
-    return this.prisma.entry.update({
+    // 2. Validar transitions de DROPDOWN-as-status fields. El frontend manda
+    // data completa (no parcial), así que comparamos directamente existing vs
+    // data para detectar cambios de status.
+    this.transitionValidator.validate(
+      record.fields,
+      existingData,
+      data,
+      userRole,
+      transitionReason,
+    )
+
+    // 3. Persistir.
+    const updated = await this.prisma.entry.update({
       where: { id: entryId },
       data: { data: data as Prisma.InputJsonValue },
     })
+
+    // 4. Emitir EntryFieldValueChangedEvent por cada field que cambió.
+    // Habilita triggers de RecordAction tipo FIELD_VALUE_CHANGED y permite
+    // que listeners reaccionen a cambios específicos (ej. el de status).
+    const fieldIds = new Set<string>([
+      ...Object.keys(existingData ?? {}),
+      ...Object.keys(data ?? {}),
+    ])
+    for (const fieldId of fieldIds) {
+      const oldValue = existingData?.[fieldId]
+      const newValue = data?.[fieldId]
+      if (this.isSameValue(oldValue, newValue)) continue
+      this.eventEmitter.emit(
+        EntryFieldValueChangedEvent.EVENT_NAME,
+        new EntryFieldValueChangedEvent(
+          entryId,
+          recordId,
+          record.organizationId,
+          fieldId,
+          oldValue,
+          newValue,
+          changedById,
+          false, // triggeredByCascade — futuro: heredar de contexto de cascada
+        ),
+      )
+    }
+
+    return updated
+  }
+
+  /** Comparación profunda simple para evitar emitir eventos por no-changes. */
+  private isSameValue(a: unknown, b: unknown): boolean {
+    if (a === b) return true
+    if (a == null && b == null) return true
+    if (a == null || b == null) return false
+    return JSON.stringify(a) === JSON.stringify(b)
   }
 
   async complete(entryId: string, recordId: string) {

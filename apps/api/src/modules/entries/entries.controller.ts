@@ -5,6 +5,7 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import type { UserRole } from '@synapse/types'
 
 @Controller('records/:recordId/entries')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -56,9 +57,10 @@ export class EntriesController {
   update(
     @Param('recordId') recordId: string,
     @Param('id') id: string,
-    @Body() body: { data: Record<string, unknown> },
+    @CurrentUser() user: JwtPayload,
+    @Body() body: { data: Record<string, unknown>; transitionReason?: string },
   ) {
-    return this.service.update(id, recordId, body.data)
+    return this.service.update(id, recordId, body.data, user.sub, user.role as UserRole, body.transitionReason)
   }
 
   @Post(':id/complete')

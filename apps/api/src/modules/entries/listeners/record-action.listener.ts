@@ -1,8 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { OnEvent } from '@nestjs/event-emitter'
 import { PrismaService } from '../../../prisma/prisma.service'
-import { EntryCreatedEvent } from '../../../common/events/domain-events'
+import {
+  EntryCreatedEvent,
+  EntryFieldValueChangedEvent,
+} from '../../../common/events/domain-events'
 import { Prisma } from '@prisma/client'
+import type { ActionCondition } from '@synapse/types'
 
 /**
  * Escucha EntryCreatedEvent y dispara la creación automática
@@ -187,5 +191,166 @@ export class RecordActionListener {
       }
 
     }
+  }
+
+  /**
+   * Handler de FIELD_VALUE_CHANGED. Dispara RecordActions configuradas con
+   * `trigger = FIELD_VALUE_CHANGED` cuando un field específico de una entry
+   * source cambia de valor (típicamente: el DROPDOWN de status pasa a otro
+   * estado y eso debe cascadear una entry en otro Record).
+   *
+   * El matching se hace contra `RecordAction.condition` con forma:
+   *   { type: 'EQUALS' | 'NOT_EQUALS' | 'IN' | 'NOT_IN', field, value }
+   * donde `field` puede ser "fieldId" (matchea el id del field que cambió) o
+   * "toValue" (matchea el valor nuevo).
+   *
+   * Anti-loop: si el evento viene de una cascada (`triggeredByCascade=true`)
+   * y la action no declara `allowCascade`, se omite.
+   */
+  @OnEvent(EntryFieldValueChangedEvent.EVENT_NAME)
+  async handleFieldValueChanged(event: EntryFieldValueChangedEvent) {
+    try {
+      const actions = await this.prisma.recordAction.findMany({
+        where: {
+          sourceRecordId: event.recordId,
+          trigger: 'FIELD_VALUE_CHANGED',
+        },
+        include: {
+          targetRecord: {
+            include: { fields: { where: { isActive: true } } },
+          },
+        },
+      })
+
+      for (const action of actions) {
+        // Anti-loop: omitir cascadas si la action no las permite explícitamente.
+        if (event.triggeredByCascade && !action.allowCascade) continue
+
+        // Filtrar por condition.
+        if (!this.matchesCondition(action.condition, event)) continue
+
+        await this.executeFieldValueChangedAction(action, event)
+      }
+    } catch (err) {
+      this.logger.error(
+        `Error en handleFieldValueChanged para evento ${JSON.stringify({
+          entryId: event.entryId,
+          recordId: event.recordId,
+          fieldId: event.fieldId,
+          toValue: event.toValue,
+        })}`,
+        err,
+      )
+      // No re-throwear: el update original ya commiteó.
+    }
+  }
+
+  /**
+   * Evalúa una `condition` (JSON guardada en RecordAction.condition) contra
+   * el payload del evento. Si condition es null/undefined, siempre matchea.
+   */
+  private matchesCondition(
+    condition: unknown,
+    event: EntryFieldValueChangedEvent,
+  ): boolean {
+    if (!condition) return true
+    const cond = condition as ActionCondition
+    if (!cond.type || !cond.field) return true
+
+    // Resolver el lado izquierdo según el path del field en el payload.
+    let actual: unknown
+    switch (cond.field) {
+      case 'fieldId':
+        actual = event.fieldId
+        break
+      case 'toValue':
+        actual = event.toValue
+        break
+      case 'fromValue':
+        actual = event.fromValue
+        break
+      default:
+        // Path no soportado: no matcheamos para evitar disparar acciones
+        // por error con configs malformadas.
+        return false
+    }
+
+    const expected = cond.value
+
+    switch (cond.type) {
+      case 'EQUALS':
+        return String(actual) === String(expected)
+      case 'NOT_EQUALS':
+        return String(actual) !== String(expected)
+      case 'IN':
+        return Array.isArray(expected) && expected.map(String).includes(String(actual))
+      case 'NOT_IN':
+        return Array.isArray(expected) && !expected.map(String).includes(String(actual))
+      default:
+        return false
+    }
+  }
+
+  /**
+   * Ejecuta una RecordAction disparada por FIELD_VALUE_CHANGED: crea una
+   * Entry en el target Record con field mapping aplicado desde la entry
+   * source. Versión simplificada (sin companion creation) — los side-effects
+   * de Batch/Sample/Stock se mantienen en handleEntryCreated por ahora.
+   */
+  private async executeFieldValueChangedAction(
+    action: {
+      id: string
+      targetRecordId: string
+      fieldMapping: unknown
+      targetRecord: {
+        type: string
+        version: number
+        periodicity: number | null
+        fields: Array<{ id: string; isActive: boolean }>
+      }
+    },
+    event: EntryFieldValueChangedEvent,
+  ) {
+    // Cargar la entry source para tener su data completa (necesaria para el
+    // field mapping).
+    const sourceEntry = await this.prisma.entry.findUnique({
+      where: { id: event.entryId },
+      select: { data: true, createdById: true },
+    })
+    if (!sourceEntry) return
+
+    const sourceData = sourceEntry.data as Record<string, unknown>
+    const mapping = action.fieldMapping as Array<{
+      sourceFieldId: string
+      targetFieldId: string
+    }>
+    const targetData: Record<string, unknown> = {}
+    for (const map of mapping ?? []) {
+      if (sourceData[map.sourceFieldId] !== undefined) {
+        targetData[map.targetFieldId] = sourceData[map.sourceFieldId]
+      }
+    }
+
+    let targetDueDate: Date | null = null
+    if (action.targetRecord.type === 'PERIODIC' && action.targetRecord.periodicity) {
+      targetDueDate = new Date()
+      targetDueDate.setDate(targetDueDate.getDate() + action.targetRecord.periodicity)
+    }
+
+    await this.prisma.entry.create({
+      data: {
+        recordId: action.targetRecordId,
+        createdById: event.changedById,
+        recordVersion: action.targetRecord.version,
+        data: targetData as Prisma.InputJsonValue,
+        dueDate: targetDueDate,
+        triggeredById: event.entryId,
+        status: 'DRAFT',
+      },
+    })
+
+    this.logger.log(
+      `RecordAction ${action.id} disparada por FIELD_VALUE_CHANGED (field=${event.fieldId}, toValue=${String(event.toValue)})`,
+    )
   }
 }

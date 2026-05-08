@@ -81,3 +81,29 @@ export class DocumentVersionCreatedEvent {
     public readonly newVersion: string,
   ) {}
 }
+
+/**
+ * Se emite cuando un field específico de Entry.data cambia de valor en un
+ * update. Habilita triggers de RecordAction tipo FIELD_VALUE_CHANGED
+ * (ej. "cuando el field 'Estado' cambia a 'CLOSED', crear una NC").
+ *
+ * Un update puede generar múltiples eventos (uno por field que cambió).
+ *
+ * `triggeredByCascade` previene loops cuando este cambio fue causado por una
+ * acción cascadeada de otra Entry; los listeners pueden filtrar para no
+ * recursar salvo que la action declare `allowCascade: true`.
+ */
+export class EntryFieldValueChangedEvent {
+  static readonly EVENT_NAME = 'entry.fieldValueChanged'
+
+  constructor(
+    public readonly entryId: string,
+    public readonly recordId: string,
+    public readonly organizationId: string,
+    public readonly fieldId: string,
+    public readonly fromValue: unknown,
+    public readonly toValue: unknown,
+    public readonly changedById: string,
+    public readonly triggeredByCascade: boolean,
+  ) {}
+}

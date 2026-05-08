@@ -96,3 +96,16 @@ export enum SampleStatus {
   IN_TESTING = 'IN_TESTING',
   COMPLETED = 'COMPLETED',
 }
+
+// Trigger que dispara una RecordAction. ENTRY_COMPLETED es el comportamiento
+// histórico (default para back-compat); los demás se introducen con el motor
+// de workflows configurable. Sincronizado con apps/api/prisma/schema.prisma.
+// Pivot v2: FIELD_VALUE_CHANGED reemplaza al ENTRY_STATE_CHANGED del spec
+// original — el estado vive como DROPDOWN OWN field.
+export enum TriggerType {
+  ENTRY_CREATED = 'ENTRY_CREATED',
+  ENTRY_COMPLETED = 'ENTRY_COMPLETED',
+  FIELD_VALUE_CHANGED = 'FIELD_VALUE_CHANGED',
+  COMPARISON_FAILED = 'COMPARISON_FAILED',
+  INSTRUMENT_STATUS_CHANGED = 'INSTRUMENT_STATUS_CHANGED',
+}
