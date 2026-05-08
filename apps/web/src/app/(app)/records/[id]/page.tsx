@@ -859,6 +859,14 @@ function SynEntriesTabbedCard({
     onTabChange?.(tab)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Conteo de flujos (RecordAction rows con sourceRecordId === record.id) para
+  // mostrarlo en el label del tab "Flujos · N".
+  const { data: flows = [] } = useQuery<Array<{ id: string }>>({
+    queryKey: ['record-actions', record.id],
+    queryFn: () => api.records.listActions(record.id) as Promise<Array<{ id: string }>>,
+  })
+  const flowCount = flows.length
   const visibleFields = record.fields.filter(
     (f) => f.fieldType !== 'FORMULA' && f.fieldType !== 'COMPARISON',
   )
@@ -995,7 +1003,7 @@ function SynEntriesTabbedCard({
             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             <Zap className="h-3.5 w-3.5" />
-            Flujos
+            Flujos · {flowCount}
           </button>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1747,8 +1755,8 @@ export default function RecordDetailPage() {
           </section>
         )}
 
-        {/* Non-editing only — Cascade summary + Compliance */}
-        {!editing && <SynCascadeCard record={record} allRecords={allRecords} />}
+        {/* Non-editing only — Compliance. Acciones cascada movido a la
+            solapa "Flujos" del SynEntriesTabbedCard (Visual Flow Editor). */}
         {!editing && <SynComplianceCard entries={entries} />}
 
         </div>
