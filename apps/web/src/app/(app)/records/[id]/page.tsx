@@ -32,6 +32,7 @@ import {
   LayoutGrid,
 } from 'lucide-react'
 import { KanbanBoard, type KanbanCard, type KanbanColor, type KanbanColumn, type KanbanTransition } from '@/components/kanban'
+import { FlowEditor } from '@/components/flow-editor'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -842,7 +843,7 @@ function SynEntriesTabbedCard({
     }
   }
 
-  const [tab, setTab] = useState<'entries' | 'versions' | 'audit' | 'kanban'>(
+  const [tab, setTab] = useState<'entries' | 'versions' | 'audit' | 'kanban' | 'flows'>(
     hasStatusField ? 'kanban' : 'entries',
   )
   const visibleFields = record.fields.filter(
@@ -973,6 +974,15 @@ function SynEntriesTabbedCard({
             className={'syn-tab ' + (tab === 'audit' ? 'active' : '')}
           >
             Auditoría
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('flows')}
+            className={'syn-tab ' + (tab === 'flows' ? 'active' : '')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <Zap className="h-3.5 w-3.5" />
+            Flujos
           </button>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -1142,6 +1152,21 @@ function SynEntriesTabbedCard({
       {tab === 'audit' && (
         <div style={{ padding: 20, fontSize: 13, color: 'var(--ink-2)' }}>
           Log inmutable de cambios. Próximamente: timeline de eventos con firma digital y sello temporal.
+        </div>
+      )}
+
+      {tab === 'flows' && (
+        <div style={{ padding: 16 }}>
+          <FlowEditor
+            recordId={record.id}
+            recordFields={record.fields.map((f) => ({
+              id: f.id,
+              label: f.label,
+              fieldType: f.fieldType,
+              isIdentifier: f.isIdentifier,
+              comparisonConfig: f.comparisonConfig,
+            }))}
+          />
         </div>
       )}
 

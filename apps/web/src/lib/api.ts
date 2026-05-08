@@ -102,8 +102,12 @@ export const api = {
       fetchApi(`/records/${recordId}/fields/${fieldId}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteField: (recordId: string, fieldId: string) =>
       fetchApi(`/records/${recordId}/fields/${fieldId}`, { method: 'DELETE' }),
+    listActions: (recordId: string) =>
+      fetchApi(`/records/${recordId}/actions`),
     addAction: (recordId: string, data: Record<string, unknown>) =>
       fetchApi(`/records/${recordId}/actions`, { method: 'POST', body: JSON.stringify(data) }),
+    updateAction: (recordId: string, actionId: string, data: Record<string, unknown>) =>
+      fetchApi(`/records/${recordId}/actions/${actionId}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteAction: (recordId: string, actionId: string) =>
       fetchApi(`/records/${recordId}/actions/${actionId}`, { method: 'DELETE' }),
   },
