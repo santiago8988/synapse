@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  FileText,
   Loader2,
   FlaskConical,
   Ruler,
@@ -827,65 +828,33 @@ export default function BatchDetailPage() {
                     </div>
                   </div>
                 )}
-                {batch.recipe.steps.length > 0 && (
+                {/* Pasos del proceso (PDF) — el operador lo abre durante la
+                    producción para seguir las instrucciones de la fórmula. */}
+                {(batch.recipe as unknown as { stepsPdfUrl?: string | null }).stepsPdfUrl && (
                   <div>
-                    <div className="kicker mb-2">· Pasos</div>
-                    <div
-                      className="rounded-[8px] border"
+                    <div className="kicker mb-2">· Pasos del proceso</div>
+                    <a
+                      href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}${(batch.recipe as unknown as { stepsPdfUrl: string }).stepsPdfUrl.replace(/^\/api/, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-[8px] border px-3 py-2.5 flex items-center gap-3 transition hover:bg-[var(--bg-3)]"
                       style={{ borderColor: 'var(--line)' }}
                     >
-                      {batch.recipe.steps.map((step, i) => (
-                        <div
-                          key={i}
-                          className="px-3 py-2 text-[13px]"
-                          style={{
-                            borderTop: i === 0 ? 'none' : '1px solid var(--line)',
-                          }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="flex h-5 w-5 items-center justify-center rounded-full font-mono text-[10px] font-semibold"
-                              style={{
-                                background: 'var(--primary-soft)',
-                                color: 'var(--primary-hex)',
-                              }}
-                            >
-                              {step.order}
-                            </span>
-                            <span
-                              className="font-medium"
-                              style={{ color: 'var(--ink-0)' }}
-                            >
-                              {step.name}
-                            </span>
-                            {step.duration && (
-                              <span
-                                className="font-mono text-[11px]"
-                                style={{ color: 'var(--ink-3)' }}
-                              >
-                                {step.duration} min
-                              </span>
-                            )}
-                          </div>
-                          {step.description && (
-                            <p
-                              className="ml-7 mt-1 text-[12px]"
-                              style={{ color: 'var(--ink-3)' }}
-                            >
-                              {step.description}
-                            </p>
-                          )}
-                          {step.controls && (
-                            <p
-                              className="ml-7 mt-1 text-[12px]"
-                              style={{ color: 'var(--info)' }}
-                            >
-                              Control: {step.controls}
-                            </p>
-                          )}
+                      <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px]"
+                        style={{ background: 'var(--info-soft)', color: 'var(--info)' }}
+                      >
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate text-[13px]" style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
+                          {(batch.recipe as unknown as { stepsPdfName?: string | null }).stepsPdfName || 'Pasos del proceso.pdf'}
                         </div>
-                      ))}
-                    </div>
+                        <div className="text-[11px]" style={{ color: 'var(--ink-3)' }}>
+                          Abrir PDF en nueva pestaña
+                        </div>
+                      </div>
+                    </a>
                   </div>
                 )}
               </div>

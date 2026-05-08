@@ -513,6 +513,14 @@ model Recipe {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  // PDF con los pasos del proceso (reemplaza el modelo RecipeStep textual).
+  // El operador lo abre durante la producción para seguir las instrucciones.
+  stepsPdfUrl        String?
+  stepsPdfKey        String?
+  stepsPdfName       String?
+  stepsPdfSize       Int?
+  stepsPdfUploadedAt DateTime?
+
   organization Organization       @relation(fields: [organizationId], references: [id])
   ingredients          RecipeIngredient[]
   usedAsIngredientIn   RecipeIngredient[] @relation("IngredientStockRecipe")

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
+  FileText,
   FlaskConical,
   Plus,
   Search,
@@ -51,6 +52,12 @@ interface Recipe {
   steps: Step[]
   requiredInstruments?: RequiredInstrument[]
   _count?: { batches: number }
+  /** PDF con los pasos del proceso (reemplaza la edición textual de Step[]). */
+  stepsPdfUrl: string | null
+  stepsPdfKey: string | null
+  stepsPdfName: string | null
+  stepsPdfSize: number | null
+  stepsPdfUploadedAt: string | null
 }
 
 const statusChipCls: Record<string, string> = {
@@ -423,68 +430,13 @@ function RecipeDetailDialog({
             </div>
           )}
 
-          {/* Pasos */}
-          {recipe.steps.length > 0 && (
-            <div>
-              <div className="kicker mb-2">· Pasos del proceso</div>
-              <div
-                className="rounded-[8px] border"
-                style={{ borderColor: 'var(--line)' }}
-              >
-                {recipe.steps.map((step, i) => (
-                  <div
-                    key={i}
-                    className="px-3 py-2.5 text-[13px]"
-                    style={{
-                      borderTop: i === 0 ? 'none' : '1px solid var(--line)',
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full font-mono text-[11px] font-semibold"
-                        style={{
-                          background: 'var(--primary-soft)',
-                          color: 'var(--primary-hex)',
-                        }}
-                      >
-                        {step.order}
-                      </span>
-                      <span
-                        className="flex-1 font-medium"
-                        style={{ color: 'var(--ink-0)' }}
-                      >
-                        {step.name}
-                      </span>
-                      {step.duration && (
-                        <span
-                          className="font-mono text-[11px]"
-                          style={{ color: 'var(--ink-3)' }}
-                        >
-                          {step.duration} min
-                        </span>
-                      )}
-                    </div>
-                    {step.description && (
-                      <p
-                        className="ml-9 mt-1 text-[12px]"
-                        style={{ color: 'var(--ink-3)' }}
-                      >
-                        {step.description}
-                      </p>
-                    )}
-                    {step.controls && (
-                      <p
-                        className="ml-9 mt-1 text-[12px]"
-                        style={{ color: 'var(--info)' }}
-                      >
-                        Control: {step.controls}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Pasos del proceso (PDF) */}
+          <RecipeStepsPdfSection
+            recipeId={recipe.id}
+            stepsPdfUrl={recipe.stepsPdfUrl}
+            stepsPdfName={recipe.stepsPdfName}
+            stepsPdfSize={recipe.stepsPdfSize}
+          />
 
           {/* Instrumentos requeridos */}
           {recipe.requiredInstruments && recipe.requiredInstruments.length > 0 && (
@@ -1039,6 +991,165 @@ function RecipeForm({
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// RecipeStepsPdfSection — sube/visualiza el PDF de pasos del proceso
+// ───────────────────────────────────────────────────────────────────────────
+
+const STEPS_PDF_MAX_BYTES = 10 * 1024 * 1024
+const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+
+function formatBytes(b: number): string {
+  if (b < 1024) return `${b} B`
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function RecipeStepsPdfSection({
+  recipeId,
+  stepsPdfUrl,
+  stepsPdfName,
+  stepsPdfSize,
+}: {
+  recipeId: string
+  stepsPdfUrl: string | null
+  stepsPdfName: string | null
+  stepsPdfSize: number | null
+}) {
+  const queryClient = useQueryClient()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleFile(file: File) {
+    setError(null)
+    if (file.type !== 'application/pdf') {
+      setError('Solo se permiten archivos PDF.')
+      return
+    }
+    if (file.size > STEPS_PDF_MAX_BYTES) {
+      setError('El archivo supera el tamaño máximo (10 MB).')
+      return
+    }
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const token = typeof window !== 'undefined' ? localStorage.getItem('synapse_token') : null
+      const res = await fetch(`${apiBase}/recipes/${recipeId}/steps-pdf`, {
+        method: 'POST',
+        body: formData,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ message: 'Error subiendo el archivo' }))
+        throw new Error(body.message || `Error ${res.status}`)
+      }
+      queryClient.invalidateQueries({ queryKey: ['recipes'] })
+      toast.success('Pasos del proceso subidos')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error subiendo el archivo')
+    } finally {
+      setUploading(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  async function handleRemove() {
+    setError(null)
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('synapse_token') : null
+      const res = await fetch(`${apiBase}/recipes/${recipeId}/steps-pdf`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) throw new Error('No se pudo eliminar el PDF')
+      queryClient.invalidateQueries({ queryKey: ['recipes'] })
+      toast.success('PDF eliminado')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error')
+    }
+  }
+
+  return (
+    <div>
+      <div className="kicker mb-2">· Pasos del proceso</div>
+      {stepsPdfUrl ? (
+        <div
+          className="rounded-[8px] border px-3 py-2.5 flex items-center gap-3"
+          style={{ borderColor: 'var(--line)' }}
+        >
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px]"
+            style={{ background: 'var(--info-soft)', color: 'var(--info)' }}
+          >
+            <FileText className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="truncate text-[13px]" style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
+              {stepsPdfName || 'pasos.pdf'}
+            </div>
+            <div className="text-[11px]" style={{ color: 'var(--ink-3)' }}>
+              {stepsPdfSize ? formatBytes(stepsPdfSize) : '—'}
+            </div>
+          </div>
+          <a
+            href={`${apiBase}${stepsPdfUrl.replace(/^\/api/, '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="syn-btn syn-btn-subtle"
+            style={{ padding: '4px 10px', fontSize: 12 }}
+          >
+            Ver
+          </a>
+          <button
+            type="button"
+            onClick={handleRemove}
+            className="syn-btn"
+            style={{ padding: '4px 8px', fontSize: 12, color: 'var(--danger)' }}
+          >
+            Quitar
+          </button>
+        </div>
+      ) : (
+        <>
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => inputRef.current?.click()}
+            className="rounded-[8px] border-2 border-dashed px-3 py-4 text-[12.5px] transition w-full text-left"
+            style={{
+              borderColor: 'var(--line)',
+              background: 'var(--bg-1)',
+              color: 'var(--ink-2)',
+              cursor: uploading ? 'not-allowed' : 'pointer',
+              opacity: uploading ? 0.6 : 1,
+            }}
+          >
+            {uploading
+              ? 'Subiendo…'
+              : 'Click para adjuntar un PDF con los pasos del proceso (máx. 10 MB)'}
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="application/pdf"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) handleFile(f)
+            }}
+          />
+        </>
+      )}
+      {error && (
+        <div className="text-[11.5px] mt-1" style={{ color: 'var(--danger)' }}>
+          {error}
+        </div>
+      )}
     </div>
   )
 }

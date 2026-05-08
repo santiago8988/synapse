@@ -208,4 +208,66 @@ export class RecipesService {
 
     return this.prisma.recipe.delete({ where: { id } })
   }
+
+  // ─── PDF de pasos del proceso ─────────────────────────────────────────────
+
+  /** Devuelve los campos del PDF (o nulls si no hay) para el recipe. */
+  async getStepsPdf(id: string, organizationId: string) {
+    const recipe = await this.prisma.recipe.findFirst({
+      where: { id, organizationId },
+      select: {
+        stepsPdfUrl: true,
+        stepsPdfKey: true,
+        stepsPdfName: true,
+        stepsPdfSize: true,
+        stepsPdfUploadedAt: true,
+      },
+    })
+    if (!recipe) throw new NotFoundException('Receta no encontrada')
+    return recipe
+  }
+
+  async setStepsPdf(
+    id: string,
+    organizationId: string,
+    data: {
+      stepsPdfUrl: string
+      stepsPdfKey: string
+      stepsPdfName: string
+      stepsPdfSize: number
+    },
+  ) {
+    await this.findById(id, organizationId)
+    return this.prisma.recipe.update({
+      where: { id },
+      data: {
+        stepsPdfUrl: data.stepsPdfUrl,
+        stepsPdfKey: data.stepsPdfKey,
+        stepsPdfName: data.stepsPdfName,
+        stepsPdfSize: data.stepsPdfSize,
+        stepsPdfUploadedAt: new Date(),
+      },
+      select: {
+        stepsPdfUrl: true,
+        stepsPdfKey: true,
+        stepsPdfName: true,
+        stepsPdfSize: true,
+        stepsPdfUploadedAt: true,
+      },
+    })
+  }
+
+  async clearStepsPdf(id: string, organizationId: string) {
+    await this.findById(id, organizationId)
+    return this.prisma.recipe.update({
+      where: { id },
+      data: {
+        stepsPdfUrl: null,
+        stepsPdfKey: null,
+        stepsPdfName: null,
+        stepsPdfSize: null,
+        stepsPdfUploadedAt: null,
+      },
+    })
+  }
 }
