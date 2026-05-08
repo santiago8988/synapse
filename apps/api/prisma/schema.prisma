@@ -52,13 +52,6 @@ enum ComparisonOperator {
   BETWEEN
 }
 
-enum InstrumentStatus {
-  ACTIVE
-  IN_CALIBRATION
-  IN_REPAIR
-  DECOMMISSIONED
-}
-
 enum NonConformityStatus {
   OPEN
   IN_PROGRESS
@@ -166,7 +159,6 @@ model Organization {
   whitelist        EmailWhitelist[]
   documents        Document[]
   records          Record[]
-  instruments      Instrument[]
   auditLogs        AuditLog[]
   positions        Position[]
   qualityRoles     QualityRole[]
@@ -316,7 +308,6 @@ model Record {
   document        Document?      @relation(fields: [documentId], references: [id])
   fields          RecordField[]
   entries         Entry[]
-  instruments     Instrument[]
   batches         Batch[]
   samples         Sample[]
   stockMovements  StockMovement[]
@@ -401,12 +392,11 @@ model Entry {
 
   record          Record          @relation(fields: [recordId], references: [id])
   nonConformities NonConformity[]
-  instrument      Instrument?     // 1:1 si es entry de record INSTRUMENTAL
   batch           Batch?          // 1:1 si es entry de record BATCH
   sample          Sample?         // 1:1 si es entry de record SAMPLE
   stockMovement   StockMovement?  // 1:1 si es entry de record STOCK
-  calibrations         Calibration[] @relation("CalibrationEntry") // calibraciones del instrumento
-  usedAsPatternIn      CalibrationPattern[] // join: en que calibraciones este instrumento se uso como patron
+  calibrations         Calibration[] @relation("CalibrationEntry") // calibraciones del instrumento (records type=INSTRUMENTAL)
+  usedAsPatternIn      CalibrationPattern[] // join: en que calibraciones esta entry se uso como patron
   statusLogs           EntryStatusLog[]
 
   @@index([recordId])
@@ -414,39 +404,13 @@ model Entry {
 }
 
 // ─────────────────────────────────────────────
-// INSTRUMENTAL
+// INSTRUMENTAL — colapsado al modelo Records-as-Lists.
+// El "instrumento" es ahora una Entry de un Record `type=INSTRUMENTAL`.
+// El estado vive en el field DROPDOWN `ESTADO` (auto-creado por
+// records.service para records nuevos). El historial se loguea en
+// EntryStatusLog. Calibration ya apuntaba a Entry.id directamente.
+// Ver INSTRUMENT_COLLAPSE_SPEC.md.
 // ─────────────────────────────────────────────
-
-model Instrument {
-  id                String           @id @default(cuid())
-  organizationId    String
-  entryId           String           @unique // 1:1 con la entry que lo creó
-  recordId          String           // record INSTRUMENTAL al que pertenece
-  status            InstrumentStatus @default(ACTIVE)
-  nextCalibrationAt DateTime?        // calculada: createdAt + periodicity del record
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-
-  organization Organization        @relation(fields: [organizationId], references: [id])
-  entry        Entry               @relation(fields: [entryId], references: [id])
-  record       Record              @relation(fields: [recordId], references: [id])
-  statusLogs   InstrumentStatusLog[]
-
-  @@index([organizationId])
-  @@index([recordId])
-}
-
-model InstrumentStatusLog {
-  id           String           @id @default(cuid())
-  instrumentId String
-  fromStatus   InstrumentStatus
-  toStatus     InstrumentStatus
-  reason       String?
-  changedById  String
-  changedAt    DateTime         @default(now())
-
-  instrument Instrument @relation(fields: [instrumentId], references: [id])
-}
 
 // ─────────────────────────────────────────────
 // NO CONFORMIDADES

@@ -9,6 +9,7 @@ import { RecordActionListener } from './listeners/record-action.listener'
 import { DueDateListener } from './listeners/due-date.listener'
 import { InstrumentListener } from './listeners/instrument.listener'
 import { EntryStatusLogListener } from './listeners/entry-status-log.listener'
+import { EntryCompletionListener } from './listeners/entry-completion.listener'
 
 @Module({
   controllers: [EntriesController],
@@ -22,6 +23,7 @@ import { EntryStatusLogListener } from './listeners/entry-status-log.listener'
     DueDateListener,
     InstrumentListener,
     EntryStatusLogListener,
+    EntryCompletionListener,
   ],
   exports: [EntriesService],
 })
