@@ -11,6 +11,7 @@ export type FieldType =
   | 'COMPARISON'
   | 'FORMULA'
   | 'CALIBRATION_TEMPLATE'
+  | 'FILE_PDF'
 
 export type RecordType =
   | 'PERIODIC'

@@ -13,6 +13,8 @@ import {
   ComparisonField,
   DropdownField,
   FieldLabel,
+  FilePdfField,
+  type FilePdfValue,
   FormulaField,
   MatrixMethodField,
   MultiRelatedEntryField,
@@ -53,6 +55,10 @@ export interface DynamicRecordFormProps {
   className?: string
   /** Variante visual: "bare" sin padding, "framed" con card. Default "bare". */
   variant?: 'bare' | 'framed'
+  /** ID de la entry (necesario para uploads de FILE_PDF en modo edit/create).
+   *  En create se setea recién después de la primera persistencia, así que
+   *  los FILE_PDF con upload solo funcionan en edit. */
+  entryId?: string
 }
 
 export function DynamicRecordForm({
@@ -69,6 +75,7 @@ export function DynamicRecordForm({
   headerActions,
   className,
   variant = 'bare',
+  entryId,
 }: DynamicRecordFormProps) {
   const isReadOnly = mode === 'view' || mode === 'preview'
   const effectiveMockData = React.useMemo(() => {
@@ -170,6 +177,7 @@ export function DynamicRecordForm({
               formulaResults={formulaResults}
               onSetFieldValue={setFieldValue}
               onSetData={setData}
+              entryId={entryId}
             />
           )
         })}
@@ -192,6 +200,7 @@ function FieldSwitch({
   formulaResults,
   onSetFieldValue,
   onSetData,
+  entryId,
 }: {
   field: FieldDef
   record: RecordForForm
@@ -202,12 +211,14 @@ function FieldSwitch({
   formulaResults: Record<string, number>
   onSetFieldValue: (id: string, v: unknown) => void
   onSetData: (d: Record<string, unknown>) => void
+  entryId?: string
 }) {
   const value = data[field.id]
   // Identificador de entry COMPLETED: read-only
   const identifierLocked =
     isCompleted && field.isIdentifier && (mode === 'edit' || mode === 'view')
   const readOnly = isReadOnly || identifierLocked
+  const recordId = (record as { id?: string }).id
 
   switch (field.fieldType) {
     case 'FORMULA':
@@ -345,6 +356,27 @@ function FieldSwitch({
           onChange={(v) => onSetFieldValue(field.id, v)}
           readOnly={readOnly}
           mode={mode}
+        />
+      )
+
+    case 'FILE_PDF':
+      if (mode === 'preview') {
+        return (
+          <PlaceholderSelectField
+            field={field}
+            hint="PDF"
+            placeholder="(adjuntar PDF al ingresar)"
+          />
+        )
+      }
+      return (
+        <FilePdfField
+          field={field}
+          value={value as FilePdfValue | null}
+          onChange={(v) => onSetFieldValue(field.id, v)}
+          readOnly={readOnly}
+          recordId={recordId}
+          entryId={entryId}
         />
       )
 

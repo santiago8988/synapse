@@ -1,16 +1,46 @@
-import { Controller, Get, Post, Patch, Param, Body, UseGuards } from '@nestjs/common'
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+  Query,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+  Res,
+} from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
+import { Response } from 'express'
+import * as fs from 'fs'
+import * as path from 'path'
 import { EntriesService } from './entries.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
+import { Public } from '../../common/decorators/public.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
 import type { UserRole } from '@synapse/types'
+
+const FILE_PDF_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
 
 @Controller('records/:recordId/entries')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
 export class EntriesController {
-  constructor(private service: EntriesService) {}
+  private uploadDir: string
+
+  constructor(private service: EntriesService) {
+    // Almacenamiento local para uploads de FILE_PDF (en producción → R2,
+    // mismo patrón que documents.controller).
+    this.uploadDir = path.join(process.cwd(), 'uploads', 'entries')
+    if (!fs.existsSync(this.uploadDir)) {
+      fs.mkdirSync(this.uploadDir, { recursive: true })
+    }
+  }
 
   @Get()
   findAll(
@@ -70,5 +100,89 @@ export class EntriesController {
     @Param('id') id: string,
   ) {
     return this.service.complete(id, recordId)
+  }
+
+  // ─── FILE_PDF uploads ─────────────────────────────────────────────────────
+
+  /**
+   * Sube un PDF y lo asigna al field `?field=<fieldId>` en `Entry.data`.
+   * Body: multipart/form-data con `file` (max 10 MB, mime application/pdf).
+   * Devuelve el value persistido en data[fieldId].
+   */
+  @Post(':id/files')
+  @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadFile(
+    @Param('recordId') recordId: string,
+    @Param('id') id: string,
+    @Query('field') fieldId: string,
+    @CurrentUser() user: JwtPayload,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!fieldId) throw new BadRequestException('Falta el query param `field` (id del field FILE_PDF)')
+    if (!file) throw new BadRequestException('No se adjuntó ningún archivo')
+    if (file.mimetype !== 'application/pdf') {
+      throw new BadRequestException('Solo se permiten archivos PDF (application/pdf)')
+    }
+    if (file.size > FILE_PDF_MAX_BYTES) {
+      throw new BadRequestException('El archivo supera el tamaño máximo permitido (10 MB)')
+    }
+
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const filename = `${id}_${fieldId}_${Date.now()}_${safeName}`
+    const filepath = path.join(this.uploadDir, filename)
+    fs.writeFileSync(filepath, file.buffer)
+
+    const url = `/api/records/${recordId}/entries/${id}/files/${filename}`
+    const value = {
+      url,
+      key: filename,
+      name: file.originalname,
+      size: file.size,
+      uploadedAt: new Date().toISOString(),
+      uploadedById: user.sub,
+    }
+
+    await this.service.setFieldValue(id, recordId, fieldId, value, user.sub, user.role as UserRole)
+    return value
+  }
+
+  @Delete(':id/files')
+  @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  async deleteFile(
+    @Param('recordId') recordId: string,
+    @Param('id') id: string,
+    @Query('field') fieldId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    if (!fieldId) throw new BadRequestException('Falta el query param `field`')
+
+    // Leer el value actual para borrar el archivo físico.
+    const current = await this.service.getFieldValue(id, recordId, fieldId)
+    if (current && typeof current === 'object' && 'key' in current) {
+      const key = (current as { key: string }).key
+      const filepath = path.join(this.uploadDir, key)
+      if (fs.existsSync(filepath)) {
+        try { fs.unlinkSync(filepath) } catch { /* mejor esfuerzo */ }
+      }
+    }
+
+    await this.service.setFieldValue(id, recordId, fieldId, null, user.sub, user.role as UserRole)
+    return { ok: true }
+  }
+
+  @Get(':id/files/:filename')
+  @Public()
+  async serveFile(
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ) {
+    const filepath = path.join(this.uploadDir, filename)
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({ message: 'Archivo no encontrado' })
+    }
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`)
+    fs.createReadStream(filepath).pipe(res)
   }
 }

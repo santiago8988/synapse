@@ -41,6 +41,7 @@ enum FieldType {
   MULTIPLE_RELATED_ENTRY
   COMPARISON
   FORMULA
+  FILE_PDF
 }
 
 enum ComparisonOperator {

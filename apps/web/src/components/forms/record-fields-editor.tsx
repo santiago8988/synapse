@@ -20,6 +20,7 @@ export type FieldType =
   | 'COMPARISON'
   | 'FORMULA'
   | 'CALIBRATION_TEMPLATE'
+  | 'FILE_PDF'
 
 export interface ComparisonConfigShape {
   operator: string
@@ -84,6 +85,7 @@ export const fieldTypeOptions: {
   { value: 'MATRIX_METHOD', label: 'Matriz · Métodos', short: 'MATRIX · MÉTODOS' },
   { value: 'RECIPE_SELECT', label: 'Fórmula', short: 'FÓRMULA' },
   { value: 'CALIBRATION_TEMPLATE', label: 'Plantilla calibración', short: 'PLANTILLA' },
+  { value: 'FILE_PDF', label: 'Archivo PDF', short: 'PDF' },
 ]
 
 export const comparisonOperators = [

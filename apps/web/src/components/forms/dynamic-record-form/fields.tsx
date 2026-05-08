@@ -837,3 +837,191 @@ export function PlaceholderSelectField({
     </div>
   )
 }
+
+// ============================================================================
+// FilePdfField — adjuntar un PDF a la entry
+// ============================================================================
+
+export interface FilePdfValue {
+  url: string
+  key: string
+  name: string
+  size: number
+  uploadedAt: string
+  uploadedById: string
+}
+
+const FILE_PDF_MAX_BYTES = 10 * 1024 * 1024
+
+function formatBytes(b: number): string {
+  if (b < 1024) return `${b} B`
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`
+}
+
+export function FilePdfField({
+  field,
+  value,
+  onChange,
+  readOnly,
+  recordId,
+  entryId,
+}: {
+  field: FieldDef
+  value: FilePdfValue | null
+  onChange: (v: FilePdfValue | null) => void
+  readOnly?: boolean
+  recordId?: string
+  entryId?: string
+}) {
+  const [uploading, setUploading] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+
+  async function handleFile(file: File) {
+    setError(null)
+    if (file.type !== 'application/pdf') {
+      setError('Solo se permiten archivos PDF.')
+      return
+    }
+    if (file.size > FILE_PDF_MAX_BYTES) {
+      setError('El archivo supera el tamaño máximo (10 MB).')
+      return
+    }
+    if (!recordId || !entryId) {
+      setError('Guardá la entrada antes de adjuntar archivos.')
+      return
+    }
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const token = typeof window !== 'undefined' ? localStorage.getItem('synapse_token') : null
+      const res = await fetch(
+        `${apiUrl}/records/${recordId}/entries/${entryId}/files?field=${encodeURIComponent(field.id)}`,
+        {
+          method: 'POST',
+          body: formData,
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      )
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ message: 'Error subiendo el archivo' }))
+        throw new Error(body.message || `Error ${res.status}`)
+      }
+      const persisted = (await res.json()) as FilePdfValue
+      onChange(persisted)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error subiendo el archivo')
+    } finally {
+      setUploading(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  async function handleRemove() {
+    if (!recordId || !entryId) {
+      onChange(null)
+      return
+    }
+    setError(null)
+    try {
+      const token = typeof window !== 'undefined' ? localStorage.getItem('synapse_token') : null
+      await fetch(
+        `${apiUrl}/records/${recordId}/entries/${entryId}/files?field=${encodeURIComponent(field.id)}`,
+        {
+          method: 'DELETE',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      )
+      onChange(null)
+    } catch {
+      onChange(null)
+    }
+  }
+
+  return (
+    <div className="syn-field">
+      <FieldLabel field={field} hint="PDF" />
+      {value ? (
+        <div
+          className="rounded-[10px] border px-3 py-2 flex items-center gap-3"
+          style={{ background: 'var(--bg-1)', borderColor: 'var(--line-2)' }}
+        >
+          <div
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[6px]"
+            style={{ background: 'var(--info-soft)', color: 'var(--info)', fontWeight: 700, fontSize: 11 }}
+          >
+            PDF
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="truncate text-[13px]" style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
+              {value.name}
+            </div>
+            <div className="text-[11px]" style={{ color: 'var(--ink-3)' }}>
+              {formatBytes(value.size)}
+            </div>
+          </div>
+          <a
+            href={`${apiUrl}${value.url.replace(/^\/api/, '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="syn-btn syn-btn-subtle"
+            style={{ padding: '4px 10px', fontSize: 12 }}
+          >
+            Ver
+          </a>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              className="syn-btn"
+              style={{ padding: '4px 8px', fontSize: 12, color: 'var(--danger)' }}
+              aria-label="Quitar archivo"
+            >
+              Quitar
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          <button
+            type="button"
+            disabled={readOnly || uploading || !entryId}
+            onClick={() => inputRef.current?.click()}
+            className="rounded-[10px] border-2 border-dashed px-3 py-4 text-[12.5px] transition w-full text-left"
+            style={{
+              borderColor: 'var(--line-2)',
+              background: 'var(--bg-1)',
+              color: 'var(--ink-2)',
+              cursor: readOnly || uploading || !entryId ? 'not-allowed' : 'pointer',
+              opacity: readOnly || uploading || !entryId ? 0.6 : 1,
+            }}
+          >
+            {uploading
+              ? 'Subiendo…'
+              : !entryId
+                ? 'Guardá la entrada primero para adjuntar PDF'
+                : 'Click para adjuntar un PDF (máx. 10 MB)'}
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="application/pdf"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) handleFile(f)
+            }}
+          />
+        </>
+      )}
+      {error && (
+        <div className="text-[11.5px] mt-1" style={{ color: 'var(--danger)' }}>
+          {error}
+        </div>
+      )}
+    </div>
+  )
+}

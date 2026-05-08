@@ -446,4 +446,54 @@ export class EntriesService {
 
     return updatedEntry
   }
+
+  /**
+   * Lee el valor actual de un field específico en `Entry.data`. Útil para
+   * el endpoint DELETE de archivos que necesita saber el `key` antes de
+   * borrar el archivo físico.
+   */
+  async getFieldValue(entryId: string, recordId: string, fieldId: string): Promise<unknown> {
+    const entry = await this.findById(entryId, recordId)
+    const data = (entry.data ?? {}) as Record<string, unknown>
+    return data[fieldId] ?? null
+  }
+
+  /**
+   * Setea el valor de un único field en `Entry.data` (merge no destructivo
+   * sobre el resto de los fields). Aplica validación de transitions y respeta
+   * la inmutabilidad de identifiers en COMPLETED. Pasar `value=null` borra
+   * el field. Usado por el endpoint de upload/delete de FILE_PDF.
+   */
+  async setFieldValue(
+    entryId: string,
+    recordId: string,
+    fieldId: string,
+    value: unknown,
+    changedById: string,
+    userRole: UserRole,
+  ) {
+    const entry = await this.findById(entryId, recordId)
+    const existingData = (entry.data ?? {}) as Record<string, unknown>
+
+    // Identifiers no se modifican en COMPLETED (consistente con update()).
+    const record = await this.prisma.record.findUniqueOrThrow({
+      where: { id: recordId },
+      include: { fields: { where: { isActive: true } } },
+    })
+    const targetField = record.fields.find((f) => f.id === fieldId)
+    if (!targetField) throw new BadRequestException('El campo indicado no existe en este registro')
+    if (entry.status === 'COMPLETED' && targetField.isIdentifier) {
+      throw new BadRequestException('No se pueden modificar campos identificadores de una entrada completada')
+    }
+
+    const newData: Record<string, unknown> =
+      value === null
+        ? Object.fromEntries(Object.entries(existingData).filter(([k]) => k !== fieldId))
+        : { ...existingData, [fieldId]: value }
+
+    return this.prisma.entry.update({
+      where: { id: entryId },
+      data: { data: newData as Prisma.InputJsonValue },
+    })
+  }
 }
