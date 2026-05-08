@@ -15,10 +15,12 @@ synapse/
     types/                ← tipos TS y enums compartidos      → packages/types/CLAUDE.md
     validators/           ← schemas Zod compartidos            → packages/validators/CLAUDE.md
   docs/
-    user-guide/           ← guía de usuario activa (12 módulos)
-    design/               ← briefs de diseño activos
-    legacy/               ← markdowns originales (QualitTab) — referencia histórica
-  SAMPLE_CUSTODY_SPEC.md  ← spec ISO 17025 §7.4 pendiente de implementar
+    user-guide/                ← guía de usuario activa (12 módulos)
+    design/                    ← briefs de diseño activos
+    legacy/                    ← markdowns originales (QualitTab) — referencia histórica
+  WORKFLOW_ENGINE_SPEC.md      ← spec del motor v2 (DROPDOWN-as-status + Kanban + RecordAction generalizado)
+  VISUAL_FLOW_EDITOR_SPEC.md   ← spec del editor visual de flujos (xyflow, tab Flujos)
+  SAMPLE_CUSTODY_SPEC.md       ← spec ISO 17025 §7.4 pendiente de implementar
 ```
 
 Workspace manager: **pnpm** (versión declarada en `package.json` → `packageManager: pnpm@9.15.0`).
@@ -100,11 +102,40 @@ NEXT_PUBLIC_API_URL=
 - **Sin registro público**.
 - **Roles**: `ADMIN`, `QUALITY_MANAGER`, `TECHNICIAN`, `AUDITOR`. Visibilidad jerárquica por `Area` (un usuario ve su área y todas las sub-áreas).
 
+## Workflow engine v2 (DROPDOWN-as-status + Visual Flow Editor)
+
+El motor de workflows configurable inspirado en Microsoft Lists + Power Automate. Está implementado y vivo. Detalle completo en `WORKFLOW_ENGINE_SPEC.md` y `VISUAL_FLOW_EDITOR_SPEC.md`.
+
+**Conceptos clave**:
+
+- **DROPDOWN-as-status**: un Record puede tener un field `DROPDOWN` con `comparisonConfig.isStatus: true` que actúa como el "estado" de la Entry. Configurable por el usuario (options con color, transitions con `requireReason`/`requiredRoles`, `isInitial`, `isFinal`). Si el Record tiene un field así, automáticamente:
+  - Aparece la pestaña **Kanban** en `/records/[id]` con drag-drop entre columnas.
+  - El backend valida transitions vía `TransitionValidatorService`.
+  - Cada cambio se loguea en `EntryStatusLog` (append-only).
+
+- **Restricción por type**: `isStatus` solo se acepta en records de tipo `PERIODIC`, `NOT_PERIODIC`, `NOT_PERIODIC_WITH_REVISION`. Los tipos con companion (`INSTRUMENTAL`, `BATCH`, `SAMPLE`, `STOCK`) manejan su lifecycle vía la entidad companion correspondiente y su enum legacy — no se mezclan paradigmas. `records.service.create` rechaza con error explícito.
+
+- **`RecordAction` generalizado** (Power Automate-like): cada flow es 1 row de la tabla `RecordAction`. Campos:
+  - `trigger`: `ENTRY_CREATED | ENTRY_COMPLETED | FIELD_VALUE_CHANGED | COMPARISON_FAILED`.
+  - `condition` (JSONB recursivo): primitivas `EQUALS / NOT_EQUALS / IN / NOT_IN / LT / LTE / GT / GTE / BETWEEN` + composite `AND / OR` anidables.
+  - `actionType`: `CREATE_ENTRY` (funcional) | `UPDATE_FIELD` (funcional) | `NOTIFY` / `EMAIL` / `WEBHOOK` (stubs).
+  - `actionConfig` (JSONB): shape según `actionType`.
+  - `fieldMapping`: array `[{ sourceFieldId, targetFieldId }]`. Soporta `$entry.id` y `$entry.<fieldId>` como source para referenciar la entry padre.
+  - `allowCascade`: anti-loop — un flow no se dispara cuando el evento que lo activa fue causado por otro flow, salvo que esté en `true`.
+
+- **Visual Flow Editor** (tab "Flujos · N" en `/records/[id]`): canvas xyflow con un único `SourceNode` central y N ramas verticales (una por `RecordAction`). Click en un node selecciona la rama → panel derecho la edita en vivo. Cada flow se persiste como una `RecordAction` row (no como un grafo serializado).
+
+- **Pilot validado**: Record sistema "No Conformidades" (creado por seed) con field DROPDOWN `ESTADO` + transitions `OPEN→IN_PROGRESS→RESOLVED→CLOSED`.
+
+**Companion entities preservadas**: `Instrument`, `Batch`, `Sample`, `Stock` siguen como entidades propias con sus enums (`InstrumentStatus`, `BatchStatus`, `SampleStatus`) e `*StatusLog` específicos. La decisión es deliberada — dan paper trail estructural y no se mezclan con el motor genérico.
+
 ## Documentación viva
 
 - `docs/user-guide/` — 12 módulos describiendo el sistema desde la perspectiva del usuario (administradores, calidad, técnicos, auditores). Es la referencia funcional canónica.
 - `docs/design/` — briefs visuales y mockups del rediseño actual.
 - `docs/legacy/` — markdowns del diseño original (QualitTab). Útil para entender el porqué de decisiones, **no** para inferir estado actual del código.
+- `WORKFLOW_ENGINE_SPEC.md` — spec del motor v2 (13 secciones: arquitectura, schema, backend, frontend, pilot, criterios de aceptación, riesgos, evolución futura).
+- `VISUAL_FLOW_EDITOR_SPEC.md` — spec del editor visual de flujos (xyflow, custom nodes, persistencia 1 flow = 1 RecordAction row).
 - `SAMPLE_CUSTODY_SPEC.md` — spec ISO 17025 §7.4 pendiente. Implementación bloqueada por falta del modelo `SampleCustodyEvent`.
 
 ## Sub-CLAUDE.md

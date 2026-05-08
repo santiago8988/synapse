@@ -141,12 +141,12 @@ Para saltear el log en un endpoint específico: `@AuditIgnore()` (justificar el 
 
 ## Reglas ISO específicas del workspace
 
-1. **Append-only**: los siguientes modelos no se pueden `UPDATE` ni `DELETE` desde código — solo `INSERT`. La migración tampoco puede dropear estas tablas (excepto si se demuestra reemplazo 1:1 a otra append-only, ver excepciones documentadas).
-   - `AuditLog`
-   - `EntryStatusLog` ← workflow engine v2: paper trail unificado de cambios de fields `isStatus`. Reemplaza progresivamente los logs específicos por dominio.
-   - `InstrumentStatusLog` (en proceso de deprecación — backfill a `EntryStatusLog`)
-   - `BatchStatusLog` (en proceso de deprecación — backfill a `EntryStatusLog`)
-   - `SampleCustodyEvent` (si se implementa — ver `SAMPLE_CUSTODY_SPEC.md`)
+1. **Append-only**: los siguientes modelos no se pueden `UPDATE` ni `DELETE` desde código — solo `INSERT`. La migración tampoco puede dropear estas tablas sin un plan documentado de rollback y backfill.
+   - `AuditLog` — log global de POST/PATCH/PUT/DELETE escrito por `AuditInterceptor`.
+   - `EntryStatusLog` — paper trail del workflow engine v2: cada cambio de un field `comparisonConfig.isStatus === true` se loguea acá. Aplica a Records de tipo `PERIODIC / NOT_PERIODIC / NOT_PERIODIC_WITH_REVISION` (los que admiten DROPDOWN-as-status).
+   - `InstrumentStatusLog` — paper trail específico de `Instrument.status`. Convive con `EntryStatusLog`: aplica a la columna del companion `Instrument`, no a fields de Entry.
+   - `BatchStatusLog` — idem para `Batch.status`.
+   - `SampleCustodyEvent` — pendiente, ver `SAMPLE_CUSTODY_SPEC.md`.
 
    El `EntryStatusLogListener` (en `entries/listeners/`) es el único writer legítimo de `EntryStatusLog`; cualquier nuevo path que toque la tabla debe pasar por el evento `EntryFieldValueChangedEvent`.
 
@@ -154,13 +154,25 @@ Para saltear el log en un endpoint específico: `@AuditIgnore()` (justificar el 
 
 3. **Identifiers de Entry COMPLETED**: los campos con `isIdentifier = true` son inmutables una vez que la Entry está en `COMPLETED`. Validar en backend incluso si el frontend deshabilita el input.
 
-4. **Cascadas (RecordAction)**: completar una `Entry` en un `sourceRecord` dispara `RecordActionListener` que crea automáticamente una Entry en el `targetRecord` mapeando los campos según `fieldMapping`. Si la cascada falla, **no** rollbackear la entry original — loggear y permitir retry manual.
+4. **`isStatus` solo para tipos sin companion**: `records.service.create` rechaza con `BadRequestException` si un Record tipo `INSTRUMENTAL / BATCH / SAMPLE / STOCK` declara un field DROPDOWN con `isStatus: true`. Esos tipos manejan su lifecycle vía la entidad companion correspondiente y su enum legacy. El motor genérico DROPDOWN-as-status queda para `PERIODIC / NOT_PERIODIC / NOT_PERIODIC_WITH_REVISION`.
 
-5. **Estado de instrumental**: un `Instrument` en `IN_CALIBRATION` o `IN_REPAIR` no puede ser referenciado por una nueva Entry. Validar en `entries.service.create` cuando un campo `RELATED_ENTRY` apunta a un registro `INSTRUMENTAL`.
+5. **Cascadas (`RecordAction`)**: el motor está generalizado tipo Power Automate. Cada flow es 1 row de la tabla `RecordAction` con:
+   - `trigger` (`ENTRY_CREATED | ENTRY_COMPLETED | FIELD_VALUE_CHANGED | COMPARISON_FAILED`).
+   - `condition` JSONB recursivo (primitivas + `AND/OR`, operadores `EQUALS / NOT_EQUALS / IN / NOT_IN / LT / LTE / GT / GTE / BETWEEN`).
+   - `actionType` (`CREATE_ENTRY` y `UPDATE_FIELD` funcionales; `NOTIFY / EMAIL / WEBHOOK` stubs).
+   - `actionConfig` JSONB.
+   - `fieldMapping` con soporte de `$entry.id` y `$entry.<fieldId>` para referenciar el padre.
+   - `allowCascade` (anti-loop con `triggeredByCascade` propagado).
 
-6. **NC automática**: si una `Entry` tiene un campo `COMPARISON` que falla, crear automáticamente una `NonConformity` asignada al área del Record.
+   El dispatcher vive en `RecordActionListener.dispatchAction`. Si una action falla, **no** rollbackear el cambio que la disparó — loggear y permitir retry manual.
 
-7. **Approval workflow**: las plantillas (Records, Documents, Recipes, Matrices, CalibrationTemplates) tienen `RecordStatus = DRAFT/ACTIVE/SUPERSEDED` y atraviesan `ApprovalRequest` + `ApprovalDecision` antes de pasar a `ACTIVE`.
+   El editor visual del usuario está en el frontend (tab "Flujos" de `/records/[id]`, ver `apps/web/CLAUDE.md` y `VISUAL_FLOW_EDITOR_SPEC.md`).
+
+6. **Estado de instrumental**: un `Instrument` en `IN_CALIBRATION` o `IN_REPAIR` no puede ser referenciado por una nueva Entry. Validar en `entries.service.create` cuando un campo `RELATED_ENTRY` apunta a un registro `INSTRUMENTAL`.
+
+7. **NC automática**: si una `Entry` tiene un campo `COMPARISON` que falla, crear automáticamente una `NonConformity` asignada al área del Record.
+
+8. **Approval workflow**: las plantillas (Records, Documents, Recipes, Matrices, CalibrationTemplates) tienen `RecordStatus = DRAFT/ACTIVE/SUPERSEDED` y atraviesan `ApprovalRequest` + `ApprovalDecision` antes de pasar a `ACTIVE`.
 
 ## Validaciones críticas
 

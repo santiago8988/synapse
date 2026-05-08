@@ -66,11 +66,15 @@ apps/web/src/
       record-fields-editor.tsx
       dynamic-record-form/
         index.tsx · fields.tsx · helpers.ts · types.ts
+    flow-editor/
+      FlowEditor.tsx · types.ts · index.ts ← editor visual de flujos (xyflow)
+    kanban/
+      kanban-board.tsx · types.ts · index.ts ← drag-drop entre columnas
     tweaks/
       density-provider.tsx · tweaks-panel.tsx
   
   lib/
-    api.ts                              ← API client centralizado (16.7 KB)
+    api.ts                              ← API client centralizado
   
   store/
     organization.store.ts               ← org activa + usuario
@@ -113,6 +117,18 @@ El formulario dinámico es el corazón de la app (`components/forms/dynamic-reco
 ## Record Builder
 
 Ubicado en `records/new/page.tsx` + `components/forms/record-fields-editor.tsx`. Permite definir los campos OWN de un Record con configuración inline para `COMPARISON` y `FORMULA`. Drag & drop para reordenar.
+
+## Detalle de Record (`/records/[id]/page.tsx`) — tabs
+
+El componente `SynEntriesTabbedCard` (interno al page) renderiza una de estas tabs:
+
+- **Entries** — tabla de entries del Record. Default si el Record NO tiene field `isStatus`.
+- **Kanban** — drag-drop entre columnas según el field DROPDOWN con `comparisonConfig.isStatus: true`. Aparece SOLO cuando ese field existe; default cuando aparece. Componente: `components/kanban/`. Las transitions y `requireReason` se respetan vía `KanbanBoard.allowedTransitions` y modal de motivo.
+- **Versiones** — historial de versiones del Record (cuando se editan campos vía `editWithVersion`).
+- **Auditoría** — placeholder; pendiente timeline rico.
+- **Flujos · N** — Visual Flow Editor. Lista todos los `RecordAction` del Record en un canvas único con `SourceNode` central + N ramas (trigger → condition → action → target). Click en una rama abre el panel derecho para editarla. Al estar activo el tab, la sidebar izquierda (campos / cumplimiento) se oculta para que el canvas ocupe todo el ancho. Componente: `components/flow-editor/`. Lib: `@xyflow/react`.
+
+El padre `RecordDetailPage` trackea el tab activo (state `recordTab`) vía callback `onTabChange` para condicionar el layout.
 
 ## Auth
 
