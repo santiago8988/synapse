@@ -722,21 +722,16 @@ export function MatrixMethodField({
       >,
     enabled: mode !== 'preview',
   })
+  // OrgMethod no tiene relación con Matrix en el schema, así que el listado no
+  // se puede filtrar por la matriz elegida: se ofrecen todos los métodos de la
+  // organización y la selección queda a criterio del usuario.
   const { data: methods = [] } = useQuery<
-    Array<{ id: string; code: string; parameter: string; matrixId: string | null; unit: string | null }>
+    Array<{ id: string; code: string; parameter: string; unit: string | null }>
   >({
-    queryKey: ['methods-for-select', current.matrixId ?? null],
+    queryKey: ['methods-for-select'],
     queryFn: () =>
-      (current.matrixId
-        ? api.methods.search({ matrixId: current.matrixId })
-        : api.methods.search()) as Promise<
-        Array<{
-          id: string
-          code: string
-          parameter: string
-          matrixId: string | null
-          unit: string | null
-        }>
+      api.methods.search() as Promise<
+        Array<{ id: string; code: string; parameter: string; unit: string | null }>
       >,
     enabled: mode !== 'preview',
   })
