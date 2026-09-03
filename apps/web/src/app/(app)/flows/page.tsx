@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useQuery } from '@tanstack/react-query'
-import { Workflow, Loader2, ArrowUpRight } from 'lucide-react'
+import { Workflow, Loader2, ArrowUpRight, AlertTriangle } from 'lucide-react'
 import { api } from '@/lib/api'
 
 interface FlowRecordRef {
@@ -33,6 +33,8 @@ interface FlowOverviewRow {
   allowCascade: boolean
   sourceRecord: FlowRecordRef
   targetRecord: FlowRecordRef
+  /** Si tiene elementos, el flujo esta incompleto y no se ejecuta. */
+  configWarnings?: string[]
 }
 
 const RELATION_COLORS = [
@@ -74,6 +76,11 @@ export default function FlowsOverviewPage() {
     [rows],
   )
 
+  const incompleteCount = useMemo(
+    () => rows.filter((r) => (r.configWarnings?.length ?? 0) > 0).length,
+    [rows],
+  )
+
   return (
     <div className="mx-auto max-w-[1280px]">
       <div className="syn-ph">
@@ -105,6 +112,9 @@ export default function FlowsOverviewPage() {
             <Stat label="Relaciones" value={rows.length} />
             <Stat label="Registros conectados" value={recordCount} />
             <Stat label="Registros con flujos" value={sourceCount} />
+            {incompleteCount > 0 && (
+              <Stat label="Sin ejecutar" value={incompleteCount} danger />
+            )}
           </div>
 
           <div
@@ -123,19 +133,29 @@ export default function FlowsOverviewPage() {
   )
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
   return (
     <div
       className="syn-card px-4 py-3"
-      style={{ minWidth: 150, display: 'flex', flexDirection: 'column', gap: 2 }}
+      style={{
+        minWidth: 150,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        borderColor: danger ? 'var(--danger)' : undefined,
+        background: danger ? 'var(--danger-soft)' : undefined,
+      }}
     >
       <span
         className="font-mono text-[9.5px] uppercase tracking-[0.14em]"
-        style={{ color: 'var(--ink-3)' }}
+        style={{ color: danger ? 'var(--danger)' : 'var(--ink-3)' }}
       >
         {label}
       </span>
-      <span className="text-[20px] font-semibold" style={{ color: 'var(--ink-0)' }}>
+      <span
+        className="text-[20px] font-semibold"
+        style={{ color: danger ? 'var(--danger)' : 'var(--ink-0)' }}
+      >
         {value}
       </span>
     </div>
@@ -254,13 +274,23 @@ function GlobalFlowGraph({ rows }: { rows: FlowOverviewRow[] }) {
     const sourceOrder = Array.from(new Set(rows.map((r) => r.sourceRecord.id)))
     const edgeList: Edge[] = rows.map((r) => {
       const colorIdx = sourceOrder.indexOf(r.sourceRecord.id)
-      const color = RELATION_COLORS[colorIdx % RELATION_COLORS.length]
+      const incomplete = (r.configWarnings?.length ?? 0) > 0
+      // Una relacion incompleta se dibuja punteada y en rojo: existe como
+      // configuracion pero no ocurre.
+      const color = incomplete
+        ? 'var(--danger)'
+        : RELATION_COLORS[colorIdx % RELATION_COLORS.length]
       return {
         id: r.id,
         source: r.sourceRecord.id,
         target: r.targetRecord.id,
         type: 'bezier',
-        style: { stroke: color, strokeWidth: 1.75, opacity: 0.8 },
+        style: {
+          stroke: color,
+          strokeWidth: 1.75,
+          opacity: incomplete ? 0.9 : 0.8,
+          strokeDasharray: incomplete ? '5 4' : undefined,
+        },
       }
     })
 
@@ -378,6 +408,16 @@ function RelationList({ rows }: { rows: FlowOverviewRow[] }) {
                 >
                   {t.targetRecord.name}
                 </Link>
+                {(t.configWarnings?.length ?? 0) > 0 && (
+                  <span
+                    className="inline-flex shrink-0 items-center gap-1 font-mono text-[9px] uppercase tracking-[0.1em]"
+                    style={{ color: 'var(--danger)' }}
+                    title={t.configWarnings?.join(' ')}
+                  >
+                    <AlertTriangle className="h-3 w-3" />
+                    No corre
+                  </span>
+                )}
               </div>
             ))}
           </div>

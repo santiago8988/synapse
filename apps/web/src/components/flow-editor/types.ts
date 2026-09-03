@@ -85,6 +85,13 @@ export interface RecordActionRow {
   actionConfig: unknown
   createdAt: string
   targetRecord: RecordSummary
+  /**
+   * Faltantes de configuracion calculados por el backend. Si tiene elementos,
+   * el flujo NO se ejecuta hasta completarlo: el listener usa exactamente la
+   * misma funcion para decidirlo, asi que lo que la UI marca con "!" y lo que
+   * el motor omite son el mismo conjunto.
+   */
+  configWarnings?: string[]
 }
 
 /** Estado interno del editor mientras edita o crea un flow. */

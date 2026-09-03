@@ -2,6 +2,11 @@ import { Injectable, Logger } from '@nestjs/common'
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter'
 import { PrismaService } from '../../../prisma/prisma.service'
 import {
+  findConfigWarnings,
+  sanitizeFieldMapping,
+  type TargetFieldRef,
+} from '../../../common/flows/flow-config'
+import {
   EntryCreatedEvent,
   EntryFieldValueChangedEvent,
 } from '../../../common/events/domain-events'
@@ -45,10 +50,22 @@ export class RecordActionListener {
     }
 
     for (const action of event.record.actionsAsSource) {
-      const mapping = action.fieldMapping as Array<{
-        sourceFieldId: string
-        targetFieldId: string
-      }>
+      const mapping = sanitizeFieldMapping(action.fieldMapping)
+
+      // Fail-closed: un flujo a medio configurar no se ejecuta. Antes creaba
+      // la entry igual, con datos incompletos o con claves vacias en el JSON.
+      const warnings = findConfigWarnings({
+        actionType: 'CREATE_ENTRY',
+        mapping,
+        targetFields: action.targetRecord.fields as TargetFieldRef[],
+      })
+      if (warnings.length > 0) {
+        this.logger.warn(
+          `RecordAction ${action.id} omitida: configuracion incompleta. ${warnings.join(' ')}`,
+        )
+        continue
+      }
+
       const targetData: Record<string, unknown> = {}
 
       for (const map of mapping) {
@@ -446,6 +463,21 @@ export class RecordActionListener {
     sourceData: Record<string, unknown>,
     companions: CompanionsBag,
   ) {
+    // Fail-closed, igual que en handleEntryCreated: la misma funcion que la UI
+    // usa para marcar el flujo con "!" es la que decide si corre.
+    const warnings = findConfigWarnings({
+      actionType: action.actionType,
+      mapping: sanitizeFieldMapping(action.fieldMapping),
+      targetFields: action.targetRecord.fields as TargetFieldRef[],
+      actionConfig: action.actionConfig,
+    })
+    if (warnings.length > 0) {
+      this.logger.warn(
+        `RecordAction ${action.id} omitida: configuracion incompleta. ${warnings.join(' ')}`,
+      )
+      return
+    }
+
     switch (action.actionType) {
       case 'CREATE_ENTRY':
         await this.executeCreateEntry(action, event, sourceEntry, sourceData, companions)
@@ -482,12 +514,9 @@ export class RecordActionListener {
     sourceData: Record<string, unknown>,
     companions: CompanionsBag,
   ) {
-    const mapping = action.fieldMapping as Array<{
-      sourceFieldId: string
-      targetFieldId: string
-    }>
+    const mapping = sanitizeFieldMapping(action.fieldMapping)
     const targetData: Record<string, unknown> = {}
-    for (const map of mapping ?? []) {
+    for (const map of mapping) {
       const value = this.resolveSource(map.sourceFieldId, event, sourceData, companions)
       if (value !== undefined) {
         targetData[map.targetFieldId] = value
@@ -677,7 +706,7 @@ type ActionWithTarget = {
     type: string
     version: number
     periodicity: number | null
-    fields: Array<{ id: string; isActive: boolean }>
+    fields: Array<{ id: string; label?: string; isActive: boolean; isIdentifier: boolean }>
   }
 }
 

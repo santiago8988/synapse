@@ -16,7 +16,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Save, Trash2, Filter, Loader2 } from 'lucide-react'
+import { Plus, Save, Trash2, Filter, Loader2, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import type {
@@ -269,6 +269,11 @@ function FlowEditorInner({ recordId, recordName, recordType, recordFields }: Flo
             </div>
           </div>
 
+          <FlowWarningBanner
+            warnings={flows.find((f) => f.id === draft.id)?.configWarnings ?? []}
+            isNew={!draft.id}
+          />
+
           <PropertiesPanel
             draft={draft}
             onChange={setDraft}
@@ -353,6 +358,7 @@ function UnifiedFlowCanvas({
       targetRecordId: string
       isDraft: boolean
       isSelected: boolean
+      warnings: string[]
     }> = flows.map((f) => ({
       flowId: f.id,
       trigger: f.trigger,
@@ -361,6 +367,7 @@ function UnifiedFlowCanvas({
       targetRecordId: f.targetRecordId,
       isDraft: false,
       isSelected: f.id === selectedFlowId,
+      warnings: f.configWarnings ?? [],
     }))
     if (draft && !draft.id) {
       list.push({
@@ -371,6 +378,7 @@ function UnifiedFlowCanvas({
         targetRecordId: draft.targetRecordId,
         isDraft: true,
         isSelected: true,
+        warnings: [],
       })
     }
     // Si el draft edita un flow existente, la rama refleja los valores en vivo.
@@ -423,6 +431,7 @@ function UnifiedFlowCanvas({
           hasCondition: Boolean(b.condition),
           actionType: b.actionType,
           targetRecordName: targetRecord?.name,
+          warningCount: b.warnings.length,
         },
         draggable: false,
       })
@@ -563,6 +572,7 @@ function BranchNode({ data }: NodeProps) {
     hasCondition: boolean
     actionType: ActionType
     targetRecordName?: string
+    warningCount: number
   }
 
   const title =
@@ -570,24 +580,34 @@ function BranchNode({ data }: NodeProps) {
       ? d.targetRecordName ?? 'Sin registro destino'
       : actionLabel(d.actionType)
 
+  // Un flujo incompleto no corre, asi que se muestra en tono de peligro y no
+  // con el color de su rama: la diferencia tiene que saltar a la vista.
+  const incomplete = d.warningCount > 0
+  const accent = incomplete ? 'var(--danger)' : d.color
+
   return (
     <div
       className="rounded-[9px] border px-3 py-1.5 transition-colors"
       style={{
-        background: 'var(--bg-1)',
-        borderColor: d.selected ? d.color : 'var(--line)',
+        background: incomplete ? 'var(--danger-soft)' : 'var(--bg-1)',
+        borderColor: d.selected || incomplete ? accent : 'var(--line)',
         borderStyle: d.isDraft ? 'dashed' : 'solid',
         boxShadow: d.selected
-          ? `0 0 0 3px color-mix(in srgb, ${d.color} 18%, transparent)`
+          ? `0 0 0 3px color-mix(in srgb, ${accent} 18%, transparent)`
           : 'var(--shadow-xs)',
         cursor: 'pointer',
         minWidth: 176,
         maxWidth: 240,
       }}
+      title={incomplete ? 'Configuracion incompleta: este flujo no se ejecuta' : undefined}
     >
       <Handle type="target" position={Position.Left} style={HANDLE_STYLE} />
       <div className="flex items-center gap-2">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: d.color }} />
+        {incomplete ? (
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--danger)' }} />
+        ) : (
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: d.color }} />
+        )}
         <div className="min-w-0 flex-1">
           <div
             className="truncate text-[12.5px] font-medium leading-tight"
@@ -598,13 +618,19 @@ function BranchNode({ data }: NodeProps) {
           </div>
           <div
             className="mt-0.5 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.1em]"
-            style={{ color: 'var(--ink-3)' }}
+            style={{ color: incomplete ? 'var(--danger)' : 'var(--ink-3)' }}
           >
-            <span className="truncate">{triggerLabel(d.trigger)}</span>
-            {d.hasCondition && (
+            {incomplete ? (
+              <span className="truncate">Sin configurar · no corre</span>
+            ) : (
               <>
-                <span aria-hidden>·</span>
-                <Filter className="h-2.5 w-2.5 shrink-0" style={{ color: d.color }} />
+                <span className="truncate">{triggerLabel(d.trigger)}</span>
+                {d.hasCondition && (
+                  <>
+                    <span aria-hidden>·</span>
+                    <Filter className="h-2.5 w-2.5 shrink-0" style={{ color: d.color }} />
+                  </>
+                )}
               </>
             )}
           </div>
@@ -1308,4 +1334,57 @@ function draftToPayload(d: FlowDraft): Record<string, unknown> {
     actionConfig: d.actionConfig,
     allowCascade: d.allowCascade,
   }
+}
+
+/**
+ * Aviso de flujo incompleto. Las advertencias las calcula el backend con la
+ * misma funcion que usa el listener para decidir si ejecuta, asi que este
+ * cartel y el comportamiento real no pueden desincronizarse.
+ *
+ * En un flujo nuevo todavia no hay advertencias del servidor (se calculan al
+ * guardar), asi que se avisa de forma generica.
+ */
+function FlowWarningBanner({ warnings, isNew }: { warnings: string[]; isNew: boolean }) {
+  if (isNew) {
+    return (
+      <div
+        className="flex items-start gap-2 rounded-[8px] border px-3 py-2 text-[11.5px]"
+        style={{
+          borderColor: 'var(--line-2)',
+          background: 'var(--bg-2)',
+          color: 'var(--ink-2)',
+        }}
+      >
+        <AlertTriangle className="mt-[1px] h-3.5 w-3.5 shrink-0" style={{ color: 'var(--ink-3)' }} />
+        <span>
+          Mientras la configuración esté incompleta el flujo no se ejecuta. Al guardar te
+          avisamos si falta algo.
+        </span>
+      </div>
+    )
+  }
+
+  if (warnings.length === 0) return null
+
+  return (
+    <div
+      className="flex items-start gap-2 rounded-[8px] border px-3 py-2 text-[11.5px]"
+      style={{
+        borderColor: 'var(--danger)',
+        background: 'var(--danger-soft)',
+        color: 'var(--danger)',
+      }}
+    >
+      <AlertTriangle className="mt-[1px] h-3.5 w-3.5 shrink-0" />
+      <div className="flex flex-col gap-1">
+        <strong>Este flujo no se está ejecutando</strong>
+        <ul className="flex list-disc flex-col gap-0.5 pl-4">
+          {warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+        <span style={{ color: 'var(--ink-2)' }}>Completá la configuración para activarlo.</span>
+      </div>
+    </div>
+  )
 }

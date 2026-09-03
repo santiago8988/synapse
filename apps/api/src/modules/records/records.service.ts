@@ -1,5 +1,11 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../prisma/prisma.service'
+import {
+  findConfigWarnings,
+  findMappingErrors,
+  sanitizeFieldMapping,
+  type TargetFieldRef,
+} from '../../common/flows/flow-config'
 import { Prisma, RecordType, FieldType } from '@prisma/client'
 
 interface CreateRecordDto {
@@ -418,7 +424,7 @@ export class RecordsService {
    * registro de otro tenant.
    */
   async listAllActions(organizationId: string) {
-    return this.prisma.recordAction.findMany({
+    const actions = await this.prisma.recordAction.findMany({
       where: {
         sourceRecord: { organizationId, isActive: true },
         targetRecord: { organizationId },
@@ -429,10 +435,39 @@ export class RecordsService {
         actionType: true,
         condition: true,
         allowCascade: true,
+        fieldMapping: true,
+        actionConfig: true,
         sourceRecord: { select: { id: true, name: true, type: true, status: true } },
-        targetRecord: { select: { id: true, name: true, type: true, status: true } },
+        targetRecord: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            status: true,
+            fields: {
+              where: { isActive: true },
+              select: { id: true, label: true, isActive: true, isIdentifier: true },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'asc' },
+    })
+
+    // Una relacion incompleta no se ejecuta: el mapa global tiene que poder
+    // distinguirla de una activa, si no muestra conexiones que nunca ocurren.
+    return actions.map((a) => {
+      const { fields, ...targetRecord } = a.targetRecord
+      return {
+        ...a,
+        targetRecord,
+        configWarnings: findConfigWarnings({
+          actionType: a.actionType,
+          mapping: sanitizeFieldMapping(a.fieldMapping),
+          targetFields: fields,
+          actionConfig: a.actionConfig,
+        }),
+      }
     })
   }
 
@@ -444,12 +479,36 @@ export class RecordsService {
     })
     if (!record) throw new NotFoundException('Registro no encontrado')
 
-    return this.prisma.recordAction.findMany({
+    const actions = await this.prisma.recordAction.findMany({
       where: { sourceRecordId: recordId },
       include: {
-        targetRecord: { select: { id: true, name: true, type: true } },
+        targetRecord: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            fields: { where: { isActive: true }, select: { id: true, label: true, isActive: true, isIdentifier: true } },
+          },
+        },
       },
       orderBy: { createdAt: 'asc' },
+    })
+
+    // configWarnings viaja al frontend para marcar los flujos incompletos.
+    // Se computa con la misma funcion que usa el listener para decidir si
+    // ejecuta, asi lo que se muestra y lo que corre no pueden divergir.
+    return actions.map((a) => {
+      const { fields, ...targetRecord } = a.targetRecord
+      return {
+        ...a,
+        targetRecord,
+        configWarnings: findConfigWarnings({
+          actionType: a.actionType,
+          mapping: sanitizeFieldMapping(a.fieldMapping),
+          targetFields: fields,
+          actionConfig: a.actionConfig,
+        }),
+      }
     })
   }
 
@@ -467,27 +526,22 @@ export class RecordsService {
     })
     if (!target) throw new BadRequestException('El registro destino no existe en esta organización')
 
-    // Para CREATE_ENTRY (default): validar que todos los campos identifier del
-    // target estén mapeados. Otras actions (UPDATE_FIELD, etc.) no requieren
-    // este check porque no crean entries nuevas.
+    // Las filas a medio completar no son un dato: se descartan antes de
+    // persistir para no escribir claves vacias en la entry destino.
     const actionType = data.actionType ?? 'CREATE_ENTRY'
-    if (actionType === 'CREATE_ENTRY') {
-      const targetIdentifiers = target.fields.filter((f) => f.isIdentifier)
-      const mappedTargetIds = data.fieldMapping.map((m) => m.targetFieldId)
-      const unmappedIdentifiers = targetIdentifiers.filter((f) => !mappedTargetIds.includes(f.id))
+    const fieldMapping = sanitizeFieldMapping(data.fieldMapping)
 
-      if (unmappedIdentifiers.length > 0) {
-        throw new BadRequestException(
-          `Los campos identificadores del destino deben estar mapeados: ${unmappedIdentifiers.map((f) => f.label).join(', ')}`,
-        )
-      }
-    }
+    // Config corrupta -> 400. La config meramente incompleta (identificadores
+    // sin mapear) se permite guardar: el flujo queda con advertencias y el
+    // listener no lo ejecuta hasta que se complete.
+    const errors = findMappingErrors(fieldMapping, target.fields as TargetFieldRef[])
+    if (errors.length > 0) throw new BadRequestException(errors.join(' '))
 
     return this.prisma.recordAction.create({
       data: {
         sourceRecordId: recordId,
         targetRecordId: data.targetRecordId,
-        fieldMapping: data.fieldMapping as unknown as Prisma.InputJsonValue,
+        fieldMapping: fieldMapping as unknown as Prisma.InputJsonValue,
         trigger: data.trigger ?? 'ENTRY_COMPLETED',
         condition: data.condition ?? Prisma.JsonNull,
         allowCascade: data.allowCascade ?? false,
@@ -517,22 +571,30 @@ export class RecordsService {
     if (!existing) throw new NotFoundException('Flujo no encontrado')
 
     // Si cambia el target, validarlo contra la org.
-    if (data.targetRecordId) {
-      const target = await this.prisma.record.findFirst({
-        where: { id: data.targetRecordId, organizationId },
-        select: { id: true },
-      })
-      if (!target) {
-        throw new BadRequestException('El registro destino no existe en esta organización')
-      }
+    const targetRecordId = data.targetRecordId ?? existing.targetRecordId
+    const target = await this.prisma.record.findFirst({
+      where: { id: targetRecordId, organizationId },
+      include: { fields: { where: { isActive: true } } },
+    })
+    if (!target) {
+      throw new BadRequestException('El registro destino no existe en esta organización')
     }
+
+    // Misma validacion dura que en addAction. Antes updateAction no validaba
+    // nada: se podia crear un flujo correcto y romperlo despues editandolo.
+    const fieldMapping =
+      data.fieldMapping !== undefined
+        ? sanitizeFieldMapping(data.fieldMapping)
+        : sanitizeFieldMapping(existing.fieldMapping)
+    const errors = findMappingErrors(fieldMapping, target.fields as TargetFieldRef[])
+    if (errors.length > 0) throw new BadRequestException(errors.join(' '))
 
     return this.prisma.recordAction.update({
       where: { id: actionId },
       data: {
         ...(data.targetRecordId !== undefined && { targetRecordId: data.targetRecordId }),
         ...(data.fieldMapping !== undefined && {
-          fieldMapping: data.fieldMapping as unknown as Prisma.InputJsonValue,
+          fieldMapping: fieldMapping as unknown as Prisma.InputJsonValue,
         }),
         ...(data.trigger !== undefined && { trigger: data.trigger }),
         ...(data.condition !== undefined && {
