@@ -30,6 +30,7 @@ import {
   Scale,
   Ruler,
   LayoutGrid,
+  ArrowUpRight,
 } from 'lucide-react'
 import { KanbanBoard, type KanbanCard, type KanbanColor, type KanbanColumn, type KanbanTransition } from '@/components/kanban'
 import { FlowEditor } from '@/components/flow-editor'
@@ -750,6 +751,30 @@ function SynComplianceCard({ entries }: { entries: SynEntryLite[] }) {
   )
 }
 
+// Wrap clickeable que apunta a la página detalle de la companion entity
+// (/batches/[id], /samples/[id], /instruments/[id]). stopPropagation para
+// que el click no abra también el modal del Entry contenedor.
+function CompanionLink({
+  href,
+  children,
+}: {
+  href: string
+  children: React.ReactNode
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={(e) => e.stopPropagation()}
+      className="inline-flex items-center gap-1 hover:underline"
+      style={{ color: 'var(--primary-hex)' }}
+      title="Abrir detalle del companion"
+    >
+      <span style={{ color: 'inherit' }}>{children}</span>
+      <ArrowUpRight className="h-3 w-3 shrink-0" />
+    </Link>
+  )
+}
+
 function SynEntriesTabbedCard({
   record,
   entries,
@@ -767,7 +792,7 @@ function SynEntriesTabbedCard({
   calibrationTemplatesMap: Record<string, { name: string; code: string | null }>
   onNewEntry: () => void
   onOpenEntry: (id: string) => void
-  onTabChange?: (tab: 'entries' | 'versions' | 'audit' | 'kanban' | 'flows') => void
+  onTabChange?: (tab: 'entries' | 'versions' | 'audit' | 'kanban' | 'flows' | 'definition') => void
 }) {
   // Workflow engine v2: detectar field DROPDOWN-as-status. Si existe, se
   // habilita la pestaña Kanban con drag-drop entre columnas = options del
@@ -845,12 +870,12 @@ function SynEntriesTabbedCard({
     }
   }
 
-  const [tab, setTabInner] = useState<'entries' | 'versions' | 'audit' | 'kanban' | 'flows'>(
+  const [tab, setTabInner] = useState<'entries' | 'versions' | 'audit' | 'kanban' | 'flows' | 'definition'>(
     hasStatusField ? 'kanban' : 'entries',
   )
   // Notificar al padre el cambio de tab para que pueda adaptar el layout
   // (ej. cuando tab==='flows' el padre oculta la sidebar izquierda).
-  const setTab = (next: 'entries' | 'versions' | 'audit' | 'kanban' | 'flows') => {
+  const setTab = (next: 'entries' | 'versions' | 'audit' | 'kanban' | 'flows' | 'definition') => {
     setTabInner(next)
     onTabChange?.(next)
   }
@@ -1005,6 +1030,13 @@ function SynEntriesTabbedCard({
             <Zap className="h-3.5 w-3.5" />
             Flujos · {flowCount}
           </button>
+          <button
+            type="button"
+            onClick={() => setTab('definition')}
+            className={'syn-tab ' + (tab === 'definition' ? 'active' : '')}
+          >
+            Definición
+          </button>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" className="syn-btn syn-btn-subtle" style={{ padding: '6px 10px' }}>
@@ -1041,17 +1073,73 @@ function SynEntriesTabbedCard({
           <div className="overflow-x-auto">
             <table className="syn-table">
               <thead>
-                <tr>
-                  {visibleFields.map((f) => (
-                    <th key={f.id}>{f.label}</th>
-                  ))}
-                  {record.type === 'BATCH' && <th>Cantidad Producida</th>}
-                  <th>Fecha</th>
-                  <th style={{ textAlign: 'right' }}>Resultado</th>
-                  {(record.type === 'BATCH' || record.type === 'SAMPLE') && (
-                    <th style={{ textAlign: 'right' }}>Estado</th>
-                  )}
-                </tr>
+                {(() => {
+                  // Configuración del grupo de columnas companion (BATCH/SAMPLE).
+                  // Si existe, se renderiza un super-header con colSpan que
+                  // abarca las columnas del companion, y el resto de
+                  // columnas usan rowSpan={2} para alinearse con la fila 2.
+                  const companionGroup =
+                    record.type === 'BATCH'
+                      ? { label: 'Lote', subCols: ['Cantidad Producida', 'Estado'] }
+                      : record.type === 'SAMPLE'
+                        ? { label: 'Muestra', subCols: ['Estado'] }
+                        : null
+                  const showEntryStatusCol =
+                    record.type === 'BATCH' || record.type === 'SAMPLE'
+                  return (
+                    <>
+                      <tr>
+                        {visibleFields.map((f) => (
+                          <th key={f.id} rowSpan={companionGroup ? 2 : 1}>
+                            {f.label}
+                          </th>
+                        ))}
+                        <th rowSpan={companionGroup ? 2 : 1}>Fecha</th>
+                        {companionGroup ? (
+                          <th
+                            colSpan={companionGroup.subCols.length}
+                            style={{
+                              textAlign: 'center',
+                              background: 'var(--info-soft)',
+                              color: 'var(--info)',
+                              borderBottom: '1px solid var(--line-2)',
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 10,
+                              letterSpacing: '0.14em',
+                              textTransform: 'uppercase',
+                            }}
+                          >
+                            · {companionGroup.label}
+                          </th>
+                        ) : (
+                          <th style={{ textAlign: 'right' }}>Resultado</th>
+                        )}
+                        {showEntryStatusCol && (
+                          <th rowSpan={2} style={{ textAlign: 'right' }}>
+                            Estado
+                          </th>
+                        )}
+                      </tr>
+                      {companionGroup && (
+                        <tr>
+                          {companionGroup.subCols.map((c, i) => (
+                            <th
+                              key={c}
+                              style={{
+                                textAlign:
+                                  i === companionGroup.subCols.length - 1
+                                    ? 'right'
+                                    : 'left',
+                              }}
+                            >
+                              {c}
+                            </th>
+                          ))}
+                        </tr>
+                      )}
+                    </>
+                  )
+                })()}
               </thead>
               <tbody>
                 {entries.map((e) => {
@@ -1090,16 +1178,6 @@ function SynEntriesTabbedCard({
                           </td>
                         )
                       })}
-                      {record.type === 'BATCH' && (
-                        <td
-                          data-label="Cantidad Producida"
-                          style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}
-                        >
-                          {e.batch?.producedQuantity != null
-                            ? `${e.batch.producedQuantity}${e.batch.unit ? ' ' + e.batch.unit : ''}`
-                            : '—'}
-                        </td>
-                      )}
                       <td data-label="Fecha" style={{ color: 'var(--ink-2)', fontSize: 12 }}>
                         {new Date(e.createdAt)
                           .toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
@@ -1110,29 +1188,81 @@ function SynEntriesTabbedCard({
                           minute: '2-digit',
                         })}
                       </td>
-                      <td
-                        data-label="Resultado"
-                        data-role="status"
-                        style={{ textAlign: 'right' }}
-                      >
-                        {(() => {
-                          if (record.type === 'BATCH' && e.batch) {
-                            const c = batchStatusChip(e.batch.status)
-                            return <span className={`syn-chip ${c.cls}`}>{c.label}</span>
-                          }
-                          if (record.type === 'SAMPLE' && e.sample) {
+                      {/* Companion group: BATCH = [cantidad producida, estado batch].
+                          SAMPLE = [estado muestra]. Otros = [resultado de la entry]. */}
+                      {record.type === 'BATCH' ? (
+                        <>
+                          <td
+                            data-label="Cantidad Producida"
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: 12,
+                              background: 'var(--info-soft)',
+                            }}
+                          >
+                            {e.batch && e.batch.producedQuantity != null ? (
+                              <CompanionLink href={`/batches/${e.batch.id}`}>
+                                {`${e.batch.producedQuantity}${e.batch.unit ? ' ' + e.batch.unit : ''}`}
+                              </CompanionLink>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td
+                            data-label="Estado lote"
+                            data-role="status"
+                            style={{
+                              textAlign: 'right',
+                              background: 'var(--info-soft)',
+                            }}
+                          >
+                            {e.batch ? (() => {
+                              const c = batchStatusChip(e.batch.status)
+                              return (
+                                <CompanionLink href={`/batches/${e.batch.id}`}>
+                                  <span className={`syn-chip ${c.cls}`}>{c.label}</span>
+                                </CompanionLink>
+                              )
+                            })() : (
+                              <span style={{ color: 'var(--ink-4)' }}>—</span>
+                            )}
+                          </td>
+                        </>
+                      ) : record.type === 'SAMPLE' ? (
+                        <td
+                          data-label="Estado muestra"
+                          data-role="status"
+                          style={{
+                            textAlign: 'right',
+                            background: 'var(--info-soft)',
+                          }}
+                        >
+                          {e.sample ? (() => {
                             const c = sampleStatusChip(e.sample.status)
-                            return <span className={`syn-chip ${c.cls}`}>{c.label}</span>
-                          }
-                          if (hasFailed) {
-                            return <span className="syn-chip syn-chip-fail">FALLIDA</span>
-                          }
-                          if (e.status === 'COMPLETED') {
-                            return <span className="syn-chip syn-chip-ok">OK</span>
-                          }
-                          return <span className="syn-chip syn-chip-draft">DRAFT</span>
-                        })()}
-                      </td>
+                            return (
+                              <CompanionLink href={`/samples/${e.sample.id}`}>
+                                <span className={`syn-chip ${c.cls}`}>{c.label}</span>
+                              </CompanionLink>
+                            )
+                          })() : (
+                            <span style={{ color: 'var(--ink-4)' }}>—</span>
+                          )}
+                        </td>
+                      ) : (
+                        <td
+                          data-label="Resultado"
+                          data-role="status"
+                          style={{ textAlign: 'right' }}
+                        >
+                          {hasFailed ? (
+                            <span className="syn-chip syn-chip-fail">FALLIDA</span>
+                          ) : e.status === 'COMPLETED' ? (
+                            <span className="syn-chip syn-chip-ok">OK</span>
+                          ) : (
+                            <span className="syn-chip syn-chip-draft">DRAFT</span>
+                          )}
+                        </td>
+                      )}
                       {(record.type === 'BATCH' || record.type === 'SAMPLE') && (
                         <td
                           data-label="Estado"
@@ -1181,6 +1311,7 @@ function SynEntriesTabbedCard({
           <FlowEditor
             recordId={record.id}
             recordName={record.name}
+            recordType={record.type}
             recordFields={record.fields.map((f) => ({
               id: f.id,
               label: f.label,
@@ -1216,6 +1347,13 @@ function SynEntriesTabbedCard({
           />
         </div>
       )}
+
+      {tab === 'definition' && (
+        <div style={{ padding: 16 }} className="grid gap-5 lg:grid-cols-2">
+          <SynFieldsReadOnlyCard record={record} />
+          <SynComplianceCard entries={entries} />
+        </div>
+      )}
     </div>
   )
 }
@@ -1240,7 +1378,7 @@ export default function RecordDetailPage() {
   // Tab activo del SynEntriesTabbedCard. Lo trackeamos acá para adaptar el
   // layout (cuando el tab es 'flows', la columna izquierda con campos/cascade/
   // cumplimiento se oculta y el editor visual ocupa todo el ancho).
-  const [recordTab, setRecordTab] = useState<'entries' | 'versions' | 'audit' | 'kanban' | 'flows'>('entries')
+  const [recordTab, setRecordTab] = useState<'entries' | 'versions' | 'audit' | 'kanban' | 'flows' | 'definition'>('entries')
 
   const { data: record, isLoading } = useQuery<RecordDetail>({
     queryKey: ['record', recordId],
@@ -1720,24 +1858,12 @@ export default function RecordDetailPage() {
         </div>
       )}
 
-      <div
-        className={
-          editing
-            ? 'grid gap-5 lg:grid-cols-3'
-            : recordTab === 'flows'
-              ? 'flex flex-col gap-5'
-              : 'syn-rec-grid'
-        }
-      >
-        {/* Left column wrapper — se oculta cuando el tab activo es 'flows'
-            para que el editor visual ocupe todo el ancho disponible. */}
-        {!(recordTab === 'flows' && !editing) && (
-        <div className={editing ? 'space-y-5 min-w-0 lg:col-span-2' : 'space-y-5 min-w-0'}>
-        {/* Campos — read-only Synapse card en non-editing */}
-        {!editing && <SynFieldsReadOnlyCard record={record} />}
-        {/* Campos — editor completo en editing */}
-        {/* Campos — editor completo en editing */}
+      <div className="flex flex-col gap-5">
+        {/* Editing: editor de campos. En non-editing, los "Campos del registro"
+            y "Cumplimiento" viven dentro del tab "Definición" del
+            SynEntriesTabbedCard — el card ocupa todo el ancho. */}
         {editing && (
+        <div className="space-y-5 min-w-0">
           <section className="syn-builder-section">
             <div className="syn-bs-head">
               <span className="syn-bs-title">Campos</span>
@@ -1755,14 +1881,8 @@ export default function RecordDetailPage() {
               mode="edit"
             />
           </section>
-        )}
-
-        {/* Non-editing only — Compliance. Acciones cascada movido a la
-            solapa "Flujos" del SynEntriesTabbedCard (Visual Flow Editor). */}
-        {!editing && <SynComplianceCard entries={entries} />}
-
         </div>
-        )} {/* close left column wrapper / hide on flows tab */}
+        )}
 
         {/* Right column */}
         {!editing && (
