@@ -3,6 +3,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter'
 import { PrismaService } from '../../prisma/prisma.service'
 import { BatchStatus, Prisma } from '@prisma/client'
 import { EntryCompletedEvent } from '../../common/events/domain-events'
+import { StorageService } from '../../common/storage/storage.service'
 
 const VALID_TRANSITIONS: Record<BatchStatus, BatchStatus[]> = {
   PLANNED: ['IN_PROGRESS'],
@@ -17,6 +18,7 @@ export class BatchesService {
   constructor(
     private prisma: PrismaService,
     private eventEmitter: EventEmitter2,
+    private storage: StorageService,
   ) {}
 
   async findAll(organizationId: string, filters?: { status?: string; recordId?: string }) {
@@ -62,7 +64,28 @@ export class BatchesService {
       },
     })
     if (!batch) throw new NotFoundException('Lote no encontrado')
-    return batch
+    return this.withRecipeStepsUrl(batch)
+  }
+
+  /**
+   * El detalle del lote enlaza el PDF de pasos de la fórmula, pero la trae por
+   * include directo y no por RecipesService, así que la URL se firma acá
+   * también. La fuente es stepsPdfKey; stepsPdfUrl ya no se persiste.
+   */
+  private async withRecipeStepsUrl<
+    T extends { recipe: { stepsPdfKey: string | null; stepsPdfName: string | null } | null },
+  >(batch: T): Promise<T> {
+    const recipe = batch.recipe
+    if (!recipe?.stepsPdfKey) return batch
+    return {
+      ...batch,
+      recipe: {
+        ...recipe,
+        stepsPdfUrl: await this.storage.signedUrl('recipes', recipe.stepsPdfKey, {
+          downloadName: recipe.stepsPdfName ?? undefined,
+        }),
+      },
+    }
   }
 
   async changeStatus(

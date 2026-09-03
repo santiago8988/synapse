@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../prisma/prisma.service'
+import { StorageService } from '../../common/storage/storage.service'
 
 interface CreateRecipeDto {
   name: string
@@ -17,10 +18,13 @@ interface UpdateRecipeDto {
 
 @Injectable()
 export class RecipesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storage: StorageService,
+  ) {}
 
   async findAll(organizationId: string) {
-    return this.prisma.recipe.findMany({
+    const recipes = await this.prisma.recipe.findMany({
       where: { organizationId, isActive: true },
       include: {
         ingredients: {
@@ -32,6 +36,7 @@ export class RecipesService {
       },
       orderBy: { updatedAt: 'desc' },
     })
+    return Promise.all(recipes.map((r) => this.withStepsPdfUrl(r)))
   }
 
   async findById(id: string, organizationId: string) {
@@ -46,7 +51,26 @@ export class RecipesService {
       },
     })
     if (!recipe) throw new NotFoundException('Receta no encontrada')
-    return recipe
+    return this.withStepsPdfUrl(recipe)
+  }
+
+  /**
+   * Reemplaza stepsPdfUrl por una URL firmada derivada de stepsPdfKey. La
+   * columna ya no se persiste; se sigue devolviendo con el mismo nombre para
+   * no cambiar el contrato con el frontend.
+   */
+  private async withStepsPdfUrl<T extends { stepsPdfKey: string | null; stepsPdfName?: string | null }>(
+    recipe: T,
+  ): Promise<T & { stepsPdfUrl: string | null }> {
+    if (!recipe.stepsPdfKey) {
+      return { ...recipe, stepsPdfUrl: null }
+    }
+    return {
+      ...recipe,
+      stepsPdfUrl: await this.storage.signedUrl('recipes', recipe.stepsPdfKey, {
+        downloadName: recipe.stepsPdfName ?? undefined,
+      }),
+    }
   }
 
   async create(organizationId: string, createdById: string, data: CreateRecipeDto) {
@@ -224,24 +248,24 @@ export class RecipesService {
       },
     })
     if (!recipe) throw new NotFoundException('Receta no encontrada')
-    return recipe
+    return this.withStepsPdfUrl(recipe)
   }
 
   async setStepsPdf(
     id: string,
     organizationId: string,
     data: {
-      stepsPdfUrl: string
       stepsPdfKey: string
       stepsPdfName: string
       stepsPdfSize: number
     },
   ) {
     await this.findById(id, organizationId)
-    return this.prisma.recipe.update({
+    const updated = await this.prisma.recipe.update({
       where: { id },
       data: {
-        stepsPdfUrl: data.stepsPdfUrl,
+        // La URL no se persiste: se firma en cada lectura desde stepsPdfKey.
+        stepsPdfUrl: null,
         stepsPdfKey: data.stepsPdfKey,
         stepsPdfName: data.stepsPdfName,
         stepsPdfSize: data.stepsPdfSize,
@@ -255,6 +279,7 @@ export class RecipesService {
         stepsPdfUploadedAt: true,
       },
     })
+    return this.withStepsPdfUrl(updated)
   }
 
   async clearStepsPdf(id: string, organizationId: string) {

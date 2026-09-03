@@ -10,33 +10,25 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
-  Res,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
-import { Response } from 'express'
-import * as fs from 'fs'
-import * as path from 'path'
 import { RecipesService } from './recipes.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
-import { Public } from '../../common/decorators/public.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import { StorageService } from '../../common/storage/storage.service'
 
 const STEPS_PDF_MAX_BYTES = 10 * 1024 * 1024
 
 @Controller('recipes')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
 export class RecipesController {
-  private uploadDir: string
-
-  constructor(private service: RecipesService) {
-    this.uploadDir = path.join(process.cwd(), 'uploads', 'recipes')
-    if (!fs.existsSync(this.uploadDir)) {
-      fs.mkdirSync(this.uploadDir, { recursive: true })
-    }
-  }
+  constructor(
+    private service: RecipesService,
+    private storage: StorageService,
+  ) {}
 
   @Get()
   findAll(@CurrentUser() user: JwtPayload) {
@@ -101,25 +93,18 @@ export class RecipesController {
       throw new BadRequestException('El archivo supera el tamaño máximo permitido (10 MB)')
     }
 
-    // Si había un PDF previo, intentamos borrarlo del disco antes de sobrescribir.
+    // Una sola versión vigente del PDF de pasos: el anterior se borra.
     const previous = await this.service.getStepsPdf(id, user.organizationId)
     if (previous?.stepsPdfKey) {
-      const prevPath = path.join(this.uploadDir, previous.stepsPdfKey)
-      if (fs.existsSync(prevPath)) {
-        try { fs.unlinkSync(prevPath) } catch { /* mejor esfuerzo */ }
-      }
+      await this.storage.remove('recipes', previous.stepsPdfKey)
     }
 
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const filename = `${id}_${Date.now()}_${safeName}`
-    const filepath = path.join(this.uploadDir, filename)
-    fs.writeFileSync(filepath, file.buffer)
+    const stored = await this.storage.put('recipes', user.organizationId, file)
 
     return this.service.setStepsPdf(id, user.organizationId, {
-      stepsPdfUrl: `/api/recipes/${id}/steps-pdf/file/${filename}`,
-      stepsPdfKey: filename,
-      stepsPdfName: file.originalname,
-      stepsPdfSize: file.size,
+      stepsPdfKey: stored.key,
+      stepsPdfName: stored.name,
+      stepsPdfSize: stored.size,
     })
   }
 
@@ -128,31 +113,8 @@ export class RecipesController {
   async deleteStepsPdf(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     const previous = await this.service.getStepsPdf(id, user.organizationId)
     if (previous?.stepsPdfKey) {
-      const prevPath = path.join(this.uploadDir, previous.stepsPdfKey)
-      if (fs.existsSync(prevPath)) {
-        try { fs.unlinkSync(prevPath) } catch { /* mejor esfuerzo */ }
-      }
+      await this.storage.remove('recipes', previous.stepsPdfKey)
     }
     return this.service.clearStepsPdf(id, user.organizationId)
-  }
-
-  @Get(':id/steps-pdf/file/:filename')
-  @Public()
-  async serveStepsPdf(
-    @Param('filename') filename: string,
-    @Res() res: Response,
-  ) {
-    // Anti path-traversal: los uploads se guardan con nombre plano sanitizado.
-    // Cualquier separador o ".." en el param (p. ej. %2e%2e%2f decodificado) → 404.
-    if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
-      return res.status(404).json({ message: 'Archivo no encontrado' })
-    }
-    const filepath = path.join(this.uploadDir, filename)
-    if (!fs.existsSync(filepath)) {
-      return res.status(404).json({ message: 'Archivo no encontrado' })
-    }
-    res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="${filename}"`)
-    fs.createReadStream(filepath).pipe(res)
   }
 }

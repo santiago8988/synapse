@@ -6,7 +6,30 @@ import { ComparisonEvaluatorService } from './services/comparison-evaluator.serv
 import { FormulaEvaluatorService } from './services/formula-evaluator.service'
 import { TransitionValidatorService } from './services/transition-validator.service'
 import { EntryCreatedEvent, EntryCompletedEvent, EntryFieldValueChangedEvent } from '../../common/events/domain-events'
+import { StorageService } from '../../common/storage/storage.service'
 import type { UserRole } from '@synapse/types'
+
+/**
+ * Forma del value que guarda un field FILE_PDF dentro de Entry.data.
+ * `key` es lo único estable: `url` se recalcula en cada lectura.
+ */
+interface EntryFileValue {
+  key: string
+  name: string
+  size: number
+  url?: string
+  uploadedAt?: string
+  uploadedById?: string
+}
+
+function isEntryFileValue(value: unknown): value is EntryFileValue {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as EntryFileValue).key === 'string' &&
+    typeof (value as EntryFileValue).name === 'string'
+  )
+}
 
 @Injectable()
 export class EntriesService {
@@ -16,7 +39,35 @@ export class EntriesService {
     private comparisonEvaluator: ComparisonEvaluatorService,
     private formulaEvaluator: FormulaEvaluatorService,
     private transitionValidator: TransitionValidatorService,
+    private storage: StorageService,
   ) {}
+
+  /**
+   * Recorre Entry.data y reemplaza la `url` de cada adjunto por una firmada y
+   * con vencimiento. Se identifica por forma ({ key, name }) en vez de por
+   * tipo de field para no tener que traer la definición del Record en cada
+   * lectura. Llegar acá ya implica haber filtrado por organizationId.
+   */
+  private async signEntryFiles<T extends { data: unknown }>(entry: T): Promise<T> {
+    const data = entry.data
+    if (typeof data !== 'object' || data === null) return entry
+
+    const entries = Object.entries(data as Record<string, unknown>)
+    const attachments = entries.filter(([, value]) => isEntryFileValue(value))
+    if (attachments.length === 0) return entry
+
+    const signed = { ...(data as Record<string, unknown>) }
+    for (const [fieldId, value] of attachments) {
+      const file = value as EntryFileValue
+      signed[fieldId] = {
+        ...file,
+        url: await this.storage.signedUrl('entries', file.key, {
+          downloadName: file.name,
+        }),
+      }
+    }
+    return { ...entry, data: signed }
+  }
 
   async findAll(recordId: string, organizationId: string) {
     const record = await this.prisma.record.findFirst({
@@ -24,7 +75,7 @@ export class EntriesService {
     })
     if (!record) throw new NotFoundException('Registro no encontrado')
 
-    return this.prisma.entry.findMany({
+    const entries = await this.prisma.entry.findMany({
       where: { recordId },
       include: {
         instrument: record.type === 'INSTRUMENTAL'
@@ -39,6 +90,7 @@ export class EntriesService {
       },
       orderBy: { createdAt: 'desc' },
     })
+    return Promise.all(entries.map((e) => this.signEntryFiles(e)))
   }
 
   async findById(entryId: string, recordId: string) {
@@ -47,7 +99,7 @@ export class EntriesService {
       include: { nonConformities: true },
     })
     if (!entry) throw new NotFoundException('Entrada no encontrada')
-    return entry
+    return this.signEntryFiles(entry)
   }
 
   async create(

@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../prisma/prisma.service'
+import { StorageService } from '../../common/storage/storage.service'
 
 @Injectable()
 export class InstrumentsService {
   constructor(
     private prisma: PrismaService,
+    private storage: StorageService,
   ) {}
 
   async findAll(organizationId: string, filters?: { status?: string; recordId?: string }) {
@@ -128,13 +130,25 @@ export class InstrumentsService {
 
   async listCertificates(instrumentId: string, organizationId: string) {
     await this.findById(instrumentId, organizationId)
-    return this.prisma.instrumentCertificate.findMany({
+    const certificates = await this.prisma.instrumentCertificate.findMany({
       where: { instrumentId, organizationId },
       orderBy: { uploadedAt: 'desc' },
       include: {
         uploadedBy: { select: { id: true, name: true, email: true } },
       },
     })
+
+    // pdfUrl se firma acá, no sale de la columna: la fila es append-only y una
+    // URL persistida quedaría atada al backend de storage del día que se subió.
+    // Llegar hasta acá ya implica haber pasado el filtro por organizationId.
+    return Promise.all(
+      certificates.map(async (cert) => ({
+        ...cert,
+        pdfUrl: await this.storage.signedUrl('instrument-certificates', cert.pdfKey, {
+          downloadName: cert.pdfName,
+        }),
+      })),
+    )
   }
 
   async addCertificate(
@@ -142,7 +156,6 @@ export class InstrumentsService {
     organizationId: string,
     uploadedById: string,
     data: {
-      pdfUrl: string
       pdfKey: string
       pdfName: string
       pdfSize: number
@@ -176,7 +189,11 @@ export class InstrumentsService {
           instrumentId,
           organizationId,
           uploadedById,
-          pdfUrl: data.pdfUrl,
+          // La columna es NOT NULL y la fila es append-only, así que no se
+          // puede dejar vacía ni corregir después. Se guarda la ubicación
+          // lógica del objeto, no una URL navegable: la de verdad se firma
+          // en cada lectura desde pdfKey.
+          pdfUrl: `storage://instrument-certificates/${data.pdfKey}`,
           pdfKey: data.pdfKey,
           pdfName: data.pdfName,
           pdfSize: data.pdfSize,

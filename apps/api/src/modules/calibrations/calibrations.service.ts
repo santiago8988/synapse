@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common'
 import { PrismaService } from '../../prisma/prisma.service'
 import { CalibrationStatus, Prisma } from '@prisma/client'
+import { StorageService } from '../../common/storage/storage.service'
 
 const PATTERNS_INCLUDE = {
   patterns: {
@@ -32,7 +33,10 @@ const VALID_TRANSITIONS: Record<CalibrationStatus, CalibrationStatus[]> = {
 
 @Injectable()
 export class CalibrationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storage: StorageService,
+  ) {}
 
   async findAll(organizationId: string, filters?: { status?: string; entryId?: string }) {
     return this.prisma.calibration.findMany({
@@ -87,7 +91,31 @@ export class CalibrationsService {
       },
     })
     if (!calibration) throw new NotFoundException('Calibracion no encontrada')
-    return calibration
+    return this.withTemplateManualUrl(calibration)
+  }
+
+  /**
+   * El detalle de la calibración muestra el manual de la plantilla, pero lo
+   * trae por include directo y no por CalibrationTemplatesService, así que la
+   * URL hay que firmarla acá también. La columna manualPdfUrl ya no se
+   * persiste: la fuente es manualPdfKey.
+   */
+  private async withTemplateManualUrl<
+    T extends { template: { manualPdfKey: string | null; manualPdfName: string | null } | null },
+  >(calibration: T): Promise<T> {
+    const template = calibration.template
+    if (!template?.manualPdfKey) return calibration
+    return {
+      ...calibration,
+      template: {
+        ...template,
+        manualPdfUrl: await this.storage.signedUrl(
+          'calibration-templates',
+          template.manualPdfKey,
+          { downloadName: template.manualPdfName ?? undefined },
+        ),
+      },
+    }
   }
 
   async changeStatus(id: string, organizationId: string, newStatus: CalibrationStatus) {

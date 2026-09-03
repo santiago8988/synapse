@@ -10,33 +10,25 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
-  Res,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
-import { Response } from 'express'
-import * as fs from 'fs'
-import * as path from 'path'
 import { CalibrationTemplatesService } from './calibration-templates.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
-import { Public } from '../../common/decorators/public.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import { StorageService } from '../../common/storage/storage.service'
 
 const MANUAL_PDF_MAX_BYTES = 10 * 1024 * 1024
 
 @Controller('calibration-templates')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
 export class CalibrationTemplatesController {
-  private uploadDir: string
-
-  constructor(private service: CalibrationTemplatesService) {
-    this.uploadDir = path.join(process.cwd(), 'uploads', 'calibration-templates')
-    if (!fs.existsSync(this.uploadDir)) {
-      fs.mkdirSync(this.uploadDir, { recursive: true })
-    }
-  }
+  constructor(
+    private service: CalibrationTemplatesService,
+    private storage: StorageService,
+  ) {}
 
   @Get()
   findAll(@CurrentUser() user: JwtPayload) {
@@ -129,25 +121,19 @@ export class CalibrationTemplatesController {
       throw new BadRequestException('El archivo supera el tamaño máximo permitido (10 MB)')
     }
 
-    // Si había un PDF previo, intentamos borrarlo del disco antes de sobrescribir.
+    // El manual no es append-only: hay una sola versión vigente, así que el
+    // anterior se borra del storage al reemplazarlo.
     const previous = await this.service.getManualPdf(id, user.organizationId)
     if (previous?.manualPdfKey) {
-      const prevPath = path.join(this.uploadDir, previous.manualPdfKey)
-      if (fs.existsSync(prevPath)) {
-        try { fs.unlinkSync(prevPath) } catch { /* mejor esfuerzo */ }
-      }
+      await this.storage.remove('calibration-templates', previous.manualPdfKey)
     }
 
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const filename = `${id}_${Date.now()}_${safeName}`
-    const filepath = path.join(this.uploadDir, filename)
-    fs.writeFileSync(filepath, file.buffer)
+    const stored = await this.storage.put('calibration-templates', user.organizationId, file)
 
     return this.service.setManualPdf(id, user.organizationId, {
-      manualPdfUrl: `/api/calibration-templates/${id}/manual-pdf/file/${filename}`,
-      manualPdfKey: filename,
-      manualPdfName: file.originalname,
-      manualPdfSize: file.size,
+      manualPdfKey: stored.key,
+      manualPdfName: stored.name,
+      manualPdfSize: stored.size,
     })
   }
 
@@ -156,31 +142,8 @@ export class CalibrationTemplatesController {
   async deleteManualPdf(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     const previous = await this.service.getManualPdf(id, user.organizationId)
     if (previous?.manualPdfKey) {
-      const prevPath = path.join(this.uploadDir, previous.manualPdfKey)
-      if (fs.existsSync(prevPath)) {
-        try { fs.unlinkSync(prevPath) } catch { /* mejor esfuerzo */ }
-      }
+      await this.storage.remove('calibration-templates', previous.manualPdfKey)
     }
     return this.service.clearManualPdf(id, user.organizationId)
-  }
-
-  @Get(':id/manual-pdf/file/:filename')
-  @Public()
-  async serveManualPdf(
-    @Param('filename') filename: string,
-    @Res() res: Response,
-  ) {
-    // Anti path-traversal: los uploads se guardan con nombre plano sanitizado.
-    // Cualquier separador o ".." en el param (p. ej. %2e%2e%2f decodificado) → 404.
-    if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
-      return res.status(404).json({ message: 'Archivo no encontrado' })
-    }
-    const filepath = path.join(this.uploadDir, filename)
-    if (!fs.existsSync(filepath)) {
-      return res.status(404).json({ message: 'Archivo no encontrado' })
-    }
-    res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="${filename}"`)
-    fs.createReadStream(filepath).pipe(res)
   }
 }

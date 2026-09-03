@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../../prisma/prisma.service'
+import { StorageService } from '../../common/storage/storage.service'
 
 interface PointDto {
   name: string
@@ -45,10 +46,13 @@ interface UpdateTemplateDto {
 
 @Injectable()
 export class CalibrationTemplatesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storage: StorageService,
+  ) {}
 
   async findAll(organizationId: string) {
-    return this.prisma.calibrationTemplate.findMany({
+    const templates = await this.prisma.calibrationTemplate.findMany({
       where: { organizationId, isActive: true },
       include: {
         tests: {
@@ -59,6 +63,7 @@ export class CalibrationTemplatesService {
       },
       orderBy: { updatedAt: 'desc' },
     })
+    return Promise.all(templates.map((t) => this.withManualPdfUrl(t)))
   }
 
   async findById(id: string, organizationId: string) {
@@ -72,7 +77,7 @@ export class CalibrationTemplatesService {
       },
     })
     if (!template) throw new NotFoundException('Plantilla de calibracion no encontrada')
-    return template
+    return this.withManualPdfUrl(template)
   }
 
   async create(organizationId: string, createdById: string, data: CreateTemplateDto) {
@@ -270,24 +275,24 @@ export class CalibrationTemplatesService {
       },
     })
     if (!template) throw new NotFoundException('Plantilla no encontrada')
-    return template
+    return this.withManualPdfUrl(template)
   }
 
   async setManualPdf(
     id: string,
     organizationId: string,
     data: {
-      manualPdfUrl: string
       manualPdfKey: string
       manualPdfName: string
       manualPdfSize: number
     },
   ) {
     await this.findById(id, organizationId)
-    return this.prisma.calibrationTemplate.update({
+    const updated = await this.prisma.calibrationTemplate.update({
       where: { id },
       data: {
-        manualPdfUrl: data.manualPdfUrl,
+        // La URL no se persiste: se firma en cada lectura desde manualPdfKey.
+        manualPdfUrl: null,
         manualPdfKey: data.manualPdfKey,
         manualPdfName: data.manualPdfName,
         manualPdfSize: data.manualPdfSize,
@@ -301,6 +306,7 @@ export class CalibrationTemplatesService {
         manualPdfUploadedAt: true,
       },
     })
+    return this.withManualPdfUrl(updated)
   }
 
   async clearManualPdf(id: string, organizationId: string) {
@@ -315,5 +321,27 @@ export class CalibrationTemplatesService {
         manualPdfUploadedAt: null,
       },
     })
+  }
+
+  /**
+   * Reemplaza manualPdfUrl por una URL firmada derivada de manualPdfKey. La
+   * columna quedó en null desde que el storage se abstrajo; se sigue
+   * devolviendo con el mismo nombre para no cambiar el contrato con el
+   * frontend. Solo se llama después de haber filtrado por organizationId.
+   */
+  private async withManualPdfUrl<T extends { manualPdfKey: string | null; manualPdfName?: string | null }>(
+    template: T,
+  ): Promise<T & { manualPdfUrl: string | null }> {
+    if (!template.manualPdfKey) {
+      return { ...template, manualPdfUrl: null }
+    }
+    return {
+      ...template,
+      manualPdfUrl: await this.storage.signedUrl(
+        'calibration-templates',
+        template.manualPdfKey,
+        { downloadName: template.manualPdfName ?? undefined },
+      ),
+    }
   }
 }

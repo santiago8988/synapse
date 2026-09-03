@@ -11,19 +11,15 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
-  Res,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
-import { Response } from 'express'
-import * as fs from 'fs'
-import * as path from 'path'
 import { EntriesService } from './entries.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
-import { Public } from '../../common/decorators/public.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import { StorageService } from '../../common/storage/storage.service'
 import type { UserRole } from '@synapse/types'
 
 const FILE_PDF_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
@@ -31,16 +27,10 @@ const FILE_PDF_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
 @Controller('records/:recordId/entries')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
 export class EntriesController {
-  private uploadDir: string
-
-  constructor(private service: EntriesService) {
-    // Almacenamiento local para uploads de FILE_PDF (en producción → R2,
-    // mismo patrón que documents.controller).
-    this.uploadDir = path.join(process.cwd(), 'uploads', 'entries')
-    if (!fs.existsSync(this.uploadDir)) {
-      fs.mkdirSync(this.uploadDir, { recursive: true })
-    }
-  }
+  constructor(
+    private service: EntriesService,
+    private storage: StorageService,
+  ) {}
 
   @Get()
   findAll(
@@ -128,23 +118,22 @@ export class EntriesController {
       throw new BadRequestException('El archivo supera el tamaño máximo permitido (10 MB)')
     }
 
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const filename = `${id}_${fieldId}_${Date.now()}_${safeName}`
-    const filepath = path.join(this.uploadDir, filename)
-    fs.writeFileSync(filepath, file.buffer)
+    const stored = await this.storage.put('entries', user.organizationId, file)
 
-    const url = `/api/records/${recordId}/entries/${id}/files/${filename}`
+    // `url` no se persiste: la firma se calcula en cada lectura desde `key`.
     const value = {
-      url,
-      key: filename,
-      name: file.originalname,
-      size: file.size,
+      key: stored.key,
+      name: stored.name,
+      size: stored.size,
       uploadedAt: new Date().toISOString(),
       uploadedById: user.sub,
     }
 
     await this.service.setFieldValue(id, recordId, fieldId, value, user.sub, user.role as UserRole)
-    return value
+    return {
+      ...value,
+      url: await this.storage.signedUrl('entries', stored.key, { downloadName: stored.name }),
+    }
   }
 
   @Delete(':id/files')
@@ -157,37 +146,13 @@ export class EntriesController {
   ) {
     if (!fieldId) throw new BadRequestException('Falta el query param `field`')
 
-    // Leer el value actual para borrar el archivo físico.
+    // Leer el value actual para borrar el archivo del storage.
     const current = await this.service.getFieldValue(id, recordId, fieldId)
     if (current && typeof current === 'object' && 'key' in current) {
-      const key = (current as { key: string }).key
-      const filepath = path.join(this.uploadDir, key)
-      if (fs.existsSync(filepath)) {
-        try { fs.unlinkSync(filepath) } catch { /* mejor esfuerzo */ }
-      }
+      await this.storage.remove('entries', (current as { key: string }).key)
     }
 
     await this.service.setFieldValue(id, recordId, fieldId, null, user.sub, user.role as UserRole)
     return { ok: true }
-  }
-
-  @Get(':id/files/:filename')
-  @Public()
-  async serveFile(
-    @Param('filename') filename: string,
-    @Res() res: Response,
-  ) {
-    // Anti path-traversal: los uploads se guardan con nombre plano sanitizado.
-    // Cualquier separador o ".." en el param (p. ej. %2e%2e%2f decodificado) → 404.
-    if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
-      return res.status(404).json({ message: 'Archivo no encontrado' })
-    }
-    const filepath = path.join(this.uploadDir, filename)
-    if (!fs.existsSync(filepath)) {
-      return res.status(404).json({ message: 'Archivo no encontrado' })
-    }
-    res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="${filename}"`)
-    fs.createReadStream(filepath).pipe(res)
   }
 }

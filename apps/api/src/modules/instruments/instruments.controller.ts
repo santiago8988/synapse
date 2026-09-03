@@ -9,33 +9,25 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
-  Res,
 } from '@nestjs/common'
 import { FileInterceptor } from '@nestjs/platform-express'
-import { Response } from 'express'
-import * as fs from 'fs'
-import * as path from 'path'
 import { InstrumentsService } from './instruments.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
-import { Public } from '../../common/decorators/public.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import { StorageService } from '../../common/storage/storage.service'
 
 const CERT_PDF_MAX_BYTES = 10 * 1024 * 1024
 
 @Controller('instruments')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
 export class InstrumentsController {
-  private uploadDir: string
-
-  constructor(private service: InstrumentsService) {
-    this.uploadDir = path.join(process.cwd(), 'uploads', 'instrument-certificates')
-    if (!fs.existsSync(this.uploadDir)) {
-      fs.mkdirSync(this.uploadDir, { recursive: true })
-    }
-  }
+  constructor(
+    private service: InstrumentsService,
+    private storage: StorageService,
+  ) {}
 
   @Get()
   findAll(
@@ -107,10 +99,7 @@ export class InstrumentsController {
     }
     const result: 'PASSED' | 'FAILED' = body.result
 
-    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const filename = `${id}_${Date.now()}_${safeName}`
-    const filepath = path.join(this.uploadDir, filename)
-    fs.writeFileSync(filepath, file.buffer)
+    const stored = await this.storage.put('instrument-certificates', user.organizationId, file)
 
     let calibrationDate: Date | null = null
     if (body.calibrationDate) {
@@ -122,33 +111,12 @@ export class InstrumentsController {
     }
 
     return this.service.addCertificate(id, user.organizationId, user.sub, {
-      pdfUrl: `/api/instruments/${id}/certificates/file/${filename}`,
-      pdfKey: filename,
-      pdfName: file.originalname,
-      pdfSize: file.size,
+      pdfKey: stored.key,
+      pdfName: stored.name,
+      pdfSize: stored.size,
       result,
       calibrationDate,
       notes: body.notes?.trim() || null,
     })
-  }
-
-  @Get(':id/certificates/file/:filename')
-  @Public()
-  async serveCertificate(
-    @Param('filename') filename: string,
-    @Res() res: Response,
-  ) {
-    // Anti path-traversal: los uploads se guardan con nombre plano sanitizado.
-    // Cualquier separador o ".." en el param (p. ej. %2e%2e%2f decodificado) → 404.
-    if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
-      return res.status(404).json({ message: 'Archivo no encontrado' })
-    }
-    const filepath = path.join(this.uploadDir, filename)
-    if (!fs.existsSync(filepath)) {
-      return res.status(404).json({ message: 'Archivo no encontrado' })
-    }
-    res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `inline; filename="${filename}"`)
-    fs.createReadStream(filepath).pipe(res)
   }
 }
