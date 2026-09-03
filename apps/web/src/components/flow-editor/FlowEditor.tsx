@@ -16,7 +16,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Save, Trash2, Zap, Filter, Wrench, Loader2, Target } from 'lucide-react'
+import { Plus, Save, Trash2, Filter, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import type {
@@ -286,7 +286,7 @@ function FlowEditorInner({ recordId, recordName, recordType, recordFields }: Flo
 }
 
 // =============================================================================
-// Canvas (xyflow) con 3 custom nodes
+// Canvas (xyflow) — mapa mental horizontal
 // =============================================================================
 
 interface UnifiedFlowCanvasProps {
@@ -302,19 +302,32 @@ interface UnifiedFlowCanvasProps {
 }
 
 /**
- * Canvas unificado Power Automate-like.
+ * Layout tipo mapa mental, de izquierda a derecha:
  *
- * Layout:
- *   - 1 SourceNode arriba al centro (representa el Record fuente).
- *   - N "ramas" debajo del Source, una por cada flow (RecordAction).
- *   - Cada rama es vertical: [Trigger] → [Condition opcional] → [Action] → [Target opcional].
- *   - Las ramas se distribuyen horizontalmente con offset.
- *   - El draft sin id (flow nuevo siendo configurado) se renderiza como rama
- *     extra con borde resaltado.
+ *   [Registro origen] ──┬── (flujo 1)
+ *                       ├── (flujo 2)
+ *                       └── (+)
  *
- * Click en cualquier node de una rama selecciona el flow → el panel de
- * propiedades a la derecha lo edita.
+ * Cada flujo es UN nodo compacto, no una cadena de nodos. El detalle (trigger,
+ * condición, mapeo de campos) vive en el panel de propiedades: el canvas está
+ * para leer de un vistazo qué relaciones hay y hacia dónde van. Cada rama
+ * tiene su color, que comparten el nodo y su curva.
  */
+
+/** Un color por rama; cicla si hay más flujos que colores. */
+const BRANCH_COLORS = [
+  'var(--info)',
+  '#7C3AED',
+  'var(--warn)',
+  'var(--ok)',
+  'var(--accent-hex)',
+  '#DB2777',
+]
+
+function branchColor(index: number): string {
+  return BRANCH_COLORS[index % BRANCH_COLORS.length]
+}
+
 function UnifiedFlowCanvas({
   sourceRecordName,
   flows,
@@ -325,21 +338,13 @@ function UnifiedFlowCanvas({
   onSelectDraft,
   onAddFlow,
 }: UnifiedFlowCanvasProps) {
-  const COL_WIDTH = 280
-  const STEP = 130
-  const SOURCE_Y = 40
-  const BRANCH_START_Y = SOURCE_Y + 110
+  // Geometría compacta: las ramas se apilan en una columna a la derecha del
+  // origen, que queda centrado verticalmente sobre ellas.
+  const BRANCH_X = 320
+  const ROW_H = 62
+  const TOP_Y = 24
 
-  // Lista de "branches" a renderizar — flows existentes + draft sin id si lo hay.
-  const branches: Array<{
-    flowId: string | 'draft'
-    trigger: TriggerType
-    condition: ConditionExpression | null
-    actionType: ActionType
-    targetRecordId: string
-    isDraft: boolean
-    isSelected: boolean
-  }> = useMemo(() => {
+  const branches = useMemo(() => {
     const list: Array<{
       flowId: string | 'draft'
       trigger: TriggerType
@@ -368,8 +373,7 @@ function UnifiedFlowCanvas({
         isSelected: true,
       })
     }
-    // Si el draft tiene id (editando uno existente), reemplazamos la rama
-    // con los valores en vivo del draft para feedback inmediato.
+    // Si el draft edita un flow existente, la rama refleja los valores en vivo.
     if (draft && draft.id) {
       const idx = list.findIndex((b) => b.flowId === draft.id)
       if (idx >= 0) {
@@ -385,103 +389,86 @@ function UnifiedFlowCanvas({
     return list
   }, [flows, draft, selectedFlowId])
 
-  // Centramos el Source horizontalmente sobre el conjunto de ramas.
-  const totalWidth = Math.max(branches.length, 1) * COL_WIDTH
-  const sourceX = totalWidth / 2 - 120
+  // +1 fila para el botón de agregar, que vive al final de la columna.
+  const rows = branches.length + 1
+  const sourceY = TOP_Y + (rows * ROW_H) / 2 - 26
 
   const nodes = useMemo<Node[]>(() => {
-    const list: Node[] = []
+    const list: Node[] = [
+      {
+        id: 'source',
+        type: 'sourceNode',
+        position: { x: 0, y: sourceY },
+        data: { recordName: sourceRecordName, branchCount: branches.length },
+        draggable: false,
+        selectable: false,
+      },
+    ]
+
+    branches.forEach((b, i) => {
+      const targetRecord =
+        b.actionType === 'CREATE_ENTRY'
+          ? orgRecords.find((r) => r.id === b.targetRecordId)
+          : null
+      list.push({
+        id: `${b.flowId}-branch`,
+        type: 'branchNode',
+        position: { x: BRANCH_X, y: TOP_Y + i * ROW_H },
+        data: {
+          flowId: b.flowId,
+          selected: b.isSelected,
+          isDraft: b.isDraft,
+          color: branchColor(i),
+          trigger: b.trigger,
+          hasCondition: Boolean(b.condition),
+          actionType: b.actionType,
+          targetRecordName: targetRecord?.name,
+        },
+        draggable: false,
+      })
+    })
+
     list.push({
-      id: 'source',
-      type: 'sourceNode',
-      position: { x: sourceX, y: SOURCE_Y },
-      data: { recordName: sourceRecordName, branchCount: branches.length, onAddFlow },
+      id: 'add',
+      type: 'addNode',
+      position: { x: BRANCH_X, y: TOP_Y + branches.length * ROW_H },
+      data: { onAddFlow },
       draggable: false,
       selectable: false,
     })
 
-    branches.forEach((b, i) => {
-      const branchX = i * COL_WIDTH + 20
-      let y = BRANCH_START_Y
-
-      list.push({
-        id: `${b.flowId}-trigger`,
-        type: 'triggerNode',
-        position: { x: branchX, y },
-        data: { trigger: b.trigger, flowId: b.flowId, selected: b.isSelected, isDraft: b.isDraft },
-        draggable: false,
-      })
-      y += STEP
-
-      if (b.condition) {
-        list.push({
-          id: `${b.flowId}-condition`,
-          type: 'conditionNode',
-          position: { x: branchX, y },
-          data: { condition: b.condition, flowId: b.flowId, selected: b.isSelected, isDraft: b.isDraft },
-          draggable: false,
-        })
-        y += STEP
-      }
-
-      const targetRecord = b.actionType === 'CREATE_ENTRY' ? orgRecords.find((r) => r.id === b.targetRecordId) : null
-      list.push({
-        id: `${b.flowId}-action`,
-        type: 'actionNode',
-        position: { x: branchX, y },
-        data: {
-          actionType: b.actionType,
-          targetRecordId: b.targetRecordId,
-          targetRecordName: targetRecord?.name,
-          flowId: b.flowId,
-          selected: b.isSelected,
-          isDraft: b.isDraft,
-        },
-        draggable: false,
-      })
-      y += STEP
-
-      if (targetRecord) {
-        list.push({
-          id: `${b.flowId}-target`,
-          type: 'targetNode',
-          position: { x: branchX, y },
-          data: {
-            recordName: targetRecord.name,
-            recordType: targetRecord.type,
-            flowId: b.flowId,
-            selected: b.isSelected,
-            isDraft: b.isDraft,
-          },
-          draggable: false,
-        })
-      }
-    })
-
     return list
-  }, [branches, sourceX, orgRecords, sourceRecordName, onAddFlow])
+  }, [branches, sourceY, orgRecords, sourceRecordName, onAddFlow])
 
   const edges = useMemo<Edge[]>(() => {
-    const list: Edge[] = []
-    branches.forEach((b) => {
-      // Source → trigger de cada rama
-      list.push({
-        id: `e-source-${b.flowId}`,
+    const list: Edge[] = branches.map((b, i) => {
+      const color = branchColor(i)
+      return {
+        id: `e-${b.flowId}`,
         source: 'source',
-        target: `${b.flowId}-trigger`,
+        target: `${b.flowId}-branch`,
+        type: 'bezier',
         animated: b.isSelected,
-        style: { stroke: b.isSelected ? 'var(--primary-hex)' : 'var(--ink-3)', strokeDasharray: b.isDraft ? '4 4' : undefined },
-      })
-      // trigger → condition?, condition → action, action → target?
-      if (b.condition) {
-        list.push({ id: `e-${b.flowId}-tc`, source: `${b.flowId}-trigger`, target: `${b.flowId}-condition`, animated: b.isSelected })
-        list.push({ id: `e-${b.flowId}-ca`, source: `${b.flowId}-condition`, target: `${b.flowId}-action`, animated: b.isSelected })
-      } else {
-        list.push({ id: `e-${b.flowId}-ta`, source: `${b.flowId}-trigger`, target: `${b.flowId}-action`, animated: b.isSelected })
+        style: {
+          stroke: color,
+          strokeWidth: b.isSelected ? 2.5 : 1.75,
+          strokeDasharray: b.isDraft ? '5 4' : undefined,
+          opacity: b.isSelected ? 1 : 0.75,
+        },
       }
-      if (b.actionType === 'CREATE_ENTRY' && b.targetRecordId) {
-        list.push({ id: `e-${b.flowId}-at`, source: `${b.flowId}-action`, target: `${b.flowId}-target`, animated: b.isSelected })
-      }
+    })
+    // Conector tenue hacia el botón de agregar, para que no quede suelto.
+    list.push({
+      id: 'e-add',
+      source: 'source',
+      target: 'add',
+      type: 'bezier',
+      style: {
+        stroke: 'var(--line-strong)',
+        strokeWidth: 1,
+        strokeDasharray: '3 4',
+        opacity: 0.45,
+      },
     })
     return list
   }, [branches])
@@ -492,11 +479,8 @@ function UnifiedFlowCanvas({
   function handleNodeClick(_e: React.MouseEvent, node: Node) {
     const flowId = (node.data as { flowId?: string }).flowId
     if (!flowId) return
-    if (flowId === 'draft') {
-      onSelectDraft()
-    } else {
-      onSelectFlow(flowId)
-    }
+    if (flowId === 'draft') onSelectDraft()
+    else onSelectFlow(flowId)
   }
 
   return (
@@ -508,11 +492,16 @@ function UnifiedFlowCanvas({
       onNodeClick={handleNodeClick}
       nodeTypes={NODE_TYPES}
       fitView
+      // maxZoom en fitView evita que con un solo flujo el mapa se agrande de
+      // forma desproporcionada, que era la queja de "arranca muy grande".
+      fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
+      minZoom={0.4}
+      maxZoom={1.5}
       proOptions={{ hideAttribution: true }}
       style={{ background: 'var(--bg-2)' }}
     >
-      <Background gap={16} />
-      <Controls showInteractive={false} />
+      <Background gap={18} size={1} color="var(--line)" />
+      <Controls showInteractive={false} position="bottom-left" />
     </ReactFlow>
   )
 }
@@ -521,137 +510,139 @@ function UnifiedFlowCanvas({
 // Custom nodes
 // =============================================================================
 
-const NODE_TYPES = {
-  sourceNode: SourceNode,
-  triggerNode: TriggerNode,
-  conditionNode: ConditionNode,
-  actionNode: ActionNode,
-  targetNode: TargetNode,
-}
-
-interface NodeBaseData {
-  flowId?: string
-  selected?: boolean
-  isDraft?: boolean
-}
-
-function selectionStyle(d: NodeBaseData, baseColor: string) {
-  return {
-    background: 'var(--bg-1)',
-    borderColor: d.selected ? 'var(--primary-hex)' : baseColor,
-    borderStyle: (d.isDraft ? 'dashed' : 'solid') as 'dashed' | 'solid',
-    boxShadow: d.selected ? '0 0 0 3px color-mix(in srgb, var(--primary-hex) 20%, transparent)' : undefined,
-    cursor: d.flowId ? 'pointer' : 'default',
-    minWidth: 240,
-  }
+/** Punto de conexión discreto: las curvas nacen del borde del nodo. */
+const HANDLE_STYLE = {
+  width: 7,
+  height: 7,
+  border: 'none',
+  background: 'var(--line-strong)',
 }
 
 function SourceNode({ data }: NodeProps) {
-  const { recordName, branchCount, onAddFlow } = data as {
-    recordName: string
-    branchCount: number
-    onAddFlow: () => void
-  }
+  const { recordName, branchCount } = data as { recordName: string; branchCount: number }
   return (
     <div
-      className="rounded-[12px] border-2 px-4 py-3 text-[12.5px]"
-      style={{ background: 'var(--bg-1)', borderColor: 'var(--ink-1)', minWidth: 260 }}
-    >
-      <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: 'var(--ink-3)' }}>
-        Origen · {branchCount} {branchCount === 1 ? 'flujo' : 'flujos'}
-      </div>
-      <div style={{ color: 'var(--ink-0)', fontWeight: 600, fontSize: 14 }}>{recordName}</div>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          onAddFlow()
-        }}
-        className="mt-2 syn-btn syn-btn-primary"
-        style={{ padding: '4px 8px', fontSize: 11 }}
-      >
-        <Plus className="h-3 w-3" /> Agregar flujo
-      </button>
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-function TriggerNode({ data }: NodeProps) {
-  const d = data as unknown as NodeBaseData & { trigger: TriggerType }
-  return (
-    <div className="rounded-[10px] border-2 px-4 py-3 text-[12.5px]" style={selectionStyle(d, 'var(--info)')}>
-      <div className="mb-1 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: 'var(--info)' }}>
-        <Zap className="h-3 w-3" /> Cuando
-      </div>
-      <div style={{ color: 'var(--ink-0)', fontWeight: 500 }}>{triggerLabel(d.trigger)}</div>
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-function ConditionNode({ data }: NodeProps) {
-  const d = data as unknown as NodeBaseData & { condition: ConditionExpression | null }
-  return (
-    <div className="rounded-[10px] border-2 px-4 py-3 text-[12.5px]" style={selectionStyle(d, 'var(--warn)')}>
-      <div className="mb-1 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: 'var(--warn)' }}>
-        <Filter className="h-3 w-3" /> Si
-      </div>
-      <div style={{ color: 'var(--ink-0)' }}>{conditionPreview(d.condition)}</div>
-      <Handle type="target" position={Position.Top} />
-      <Handle type="source" position={Position.Bottom} />
-    </div>
-  )
-}
-
-function ActionNode({ data }: NodeProps) {
-  const d = data as unknown as NodeBaseData & {
-    actionType: ActionType
-    targetRecordId: string
-    targetRecordName?: string
-  }
-  return (
-    <div className="rounded-[10px] border-2 px-4 py-3 text-[12.5px]" style={selectionStyle(d, 'var(--ok)')}>
-      <div className="mb-1 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: 'var(--ok)' }}>
-        <Wrench className="h-3 w-3" /> Hacer
-      </div>
-      <div style={{ color: 'var(--ink-0)', fontWeight: 500 }}>{actionLabel(d.actionType)}</div>
-      {d.actionType === 'CREATE_ENTRY' && d.targetRecordName && (
-        <div className="mt-1 text-[11px]" style={{ color: 'var(--ink-2)' }}>
-          en {d.targetRecordName}
-        </div>
-      )}
-      <Handle type="target" position={Position.Top} />
-      {d.actionType === 'CREATE_ENTRY' && <Handle type="source" position={Position.Bottom} />}
-    </div>
-  )
-}
-
-function TargetNode({ data }: NodeProps) {
-  const d = data as unknown as NodeBaseData & { recordName: string; recordType: string }
-  return (
-    <div
-      className="rounded-[16px] border-2 px-4 py-2.5 text-[12.5px]"
+      className="rounded-[10px] border px-3.5 py-2.5"
       style={{
-        ...selectionStyle(d, 'var(--primary-hex)'),
-        background: 'var(--bg-2)',
-        borderStyle: 'dashed',
+        background: 'var(--bg-1)',
+        borderColor: 'var(--line-strong)',
+        boxShadow: 'var(--shadow-sm)',
+        minWidth: 200,
+        maxWidth: 260,
       }}
     >
-      <div className="flex items-center gap-2">
-        <Target className="h-3.5 w-3.5" style={{ color: 'var(--primary-hex)' }} />
-        <div className="flex-1">
-          <div className="font-mono text-[9px] uppercase tracking-[0.14em]" style={{ color: 'var(--ink-3)' }}>
-            Registro destino · {d.recordType}
-          </div>
-          <div style={{ color: 'var(--ink-0)', fontWeight: 500 }}>{d.recordName}</div>
-        </div>
+      <div
+        className="mb-0.5 font-mono text-[9px] uppercase tracking-[0.14em]"
+        style={{ color: 'var(--ink-3)' }}
+      >
+        Origen · {branchCount} {branchCount === 1 ? 'flujo' : 'flujos'}
       </div>
-      <Handle type="target" position={Position.Top} />
+      <div
+        className="truncate text-[13px] font-semibold"
+        style={{ color: 'var(--ink-0)' }}
+        title={recordName}
+      >
+        {recordName}
+      </div>
+      <Handle type="source" position={Position.Right} style={HANDLE_STYLE} />
     </div>
   )
 }
+
+/**
+ * Una rama = un flujo. Muestra a dónde va y, en letra chica, cuándo se
+ * dispara. El resto se edita en el panel lateral.
+ */
+function BranchNode({ data }: NodeProps) {
+  const d = data as unknown as {
+    flowId: string
+    selected: boolean
+    isDraft: boolean
+    color: string
+    trigger: TriggerType
+    hasCondition: boolean
+    actionType: ActionType
+    targetRecordName?: string
+  }
+
+  const title =
+    d.actionType === 'CREATE_ENTRY'
+      ? d.targetRecordName ?? 'Sin registro destino'
+      : actionLabel(d.actionType)
+
+  return (
+    <div
+      className="rounded-[9px] border px-3 py-1.5 transition-colors"
+      style={{
+        background: 'var(--bg-1)',
+        borderColor: d.selected ? d.color : 'var(--line)',
+        borderStyle: d.isDraft ? 'dashed' : 'solid',
+        boxShadow: d.selected
+          ? `0 0 0 3px color-mix(in srgb, ${d.color} 18%, transparent)`
+          : 'var(--shadow-xs)',
+        cursor: 'pointer',
+        minWidth: 176,
+        maxWidth: 240,
+      }}
+    >
+      <Handle type="target" position={Position.Left} style={HANDLE_STYLE} />
+      <div className="flex items-center gap-2">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: d.color }} />
+        <div className="min-w-0 flex-1">
+          <div
+            className="truncate text-[12.5px] font-medium leading-tight"
+            style={{ color: 'var(--ink-0)' }}
+            title={title}
+          >
+            {title}
+          </div>
+          <div
+            className="mt-0.5 flex items-center gap-1 font-mono text-[9px] uppercase tracking-[0.1em]"
+            style={{ color: 'var(--ink-3)' }}
+          >
+            <span className="truncate">{triggerLabel(d.trigger)}</span>
+            {d.hasCondition && (
+              <>
+                <span aria-hidden>·</span>
+                <Filter className="h-2.5 w-2.5 shrink-0" style={{ color: d.color }} />
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AddNode({ data }: NodeProps) {
+  const { onAddFlow } = data as { onAddFlow: () => void }
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onAddFlow()
+      }}
+      className="flex items-center gap-1.5 rounded-[9px] border border-dashed px-3 py-1.5 text-[11.5px] transition-colors hover:bg-[var(--bg-3)]"
+      style={{
+        borderColor: 'var(--line-strong)',
+        color: 'var(--ink-2)',
+        background: 'transparent',
+      }}
+    >
+      <Handle type="target" position={Position.Left} style={{ ...HANDLE_STYLE, opacity: 0 }} />
+      <Plus className="h-3 w-3" />
+      Agregar flujo
+    </button>
+  )
+}
+
+const NODE_TYPES = {
+  sourceNode: SourceNode,
+  branchNode: BranchNode,
+  addNode: AddNode,
+}
+
 
 // =============================================================================
 // Properties panel
