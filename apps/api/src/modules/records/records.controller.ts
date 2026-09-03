@@ -49,6 +49,16 @@ export class RecordsController {
     return this.service.create(user.organizationId, user.sub, body)
   }
 
+  /**
+   * Mapa global de flujos de la organizacion: todas las RecordAction con sus
+   * registros origen y destino. Se declara antes de @Get(':id') para que la
+   * ruta no la capture el parametro.
+   */
+  @Get('flows/overview')
+  flowsOverview(@CurrentUser() user: JwtPayload) {
+    return this.service.listAllActions(user.organizationId)
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.service.findById(id, user.organizationId)

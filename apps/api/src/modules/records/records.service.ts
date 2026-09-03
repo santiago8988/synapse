@@ -409,6 +409,33 @@ export class RecordsService {
 
   // ─── Actions / Visual Flow Editor ─────────────
 
+  /**
+   * Todas las RecordAction de la organizacion, para el mapa global de flujos.
+   *
+   * El aislamiento va por la relacion: RecordAction no tiene organizationId
+   * propio. Se exige que AMBOS extremos pertenezcan a la organizacion, no solo
+   * el origen, para que una relacion mal armada no filtre el nombre de un
+   * registro de otro tenant.
+   */
+  async listAllActions(organizationId: string) {
+    return this.prisma.recordAction.findMany({
+      where: {
+        sourceRecord: { organizationId, isActive: true },
+        targetRecord: { organizationId },
+      },
+      select: {
+        id: true,
+        trigger: true,
+        actionType: true,
+        condition: true,
+        allowCascade: true,
+        sourceRecord: { select: { id: true, name: true, type: true, status: true } },
+        targetRecord: { select: { id: true, name: true, type: true, status: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+  }
+
   async listActions(recordId: string, organizationId: string) {
     // Verificar que el record pertenezca a la org (defense-in-depth multitenant).
     const record = await this.prisma.record.findFirst({

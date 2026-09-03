@@ -102,6 +102,8 @@ export const api = {
       fetchApi(`/records/${recordId}/fields/${fieldId}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteField: (recordId: string, fieldId: string) =>
       fetchApi(`/records/${recordId}/fields/${fieldId}`, { method: 'DELETE' }),
+    /** Mapa global de flujos de la organizacion (todas las RecordAction). */
+    flowsOverview: <T = unknown>() => fetchApi<T>('/records/flows/overview'),
     listActions: (recordId: string) =>
       fetchApi(`/records/${recordId}/actions`),
     addAction: (recordId: string, data: Record<string, unknown>) =>

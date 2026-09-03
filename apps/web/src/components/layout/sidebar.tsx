@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   FileText,
   ClipboardList,
+  Workflow,
   Wrench,
   AlertTriangle,
   Shield,
@@ -48,6 +49,7 @@ function buildNavigation(counts: { ncOpen: number; approvalsPending: number }): 
       items: [
         { href: '/dashboard', name: 'Dashboard', icon: LayoutDashboard },
         { href: '/records', name: 'Registros', icon: ClipboardList },
+        { href: '/flows', name: 'Flujos', icon: Workflow },
         { href: '/documents', name: 'Documentos', icon: FileText },
         { href: '/recipes', name: 'Fórmulas', icon: FlaskConical },
         { href: '/matrices', name: 'Matrices', icon: Microscope },
