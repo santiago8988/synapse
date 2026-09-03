@@ -70,6 +70,10 @@ interface FieldDef {
   formulaConfig: { expression: string } | null
   relatedRecordId?: string
   relatedFieldIds?: string[]
+  // Lo escribe RecordFieldsEditor mientras se edita un field DROPDOWN/QUANTITY.
+  // Al guardar se colapsa a comparisonConfig.{options|units}, que es lo que
+  // espera el backend.
+  dropdownOptions?: string[]
   isNew?: boolean
   markedForRemoval?: boolean
 }
@@ -78,6 +82,7 @@ interface RecordDetail {
   id: string
   name: string
   type: 'PERIODIC' | 'NOT_PERIODIC' | 'NOT_PERIODIC_WITH_REVISION' | 'INSTRUMENTAL' | 'BATCH' | 'SAMPLE' | 'STOCK'
+  status: 'DRAFT' | 'IN_REVIEW' | 'ACTIVE'
   version: number
   changeLog: string | null
   periodicity: number | null
@@ -1684,7 +1689,7 @@ export default function RecordDetailPage() {
               <span className="mk">ESTADO</span>
               <span className="mv">
                 {(() => {
-                  const s = (record as Record<string, unknown>).status as string | undefined
+                  const s = record.status
                   if (s === 'ACTIVE') {
                     return (
                       <span className="syn-chip syn-chip-active">
@@ -1721,14 +1726,6 @@ export default function RecordDetailPage() {
               <span className="mk">VERSIÓN</span>
               <span className="mv font-mono">v{record.version}</span>
             </div>
-            {(record as Record<string, unknown>).recipe && (
-              <div className="m">
-                <span className="mk">FÓRMULA</span>
-                <span className="mv">
-                  {((record as Record<string, unknown>).recipe as { name: string }).name}
-                </span>
-              </div>
-            )}
             {record.changeLog && (
               <div className="m">
                 <span className="mk">CAMBIO</span>
@@ -1783,7 +1780,7 @@ export default function RecordDetailPage() {
                 <Settings className="h-3.5 w-3.5" />
                 Editar
               </button>
-              {(record as Record<string, unknown>).status === 'DRAFT' && (
+              {record.status === 'DRAFT' && (
                 <button
                   type="button"
                   onClick={() => submitForApprovalMutation.mutate()}
@@ -1794,7 +1791,7 @@ export default function RecordDetailPage() {
                   {submitForApprovalMutation.isPending ? 'Enviando…' : 'Enviar a revisión'}
                 </button>
               )}
-              {(record as Record<string, unknown>).status === 'ACTIVE' && canCreateEntry && (
+              {record.status === 'ACTIVE' && canCreateEntry && (
                 <button
                   type="button"
                   onClick={() => {
