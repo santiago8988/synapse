@@ -433,9 +433,8 @@ export default function CalibrationDetailPage() {
 
           {/* Manual de verificación interna (PDF asociado a la plantilla) */}
           {calibration.template?.manualPdfUrl && (() => {
-            const apiBase =
-              process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
-            const href = `${apiBase}${calibration.template.manualPdfUrl.replace(/^\/api/, '')}`
+            // La API devuelve la URL ya firmada y absoluta.
+            const href = calibration.template.manualPdfUrl
             return (
               <div
                 className="syn-card flex items-center gap-3 px-5 py-3.5"

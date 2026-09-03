@@ -943,7 +943,7 @@ function CertificatesSection({ instrumentId }: { instrumentId: string }) {
                   )}
                 </div>
                 <a
-                  href={`${apiBase}${cert.pdfUrl.replace(/^\/api/, '')}`}
+                  href={cert.pdfUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="syn-btn syn-btn-subtle"

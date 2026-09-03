@@ -1223,7 +1223,7 @@ function CalibrationTemplateManualPdfSection({
             </div>
           </div>
           <a
-            href={`${apiBaseCT}${manualPdfUrl.replace(/^\/api/, '')}`}
+            href={manualPdfUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="syn-btn syn-btn-subtle"

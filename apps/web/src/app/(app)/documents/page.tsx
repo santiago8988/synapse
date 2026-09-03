@@ -486,9 +486,10 @@ export default function DocumentsPage() {
               </button>
             </div>
             <div className="flex-1 overflow-hidden">
-              {previewDoc.fileUrl.includes('.pdf') ? (
+              {/* La URL viene firmada y con query string: se mira solo el path. */}
+              {previewDoc.fileUrl.split('?')[0].toLowerCase().includes('.pdf') ? (
                 <iframe
-                  src={`${API_URL.replace('/api', '')}${previewDoc.fileUrl}`}
+                  src={previewDoc.fileUrl}
                   className="h-full w-full"
                   title={previewDoc.title}
                 />
@@ -502,7 +503,7 @@ export default function DocumentsPage() {
                     Vista previa no disponible para este tipo de archivo
                   </p>
                   <a
-                    href={`${API_URL.replace('/api', '')}${previewDoc.fileUrl}`}
+                    href={previewDoc.fileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="syn-btn syn-btn-ghost"

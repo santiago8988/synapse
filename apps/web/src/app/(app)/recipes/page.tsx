@@ -1101,7 +1101,7 @@ function RecipeStepsPdfSection({
             </div>
           </div>
           <a
-            href={`${apiBase}${stepsPdfUrl.replace(/^\/api/, '')}`}
+            href={stepsPdfUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="syn-btn syn-btn-subtle"

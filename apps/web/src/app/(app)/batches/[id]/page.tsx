@@ -834,7 +834,7 @@ export default function BatchDetailPage() {
                   <div>
                     <div className="kicker mb-2">· Pasos del proceso</div>
                     <a
-                      href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}${(batch.recipe as unknown as { stepsPdfUrl: string }).stepsPdfUrl.replace(/^\/api/, '')}`}
+                      href={(batch.recipe as unknown as { stepsPdfUrl: string }).stepsPdfUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="rounded-[8px] border px-3 py-2.5 flex items-center gap-3 transition hover:bg-[var(--bg-3)]"
