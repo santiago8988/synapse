@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config'
 import { APP_INTERCEPTOR } from '@nestjs/core'
 import { PrismaModule } from './prisma/prisma.module'
 import { EventsModule } from './common/events/events.module'
+import { StorageModule } from './common/storage/storage.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { OrganizationsModule } from './modules/organizations/organizations.module'
 import { UsersModule } from './modules/users/users.module'
@@ -30,6 +31,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor'
     ConfigModule.forRoot({ isGlobal: true }),
     EventsModule,
     PrismaModule,
+    StorageModule,
     AuthModule,
     OrganizationsModule,
     UsersModule,
