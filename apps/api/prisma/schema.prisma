@@ -843,10 +843,18 @@ model Calibration {
 model CalibrationPattern {
   id             String   @id @default(cuid())
   calibrationId  String
-  patternEntryId String   // entry del instrumento usado como patron
+  patternEntryId String   // entry del instrumento usado como patron (FK por trazabilidad)
   testId         String?  // futuro: atar a un test especifico de la plantilla
   pointId        String?  // futuro: atar a un punto especifico
   createdAt      DateTime @default(now())
+
+  // Snapshot de los datos descriptivos del patrón al momento de la asociación.
+  // Esto preserva la evidencia ISO: si mañana renombran el patrón o cambia su
+  // status, la calibración cerrada sigue mostrando el estado del momento.
+  snapshotIdentifier        String?
+  snapshotRecordName        String?
+  snapshotInstrumentStatus  String?
+  snapshotNextCalibrationAt DateTime?
 
   calibration Calibration @relation(fields: [calibrationId], references: [id], onDelete: Cascade)
   pattern     Entry       @relation(fields: [patternEntryId], references: [id])

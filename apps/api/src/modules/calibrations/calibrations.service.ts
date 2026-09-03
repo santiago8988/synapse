@@ -20,11 +20,14 @@ const PATTERNS_INCLUDE = {
   },
 }
 
+// Flujo simplificado: COMPLETED es el estado final (no requiere aprobación
+// adicional). REJECTED se mantiene por si en un futuro se reincorpora rechazo
+// manual; APPROVED queda solo para data legacy (calibraciones antiguas).
 const VALID_TRANSITIONS: Record<CalibrationStatus, CalibrationStatus[]> = {
-  IN_PROGRESS: ['COMPLETED'],
-  COMPLETED: ['APPROVED', 'REJECTED'],
+  IN_PROGRESS: ['COMPLETED', 'REJECTED'],
+  COMPLETED: [],
   APPROVED: [],
-  REJECTED: [],
+  REJECTED: ['IN_PROGRESS'],
 }
 
 @Injectable()
@@ -97,6 +100,39 @@ export class CalibrationsService {
       )
     }
 
+    // Validaciones específicas al pasar a COMPLETED desde IN_PROGRESS:
+    //   1. Al menos 1 patrón asociado.
+    //   2. Todos los tests del template tienen lecturas completas en cada
+    //      uno de sus puntos (no se permite calibración a medias).
+    if (newStatus === 'COMPLETED' && calibration.status === 'IN_PROGRESS') {
+      if (calibration.patterns.length === 0) {
+        throw new BadRequestException(
+          'Asociá al menos un patrón antes de completar la calibración.',
+        )
+      }
+
+      const results = (calibration.results ?? {}) as Record<
+        string,
+        Record<string, { readings?: unknown }>
+      >
+      const tests = calibration.template?.tests ?? []
+      for (const test of tests) {
+        const testResults = results[test.id] || {}
+        for (const point of test.points) {
+          const pr = testResults[point.id]
+          const readings = Array.isArray(pr?.readings) ? pr!.readings : []
+          const validReadings = readings.filter(
+            (r) => typeof r === 'number' && !Number.isNaN(r) && r !== 0,
+          )
+          if (validReadings.length === 0) {
+            throw new BadRequestException(
+              `Falta cargar lecturas: prueba "${test.name}", punto "${point.name}".`,
+            )
+          }
+        }
+      }
+    }
+
     const updateData: Record<string, unknown> = { status: newStatus }
     if (newStatus === 'COMPLETED') updateData.completedAt = new Date()
 
@@ -108,8 +144,11 @@ export class CalibrationsService {
       },
     })
 
-    // Al aprobar: crear la siguiente calibracion con dueDate
-    if (newStatus === 'APPROVED' && updated.template.periodicity) {
+    // Al COMPLETAR (estado final del flujo nuevo): crear la siguiente
+    // calibración con dueDate = ahora + periodicity de la plantilla.
+    // Antes esto se hacía al APROBAR, pero con el flujo simplificado el
+    // técnico cierra el ciclo en una sola acción.
+    if (newStatus === 'COMPLETED' && updated.template.periodicity) {
       const nextDueDate = new Date()
       nextDueDate.setDate(nextDueDate.getDate() + updated.template.periodicity)
 
@@ -128,23 +167,56 @@ export class CalibrationsService {
 
   async addPattern(id: string, organizationId: string, patternEntryId: string) {
     const calibration = await this.findById(id, organizationId)
-    if (calibration.status === 'APPROVED') {
-      throw new BadRequestException('No se pueden modificar patrones en una calibracion aprobada')
+    if (calibration.status !== 'IN_PROGRESS') {
+      throw new BadRequestException(
+        'Solo se pueden modificar patrones mientras la calibración está en progreso',
+      )
     }
 
-    // Verificar que el patron exista y pertenezca a la misma org
+    // Verificar que el patron exista y pertenezca a la misma org. Traigo
+    // tambien el record (con field identifier) para construir el snapshot.
     const patternEntry = await this.prisma.entry.findFirst({
       where: { id: patternEntryId, record: { organizationId } },
-      include: { instrument: true },
+      include: {
+        instrument: true,
+        record: {
+          select: {
+            name: true,
+            fields: {
+              where: { isActive: true, isIdentifier: true },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+      },
     })
     if (!patternEntry) throw new NotFoundException('Patron no encontrado')
     if (!patternEntry.instrument) {
       throw new BadRequestException('La entrada seleccionada no es un instrumento')
     }
 
+    // Snapshot al momento de asociar el patrón. Esto persiste la evidencia
+    // ISO: si después cambia el código, el status o la próxima calibración
+    // del patrón, la calibración pasada NO se ve afectada.
+    const identifierFieldId = patternEntry.record.fields[0]?.id
+    const data = (patternEntry.data ?? {}) as Record<string, unknown>
+    const snapshotIdentifier = identifierFieldId
+      ? data[identifierFieldId] != null
+        ? String(data[identifierFieldId])
+        : null
+      : null
+
     try {
       await this.prisma.calibrationPattern.create({
-        data: { calibrationId: id, patternEntryId },
+        data: {
+          calibrationId: id,
+          patternEntryId,
+          snapshotIdentifier,
+          snapshotRecordName: patternEntry.record.name,
+          snapshotInstrumentStatus: patternEntry.instrument.status,
+          snapshotNextCalibrationAt: patternEntry.instrument.nextCalibrationAt,
+        },
       })
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
@@ -158,8 +230,10 @@ export class CalibrationsService {
 
   async removePattern(id: string, organizationId: string, calibrationPatternId: string) {
     const calibration = await this.findById(id, organizationId)
-    if (calibration.status === 'APPROVED') {
-      throw new BadRequestException('No se pueden modificar patrones en una calibracion aprobada')
+    if (calibration.status !== 'IN_PROGRESS') {
+      throw new BadRequestException(
+        'Solo se pueden modificar patrones mientras la calibración está en progreso',
+      )
     }
 
     const cp = await this.prisma.calibrationPattern.findFirst({

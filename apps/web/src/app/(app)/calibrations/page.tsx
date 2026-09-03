@@ -1,11 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import Link from 'next/link'
 import { ScanLine, Search, CalendarClock, AlertTriangle, ArrowRight } from 'lucide-react'
 import { api } from '@/lib/api'
-import { toast } from 'sonner'
 
 type CalibrationStatus = 'IN_PROGRESS' | 'COMPLETED' | 'APPROVED' | 'REJECTED'
 
@@ -27,7 +26,9 @@ interface CalibrationItem {
 
 const statusChipCls: Record<CalibrationStatus | 'PENDING', string> = {
   IN_PROGRESS: 'syn-chip-active',
-  COMPLETED: 'syn-chip-warn',
+  // COMPLETED es el estado final exitoso del flujo nuevo (no requiere
+  // aprobación adicional). APPROVED queda solo para data legacy.
+  COMPLETED: 'syn-chip-ok',
   APPROVED: 'syn-chip-ok',
   REJECTED: 'syn-chip-fail',
   PENDING: 'syn-chip-draft',
@@ -39,15 +40,7 @@ const statusLabel: Record<CalibrationStatus | 'PENDING', string> = {
   REJECTED: 'Rechazada',
   PENDING: 'Pendiente',
 }
-const nextStatus: Record<CalibrationStatus, { status: CalibrationStatus; label: string } | null> = {
-  IN_PROGRESS: { status: 'COMPLETED', label: 'Completar' },
-  COMPLETED: { status: 'APPROVED', label: 'Aprobar' },
-  APPROVED: null,
-  REJECTED: null,
-}
-
 export default function CalibrationsPage() {
-  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
 
@@ -57,16 +50,6 @@ export default function CalibrationsPage() {
       api.calibrations.list(
         statusFilter ? { status: statusFilter } : undefined,
       ) as Promise<CalibrationItem[]>,
-  })
-
-  const changeStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) =>
-      api.calibrations.changeStatus(id, status),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['calibrations'] })
-      toast.success('Estado actualizado')
-    },
-    onError: (err: Error) => toast.error(err.message),
   })
 
   const filtered = calibrations.filter((c) => {
@@ -159,7 +142,6 @@ export default function CalibrationsPage() {
                 const hasResults = c.results && Object.keys(c.results).length > 0
                 const effectiveKey: CalibrationStatus | 'PENDING' =
                   c.status === 'IN_PROGRESS' && !hasResults ? 'PENDING' : c.status
-                const next = nextStatus[c.status]
 
                 const dueDate = c.dueDate ? new Date(c.dueDate) : null
                 const isOverdue =
@@ -224,26 +206,13 @@ export default function CalibrationsPage() {
                       </span>
                     </td>
                     <td data-label="" style={{ textAlign: 'right' }}>
-                      {next ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            changeStatusMutation.mutate({ id: c.id, status: next.status })
-                          }
-                          disabled={changeStatusMutation.isPending}
-                          className="syn-btn syn-btn-ghost"
-                        >
-                          {next.label}
-                        </button>
-                      ) : (
-                        <Link
-                          href={`/calibrations/${c.id}`}
-                          className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
-                          style={{ color: 'var(--primary-hex)' }}
-                        >
-                          Abrir <ArrowRight className="h-3 w-3" />
-                        </Link>
-                      )}
+                      <Link
+                        href={`/calibrations/${c.id}`}
+                        className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
+                        style={{ color: 'var(--primary-hex)' }}
+                      >
+                        Abrir <ArrowRight className="h-3 w-3" />
+                      </Link>
                     </td>
                   </tr>
                 )

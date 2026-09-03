@@ -18,6 +18,8 @@ import {
   Plus,
   X,
   Search,
+  FileText,
+  ExternalLink,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
@@ -50,6 +52,15 @@ type InstrumentStatus = 'ACTIVE' | 'IN_CALIBRATION' | 'OUT_OF_SERVICE' | 'DECOMM
 
 interface PatternRef {
   id: string // CalibrationPattern.id (join row id)
+  // Snapshot del patrón al momento de la asociación. Esto es lo que se
+  // muestra siempre — preserva la evidencia ISO aunque el patrón cambie
+  // después.
+  snapshotIdentifier: string | null
+  snapshotRecordName: string | null
+  snapshotInstrumentStatus: InstrumentStatus | null
+  snapshotNextCalibrationAt: string | null
+  // FK al patrón actual — solo se usa para "Ver instrumento" (link al detalle
+  // que sí muestra el estado actual). NO se renderiza data desde acá.
   pattern: {
     id: string // Entry.id
     data: Record<string, unknown>
@@ -87,6 +98,9 @@ interface CalibrationDetail {
     unitMain: string
     unitTolerance: string
     tests: CalibrationTest[]
+    manualPdfUrl: string | null
+    manualPdfName: string | null
+    manualPdfSize: number | null
   } | null
 }
 
@@ -274,6 +288,7 @@ export default function CalibrationDetailPage() {
   const isOverdue =
     !!dueDate &&
     dueDate.getTime() < Date.now() &&
+    calibration.status !== 'COMPLETED' &&
     calibration.status !== 'APPROVED' &&
     calibration.status !== 'REJECTED'
   const daysUntilDue = dueDate
@@ -415,6 +430,52 @@ export default function CalibrationDetailPage() {
                 })}
             </div>
           </div>
+
+          {/* Manual de verificación interna (PDF asociado a la plantilla) */}
+          {calibration.template?.manualPdfUrl && (() => {
+            const apiBase =
+              process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+            const href = `${apiBase}${calibration.template.manualPdfUrl.replace(/^\/api/, '')}`
+            return (
+              <div
+                className="syn-card flex items-center gap-3 px-5 py-3.5"
+                style={{
+                  borderColor: 'var(--info)',
+                  background: 'var(--info-soft)',
+                }}
+              >
+                <div
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px]"
+                  style={{ background: 'var(--bg-1)', color: 'var(--info)' }}
+                >
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div
+                    className="text-[12px] font-mono uppercase tracking-[0.14em]"
+                    style={{ color: 'var(--info)' }}
+                  >
+                    · Manual de verificación
+                  </div>
+                  <div
+                    className="truncate text-[13px]"
+                    style={{ color: 'var(--ink-0)', fontWeight: 500 }}
+                  >
+                    {calibration.template.manualPdfName || 'manual.pdf'}
+                  </div>
+                </div>
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="syn-btn syn-btn-primary"
+                  style={{ padding: '6px 12px', fontSize: 12 }}
+                >
+                  <ExternalLink className="h-3 w-3" /> Abrir manual
+                </a>
+              </div>
+            )
+          })()}
 
           {/* Ensayos */}
           {tests.map((test) => {
@@ -712,7 +773,11 @@ export default function CalibrationDetailPage() {
               OUT_OF_SERVICE: 'Fuera de servicio',
               DECOMMISSIONED: 'De baja',
             }
-            const isLocked = calibration.status === 'APPROVED'
+            // En el flujo nuevo COMPLETED es final — no se modifican patrones.
+            // APPROVED queda solo para data legacy.
+            const isLocked =
+              calibration.status === 'COMPLETED' ||
+              calibration.status === 'APPROVED'
             const usedIds = new Set(calibration.patterns.map((cp) => cp.pattern.id))
 
             const getCodigo = (data: Record<string, unknown>, fallback: string) =>
@@ -727,9 +792,12 @@ export default function CalibrationDetailPage() {
                 return codigo.includes(q) || p.record.name.toLowerCase().includes(q)
               })
 
+            // Vencimiento al MOMENTO de la asociación. Si la calibración
+            // está cerrada esto es histórico — un "vencido ahora" no debe
+            // afectar una calibración pasada.
             const anyOverdue = calibration.patterns.some((cp) => {
-              const next = cp.pattern.instrument?.nextCalibrationAt
-              return next && new Date(next).getTime() < Date.now()
+              if (!cp.snapshotNextCalibrationAt) return false
+              return new Date(cp.snapshotNextCalibrationAt).getTime() < Date.now()
             })
 
             return (
@@ -753,14 +821,26 @@ export default function CalibrationDetailPage() {
                   )}
 
                   {calibration.patterns.map((cp) => {
-                    const inst = cp.pattern.instrument
-                    const pCodigo = getCodigo(cp.pattern.data, cp.pattern.id.slice(0, 8))
-                    const pNext = inst?.nextCalibrationAt
-                      ? new Date(inst.nextCalibrationAt)
+                    // Render desde el snapshot — datos congelados al
+                    // momento de la asociación. NO leer cp.pattern.data
+                    // ni cp.pattern.instrument.* para mostrar.
+                    const inst = cp.pattern.instrument // solo para "Ver instrumento"
+                    const pCodigo =
+                      cp.snapshotIdentifier ||
+                      getCodigo(cp.pattern.data, cp.pattern.id.slice(0, 8))
+                    const recordName =
+                      cp.snapshotRecordName || cp.pattern.record.name
+                    const snapshotStatus = cp.snapshotInstrumentStatus as
+                      | InstrumentStatus
+                      | null
+                    const pNext = cp.snapshotNextCalibrationAt
+                      ? new Date(cp.snapshotNextCalibrationAt)
                       : null
                     const pOverdue = !!pNext && pNext.getTime() < Date.now()
                     const pDays = pNext
-                      ? Math.ceil((pNext.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                      ? Math.ceil(
+                          (pNext.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+                        )
                       : null
 
                     return (
@@ -784,16 +864,17 @@ export default function CalibrationDetailPage() {
                               className="truncate text-[11px]"
                               style={{ color: 'var(--ink-3)' }}
                             >
-                              {cp.pattern.record.name}
+                              {recordName}
                             </p>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
-                            {inst && (
+                            {snapshotStatus && (
                               <span
-                                className={`syn-chip ${instStatusChip[inst.status]}`}
+                                className={`syn-chip ${instStatusChip[snapshotStatus]}`}
                                 style={{ fontSize: 9 }}
+                                title="Estado del patrón al momento de asociarlo"
                               >
-                                {instStatusLabel[inst.status]}
+                                {instStatusLabel[snapshotStatus]}
                               </span>
                             )}
                             {!isLocked && (
@@ -840,6 +921,7 @@ export default function CalibrationDetailPage() {
                                   : 'var(--ink-3)',
                               fontWeight: pOverdue ? 500 : 400,
                             }}
+                            title="Próxima calibración del patrón al momento de asociarlo"
                           >
                             {pOverdue ? (
                               <AlertTriangle className="h-3 w-3 shrink-0" />
@@ -847,7 +929,7 @@ export default function CalibrationDetailPage() {
                               <CalendarClock className="h-3 w-3 shrink-0" />
                             )}
                             <span>
-                              Cal: {pNext.toLocaleDateString('es-AR')}
+                              Cal: {pNext.toLocaleDateString('es-AR', { timeZone: 'UTC' })}
                               {pDays !== null && (
                                 <span className="ml-1 opacity-80">
                                   (
@@ -1099,63 +1181,78 @@ export default function CalibrationDetailPage() {
               </div>
             </div>
             <div style={{ padding: '14px 16px 16px' }} className="space-y-2">
-              {calibration.status === 'IN_PROGRESS' && (
-                <>
-                  {dirty && (
+              {calibration.status === 'IN_PROGRESS' && (() => {
+                // Pre-validación cliente para "Completar":
+                // 1) Al menos 1 patrón. 2) Todos los tests con lecturas
+                //    completas (overallResult ≠ null). El backend duplica
+                //    estas validaciones — esto es solo feedback inmediato.
+                const noPatterns = calibration.patterns.length === 0
+                const incompleteTests = overallResult === null
+                const cantComplete = dirty || noPatterns || incompleteTests
+                const blockerMessage = dirty
+                  ? 'Guardá los resultados antes de completar.'
+                  : noPatterns
+                    ? 'Asociá al menos un patrón.'
+                    : incompleteTests
+                      ? 'Cargá las lecturas de todos los puntos.'
+                      : ''
+                return (
+                  <>
+                    {dirty && (
+                      <button
+                        type="button"
+                        onClick={() => saveResultsMutation.mutate()}
+                        disabled={saveResultsMutation.isPending}
+                        className="syn-btn syn-btn-ghost w-full justify-center"
+                      >
+                        <Save className="h-3.5 w-3.5" /> Guardar resultados
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => saveResultsMutation.mutate()}
-                      disabled={saveResultsMutation.isPending}
-                      className="syn-btn syn-btn-ghost w-full justify-center"
-                    >
-                      <Save className="h-3.5 w-3.5" /> Guardar resultados
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (dirty) {
-                        toast.error('Guardá los resultados antes de completar')
-                        return
+                      onClick={() => {
+                        if (cantComplete) {
+                          toast.error(blockerMessage)
+                          return
+                        }
+                        changeStatusMutation.mutate('COMPLETED')
+                      }}
+                      disabled={
+                        changeStatusMutation.isPending || cantComplete
                       }
-                      changeStatusMutation.mutate('COMPLETED')
-                    }}
-                    disabled={changeStatusMutation.isPending}
-                    className="syn-btn syn-btn-primary w-full justify-center"
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Completar
-                  </button>
-                </>
-              )}
+                      className="syn-btn syn-btn-primary w-full justify-center"
+                      title={cantComplete ? blockerMessage : undefined}
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Completar
+                    </button>
+                    {cantComplete && (
+                      <div
+                        className="rounded-[8px] border px-3 py-2 text-center text-[12px]"
+                        style={{
+                          borderColor: 'var(--danger)',
+                          background: 'var(--danger-soft)',
+                          color: 'var(--danger)',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <AlertTriangle
+                          className="mr-1 inline-block h-3.5 w-3.5"
+                          style={{ marginTop: -2 }}
+                        />
+                        {blockerMessage}
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
 
               {calibration.status === 'COMPLETED' && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => changeStatusMutation.mutate('APPROVED')}
-                    disabled={changeStatusMutation.isPending}
-                    className="syn-btn syn-btn-primary w-full justify-center"
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Aprobar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => changeStatusMutation.mutate('REJECTED')}
-                    disabled={changeStatusMutation.isPending}
-                    className="syn-btn syn-btn-ghost w-full justify-center"
-                    style={{ color: 'var(--danger)' }}
-                  >
-                    <XCircle className="h-3.5 w-3.5" /> Rechazar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => changeStatusMutation.mutate('IN_PROGRESS')}
-                    disabled={changeStatusMutation.isPending}
-                    className="syn-btn syn-btn-ghost w-full justify-center"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" /> Reiniciar
-                  </button>
-                </>
+                <p
+                  className="text-center text-[12px]"
+                  style={{ color: 'var(--ink-3)' }}
+                >
+                  Calibración completada — sin acciones.
+                </p>
               )}
 
               {calibration.status === 'APPROVED' && (
