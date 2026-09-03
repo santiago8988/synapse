@@ -76,12 +76,16 @@ export default function RecipesPage() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null)
-  const [viewingRecipe, setViewingRecipe] = useState<Recipe | null>(null)
+  const [viewingRecipeId, setViewingRecipeId] = useState<string | null>(null)
 
   const { data: recipes = [], isLoading } = useQuery({
     queryKey: ['recipes'],
     queryFn: () => api.recipes.list() as Promise<Recipe[]>,
   })
+
+  const viewingRecipe = viewingRecipeId
+    ? recipes.find((r) => r.id === viewingRecipeId) ?? null
+    : null
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.recipes.delete(id),
@@ -221,7 +225,7 @@ export default function RecipesPage() {
               <button
                 type="button"
                 key={r.id}
-                onClick={() => setViewingRecipe(r)}
+                onClick={() => setViewingRecipeId(r.id)}
                 className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-[var(--bg-3)]"
                 style={{ borderTop: idx === 0 ? 'none' : '1px solid var(--line)' }}
               >
@@ -265,19 +269,19 @@ export default function RecipesPage() {
       {viewingRecipe && (
         <RecipeDetailDialog
           recipe={viewingRecipe}
-          onClose={() => setViewingRecipe(null)}
+          onClose={() => setViewingRecipeId(null)}
           onEdit={() => {
             setEditingRecipe(viewingRecipe)
-            setViewingRecipe(null)
+            setViewingRecipeId(null)
           }}
           onSubmit={() => {
             submitMutation.mutate(viewingRecipe.id)
-            setViewingRecipe(null)
+            setViewingRecipeId(null)
           }}
           onDelete={() => {
             if (confirm(`¿Eliminar la fórmula "${viewingRecipe.name}"?`)) {
               deleteMutation.mutate(viewingRecipe.id)
-              setViewingRecipe(null)
+              setViewingRecipeId(null)
             }
           }}
         />
