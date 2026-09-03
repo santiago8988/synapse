@@ -80,17 +80,6 @@ function getIdentifier(inst: Instrument): string {
   return 'Sin identificador'
 }
 
-function getFieldSummary(inst: Instrument): string {
-  return inst.record.fields
-    .filter((f) => !f.isIdentifier)
-    .map((f) => {
-      const val = inst.entry.data[f.id]
-      return val !== undefined && val !== null && val !== '' ? String(val) : null
-    })
-    .filter(Boolean)
-    .join(' · ')
-}
-
 type CalibrationIndicator = 'green' | 'amber' | 'red' | null
 
 function getCalibrationIndicator(
@@ -133,7 +122,6 @@ export default function InstrumentsPage() {
       if (!lowerSearch) return true
       return (
         getIdentifier(inst).toLowerCase().includes(lowerSearch) ||
-        getFieldSummary(inst).toLowerCase().includes(lowerSearch) ||
         inst.record.name.toLowerCase().includes(lowerSearch)
       )
     })
@@ -151,9 +139,9 @@ export default function InstrumentsPage() {
     <div className="mx-auto max-w-[1280px]">
       <div className="syn-ph">
         <div>
-          <div className="kicker mb-2">· Seguimiento · Instrumental</div>
+          <div className="kicker mb-2">· Seguimiento · Calibración Ext.</div>
           <h1>
-            Equipos e <span className="italic">instrumental.</span>
+            Calibración <span className="italic">externa.</span>
           </h1>
           <p className="sub">
             Estado operativo y próxima calibración de cada equipo. Se agrupan por el registro tipo Instrumental que les dio de alta.
@@ -192,7 +180,7 @@ export default function InstrumentsPage() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por identificador, datos o tipo de registro…"
+            placeholder="Buscar por identificador o tipo de registro…"
             className="h-[38px] w-full rounded-[10px] border pl-10 pr-10 text-[13px] outline-none"
             style={{
               background: 'var(--bg-1)',
@@ -273,7 +261,6 @@ export default function InstrumentsPage() {
                 <thead>
                   <tr>
                     <th>Identificador</th>
-                    <th>Datos</th>
                     <th>Próxima calibración</th>
                     <th>Estado</th>
                     <th style={{ textAlign: 'right' }}>Acción</th>
@@ -282,7 +269,6 @@ export default function InstrumentsPage() {
                 <tbody>
                   {items.map((inst) => {
                     const identifier = getIdentifier(inst)
-                    const summary = getFieldSummary(inst)
                     const isDecommissioned = inst.status === 'DECOMMISSIONED'
                     const calInd = getCalibrationIndicator(
                       inst.nextCalibrationAt,
@@ -301,12 +287,6 @@ export default function InstrumentsPage() {
                             {identifier}
                           </Link>
                         </td>
-                        <td
-                          data-label="Datos"
-                          style={{ color: 'var(--ink-2)', fontSize: 12.5 }}
-                        >
-                          {summary || <span style={{ color: 'var(--ink-4)' }}>—</span>}
-                        </td>
                         <td data-label="Próxima calibración">
                           {inst.nextCalibrationAt && calInd ? (
                             <span
@@ -314,11 +294,12 @@ export default function InstrumentsPage() {
                               style={{ color: calibrationColorVar[calInd] }}
                               title={new Date(
                                 inst.nextCalibrationAt,
-                              ).toLocaleString('es-AR')}
+                              ).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
                             >
                               <CalendarClock className="h-3 w-3" />
                               {new Date(inst.nextCalibrationAt).toLocaleDateString(
                                 'es-AR',
+                                { timeZone: 'UTC' },
                               )}
                             </span>
                           ) : (

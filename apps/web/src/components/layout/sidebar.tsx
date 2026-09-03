@@ -60,7 +60,7 @@ function buildNavigation(counts: { ncOpen: number; approvalsPending: number }): 
       items: [
         { href: '/batches', name: 'Lotes', icon: Package },
         { href: '/samples', name: 'Muestras', icon: TestTube2 },
-        { href: '/instruments', name: 'Instrumental', icon: Wrench },
+        { href: '/instruments', name: 'Calibración Ext.', icon: Wrench },
         { href: '/calibrations', name: 'Calibraciones', icon: ScanLine },
         { href: '/stock', name: 'Stock', icon: Warehouse },
       ],
