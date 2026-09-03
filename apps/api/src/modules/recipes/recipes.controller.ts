@@ -142,6 +142,11 @@ export class RecipesController {
     @Param('filename') filename: string,
     @Res() res: Response,
   ) {
+    // Anti path-traversal: los uploads se guardan con nombre plano sanitizado.
+    // Cualquier separador o ".." en el param (p. ej. %2e%2e%2f decodificado) → 404.
+    if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
+      return res.status(404).json({ message: 'Archivo no encontrado' })
+    }
     const filepath = path.join(this.uploadDir, filename)
     if (!fs.existsSync(filepath)) {
       return res.status(404).json({ message: 'Archivo no encontrado' })
