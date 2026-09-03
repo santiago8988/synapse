@@ -137,6 +137,8 @@ export const api = {
     real: () => fetchApi('/instruments/real'),
     changeStatus: (id: string, data: { status: string; reason?: string }) =>
       fetchApi(`/instruments/${id}/status`, { method: 'POST', body: JSON.stringify(data) }),
+    listCertificates: (id: string) =>
+      fetchApi(`/instruments/${id}/certificates`),
   },
   nonConformities: {
     list: (filters?: { status?: string; entryId?: string }) => {

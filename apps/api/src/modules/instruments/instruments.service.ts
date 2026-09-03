@@ -123,4 +123,82 @@ export class InstrumentsService {
 
     return updatedInstrument
   }
+
+  // ─── Certificados de calibración externa (append-only) ───────────────────
+
+  async listCertificates(instrumentId: string, organizationId: string) {
+    await this.findById(instrumentId, organizationId)
+    return this.prisma.instrumentCertificate.findMany({
+      where: { instrumentId, organizationId },
+      orderBy: { uploadedAt: 'desc' },
+      include: {
+        uploadedBy: { select: { id: true, name: true, email: true } },
+      },
+    })
+  }
+
+  async addCertificate(
+    instrumentId: string,
+    organizationId: string,
+    uploadedById: string,
+    data: {
+      pdfUrl: string
+      pdfKey: string
+      pdfName: string
+      pdfSize: number
+      result: 'PASSED' | 'FAILED'
+      calibrationDate?: Date | null
+      notes?: string | null
+    },
+  ) {
+    const instrument = await this.findById(instrumentId, organizationId)
+
+    // Recalcular nextCalibrationAt SOLO si:
+    // 1) el certificado dice PASSED (equipo conforme),
+    // 2) se cargó calibrationDate (la fecha real de la calibración externa),
+    // 3) el record tiene periodicity definida.
+    // Si FAILED → no se toca; el user decide poner el equipo en IN_REPAIR / DECOMMISSIONED.
+    let recalculatedNext: Date | null = null
+    if (
+      data.result === 'PASSED' &&
+      data.calibrationDate &&
+      instrument.record.periodicity
+    ) {
+      // Suma en UTC para no depender del timezone del server.
+      const next = new Date(data.calibrationDate.getTime())
+      next.setUTCDate(next.getUTCDate() + instrument.record.periodicity)
+      recalculatedNext = next
+    }
+
+    const [certificate] = await this.prisma.$transaction(async (tx) => {
+      const cert = await tx.instrumentCertificate.create({
+        data: {
+          instrumentId,
+          organizationId,
+          uploadedById,
+          pdfUrl: data.pdfUrl,
+          pdfKey: data.pdfKey,
+          pdfName: data.pdfName,
+          pdfSize: data.pdfSize,
+          result: data.result,
+          calibrationDate: data.calibrationDate ?? null,
+          notes: data.notes ?? null,
+        },
+        include: {
+          uploadedBy: { select: { id: true, name: true, email: true } },
+        },
+      })
+
+      if (recalculatedNext) {
+        await tx.instrument.update({
+          where: { id: instrumentId },
+          data: { nextCalibrationAt: recalculatedNext },
+        })
+      }
+
+      return [cert] as const
+    })
+
+    return certificate
+  }
 }

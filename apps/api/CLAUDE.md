@@ -145,6 +145,7 @@ Para saltear el log en un endpoint específico: `@AuditIgnore()` (justificar el 
    - `AuditLog` — log global de POST/PATCH/PUT/DELETE escrito por `AuditInterceptor`.
    - `EntryStatusLog` — paper trail del workflow engine v2: cada cambio de un field `comparisonConfig.isStatus === true` se loguea acá. Aplica a Records de tipo `PERIODIC / NOT_PERIODIC / NOT_PERIODIC_WITH_REVISION` (los que admiten DROPDOWN-as-status).
    - `InstrumentStatusLog` — paper trail específico de `Instrument.status`. Convive con `EntryStatusLog`: aplica a la columna del companion `Instrument`, no a fields de Entry.
+   - `InstrumentCertificate` — historial de PDFs de calibración externa por instrumento. Cada certificado emitido por un técnico externo se guarda como nuevo row; nunca se borra ni se sobrescribe (cuenta la historia del equipo).
    - `BatchStatusLog` — idem para `Batch.status`.
    - `SampleCustodyEvent` — pendiente, ver `SAMPLE_CUSTODY_SPEC.md`.
 

@@ -60,6 +60,11 @@ enum InstrumentStatus {
   DECOMMISSIONED
 }
 
+enum CertificateResult {
+  PASSED // conforme — el equipo pasó la calibración
+  FAILED // no conforme — el equipo no pasó (debería ir a reparación o baja)
+}
+
 enum NonConformityStatus {
   OPEN
   IN_PROGRESS
@@ -181,6 +186,7 @@ model Organization {
   calibrationTemplates     CalibrationTemplate[]
   calibrations             Calibration[]
   entryStatusLogs          EntryStatusLog[]
+  instrumentCertificates   InstrumentCertificate[]
 }
 
 model Area {
@@ -209,7 +215,8 @@ model User {
   avatarUrl String?
   createdAt DateTime @default(now())
 
-  organizations OrganizationUser[]
+  organizations          OrganizationUser[]
+  instrumentCertificates InstrumentCertificate[]
 }
 
 model OrganizationUser {
@@ -440,13 +447,40 @@ model Instrument {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  organization Organization        @relation(fields: [organizationId], references: [id])
-  entry        Entry               @relation(fields: [entryId], references: [id])
-  record       Record              @relation(fields: [recordId], references: [id])
+  organization Organization            @relation(fields: [organizationId], references: [id])
+  entry        Entry                   @relation(fields: [entryId], references: [id])
+  record       Record                  @relation(fields: [recordId], references: [id])
   statusLogs   InstrumentStatusLog[]
+  certificates InstrumentCertificate[]
 
   @@index([organizationId])
   @@index([recordId])
+}
+
+// Certificados de calibración externa (PDF) — append-only por requisito ISO.
+// Cada vez que un técnico externo entrega un certificado, se sube un nuevo row.
+// Nunca se hace UPDATE ni DELETE — el historial cuenta la trazabilidad del equipo.
+model InstrumentCertificate {
+  id              String              @id @default(cuid())
+  instrumentId    String
+  organizationId  String
+  pdfUrl          String
+  pdfKey          String
+  pdfName         String
+  pdfSize         Int
+  result          CertificateResult   @default(PASSED)
+  calibrationDate DateTime?
+  notes           String?
+  uploadedById    String
+  uploadedAt      DateTime            @default(now())
+
+  instrument   Instrument   @relation(fields: [instrumentId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  uploadedBy   User         @relation(fields: [uploadedById], references: [id])
+
+  @@index([instrumentId])
+  @@index([organizationId])
+  @@index([uploadedAt])
 }
 
 model InstrumentStatusLog {
