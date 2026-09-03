@@ -41,26 +41,26 @@ export const api = {
       }),
   },
   organizations: {
-    get: (id: string) => fetchApi(`/organizations/${id}`),
+    get: <T = unknown>(id: string) => fetchApi<T>(`/organizations/${id}`),
     update: (id: string, data: { name?: string }) =>
       fetchApi(`/organizations/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    getWhitelist: (id: string) => fetchApi(`/organizations/${id}/whitelist`),
+    getWhitelist: <T = unknown>(id: string) => fetchApi<T>(`/organizations/${id}/whitelist`),
     addWhitelist: (id: string, data: { email: string; role?: string }) =>
       fetchApi(`/organizations/${id}/whitelist`, { method: 'POST', body: JSON.stringify(data) }),
     removeWhitelist: (id: string, whitelistId: string) =>
       fetchApi(`/organizations/${id}/whitelist/${whitelistId}`, { method: 'DELETE' }),
-    getUsers: (id: string) => fetchApi(`/organizations/${id}/users`),
+    getUsers: <T = unknown>(id: string) => fetchApi<T>(`/organizations/${id}/users`),
     updateUser: (id: string, userId: string, data: { role?: string; areaId?: string | null; positionId?: string | null; phone?: string | null }) =>
       fetchApi(`/organizations/${id}/users/${userId}`, { method: 'PATCH', body: JSON.stringify(data) }),
-    getPositions: (orgId: string) => fetchApi(`/organizations/${orgId}/positions`),
+    getPositions: <T = unknown>(orgId: string) => fetchApi<T>(`/organizations/${orgId}/positions`),
     createPosition: (orgId: string, name: string) =>
       fetchApi(`/organizations/${orgId}/positions`, { method: 'POST', body: JSON.stringify({ name }) }),
     deletePosition: (orgId: string, positionId: string) =>
       fetchApi(`/organizations/${orgId}/positions/${positionId}`, { method: 'DELETE' }),
     setAreaLeader: (orgId: string, areaId: string, leaderId: string | null) =>
       fetchApi(`/organizations/${orgId}/areas/${areaId}/leader`, { method: 'PATCH', body: JSON.stringify({ leaderId }) }),
-    getTrainings: (orgId: string, userId: string) =>
-      fetchApi(`/organizations/${orgId}/users/${userId}/trainings`),
+    getTrainings: <T = unknown>(orgId: string, userId: string) =>
+      fetchApi<T>(`/organizations/${orgId}/users/${userId}/trainings`),
     addTraining: (orgId: string, userId: string, data: { name: string; description?: string; provider?: string; completedAt: string; expiresAt?: string }) =>
       fetchApi(`/organizations/${orgId}/users/${userId}/trainings`, { method: 'POST', body: JSON.stringify(data) }),
     removeTraining: (orgId: string, userId: string, trainingId: string) =>

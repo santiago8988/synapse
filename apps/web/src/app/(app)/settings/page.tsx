@@ -299,7 +299,7 @@ function GeneralTab({ orgId }: { orgId: string }) {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    api.organizations.get(orgId).then((org: { name: string; slug: string }) => {
+    api.organizations.get<{ name: string; slug: string }>(orgId).then((org) => {
       setName(org.name)
       setSlug(org.slug)
       setLoading(false)
@@ -459,7 +459,7 @@ function WhitelistTab({ orgId }: { orgId: string }) {
 
   const fetchWhitelist = useCallback(() => {
     setLoading(true)
-    api.organizations.getWhitelist(orgId).then((data: WhitelistItem[]) => {
+    api.organizations.getWhitelist<WhitelistItem[]>(orgId).then((data) => {
       setItems(data)
       setLoading(false)
     })
@@ -594,7 +594,7 @@ function UsersTab({ orgId }: { orgId: string }) {
 
   const fetchUsers = useCallback(() => {
     setLoading(true)
-    api.organizations.getUsers(orgId).then((data: OrgUser[]) => {
+    api.organizations.getUsers<OrgUser[]>(orgId).then((data) => {
       setUsers(data)
       setLoading(false)
     })
@@ -678,7 +678,7 @@ function UserProfile({ user, orgId, onUpdate }: { user: OrgUser; orgId: string; 
 
   const fetchTrainings = useCallback(() => {
     setLoadingTrainings(true)
-    api.organizations.getTrainings(orgId, user.id).then((data: TrainingItem[]) => {
+    api.organizations.getTrainings<TrainingItem[]>(orgId, user.id).then((data) => {
       setTrainings(data)
       setLoadingTrainings(false)
     })
@@ -686,8 +686,8 @@ function UserProfile({ user, orgId, onUpdate }: { user: OrgUser; orgId: string; 
 
   useEffect(() => {
     fetchTrainings()
-    api.organizations.getPositions(orgId).then((data: PositionItem[]) => setPositions(data))
-    api.organizations.get(orgId).then((org: { areas: AreaNode[] }) => {
+    api.organizations.getPositions<PositionItem[]>(orgId).then((data) => setPositions(data))
+    api.organizations.get<{ areas: AreaNode[] }>(orgId).then((org) => {
       // Flatten area tree for dropdown
       const flat: { id: string; name: string; depth: number }[] = []
       const walk = (nodes: AreaNode[], depth: number) => {
@@ -931,7 +931,7 @@ function PositionsTab({ orgId }: { orgId: string }) {
 
   const fetchPositions = useCallback(() => {
     setLoading(true)
-    api.organizations.getPositions(orgId).then((data: PositionItem[]) => {
+    api.organizations.getPositions<PositionItem[]>(orgId).then((data) => {
       setPositions(data)
       setLoading(false)
     })
