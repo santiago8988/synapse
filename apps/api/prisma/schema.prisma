@@ -284,6 +284,10 @@ model Document {
   code           String?
   version        String         @default("1.0")
   status         DocumentStatus @default(DRAFT)
+  // Clave del objeto en el storage (disco en dev, R2 en prod). La URL no se
+  // persiste: se firma en cada lectura a partir de esta clave. `fileUrl` queda
+  // por compatibilidad con documentos anteriores a la abstracción de storage.
+  fileKey        String?
   fileUrl        String?
   content        String?
   createdAt      DateTime       @default(now())

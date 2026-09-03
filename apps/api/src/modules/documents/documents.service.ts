@@ -1,16 +1,21 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common'
 import { PrismaService } from '../../prisma/prisma.service'
 import { DocumentStatus } from '@prisma/client'
+import { StorageService } from '../../common/storage/storage.service'
 
 @Injectable()
 export class DocumentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storage: StorageService,
+  ) {}
 
   async findAll(organizationId: string) {
-    return this.prisma.document.findMany({
+    const documents = await this.prisma.document.findMany({
       where: { organizationId },
       orderBy: { updatedAt: 'desc' },
     })
+    return Promise.all(documents.map((d) => this.withFileUrl(d)))
   }
 
   async findById(id: string, organizationId: string) {
@@ -19,7 +24,27 @@ export class DocumentsService {
       include: { records: { select: { id: true, name: true } } },
     })
     if (!doc) throw new NotFoundException('Documento no encontrado')
-    return doc
+    return this.withFileUrl(doc)
+  }
+
+  /**
+   * Reemplaza fileUrl por una URL firmada derivada de fileKey. Los documentos
+   * anteriores a la abstracción de storage tienen fileKey backfilleado por la
+   * migración; si quedó en null se devuelve null (documento sin archivo
+   * accesible) en vez de la ruta vieja, que ya no existe como endpoint.
+   */
+  private async withFileUrl<T extends { fileKey: string | null; title: string }>(
+    doc: T,
+  ): Promise<T & { fileUrl: string | null }> {
+    if (!doc.fileKey) {
+      return { ...doc, fileUrl: null }
+    }
+    return {
+      ...doc,
+      fileUrl: await this.storage.signedUrl('documents', doc.fileKey, {
+        downloadName: doc.title,
+      }),
+    }
   }
 
   async create(
@@ -83,27 +108,29 @@ export class DocumentsService {
     return this.prisma.document.update({ where: { id }, data })
   }
 
-  async setFileUrl(id: string, organizationId: string, fileUrl: string) {
+  async setFileKey(id: string, organizationId: string, fileKey: string) {
     const doc = await this.findById(id, organizationId)
 
     // Si ya tiene archivo, no se puede subir otro — debe crear nueva versión
-    if (doc.fileUrl) {
+    if (doc.fileKey) {
       throw new ConflictException(
         'Este documento ya tiene un archivo adjunto. Para actualizar el archivo, creá una nueva versión.',
       )
     }
 
-    return this.prisma.document.update({
+    const updated = await this.prisma.document.update({
       where: { id },
-      data: { fileUrl },
+      // fileUrl se deja en null a propósito: la URL se firma al leer.
+      data: { fileKey, fileUrl: null },
     })
+    return this.withFileUrl(updated)
   }
 
   async createNewVersion(
     id: string,
     organizationId: string,
     createdById: string,
-    data: { fileUrl?: string; reason?: string },
+    data: { fileKey?: string; reason?: string },
   ) {
     const current = await this.findById(id, organizationId)
 
@@ -117,18 +144,21 @@ export class DocumentsService {
     const major = parseInt(parts[0]) + 1
     const newVersion = `${major}.0`
 
-    return this.prisma.document.create({
+    const created = await this.prisma.document.create({
       data: {
         organizationId,
         createdById,
         title: current.title,
         code: current.code,
-        fileUrl: data.fileUrl || current.fileUrl,
+        // Si la nueva versión no trae archivo, se reapunta al mismo objeto que
+        // la anterior: dos filas comparten la clave y ninguna la borra.
+        fileKey: data.fileKey || current.fileKey,
         version: newVersion,
         status: 'DRAFT',
         // Usamos content para guardar el motivo del cambio
         content: data.reason || null,
       },
     })
+    return this.withFileUrl(created)
   }
 }
