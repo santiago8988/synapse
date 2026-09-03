@@ -224,16 +224,57 @@ export class RecordActionListener {
           },
         },
       })
+      if (actions.length === 0) return
+
+      // Cargamos la entry source UNA vez con sus companions. Lo usan
+      // matchesCondition (para evaluar paths $batch.* / $sample.* / $instrument.*
+      // / data.<fieldId>) y executeCreateEntry para resolver fieldMapping.
+      const sourceEntry = await this.prisma.entry.findUnique({
+        where: { id: event.entryId },
+        select: {
+          data: true,
+          createdById: true,
+          batch: {
+            select: {
+              id: true,
+              lotNumber: true,
+              status: true,
+              producedQuantity: true,
+              unit: true,
+            },
+          },
+          sample: {
+            select: {
+              id: true,
+              sampleCode: true,
+              status: true,
+              client: true,
+              matrixId: true,
+            },
+          },
+          instrument: {
+            select: { id: true, status: true, nextCalibrationAt: true },
+          },
+        },
+      })
+      if (!sourceEntry) return
+
+      const sourceData = (sourceEntry.data ?? {}) as Record<string, unknown>
+      const companions = {
+        batch: sourceEntry.batch as Record<string, unknown> | null,
+        sample: sourceEntry.sample as Record<string, unknown> | null,
+        instrument: sourceEntry.instrument as Record<string, unknown> | null,
+      }
 
       for (const action of actions) {
         // Anti-loop: omitir cascadas si la action no las permite explícitamente.
         if (event.triggeredByCascade && !action.allowCascade) continue
 
         // Filtrar por condition (recursiva).
-        if (!this.matchesCondition(action.condition, event)) continue
+        if (!this.matchesCondition(action.condition, event, sourceData, companions)) continue
 
         // Dispatch por actionType — default CREATE_ENTRY mantiene back-compat.
-        await this.dispatchAction(action, event)
+        await this.dispatchAction(action, event, sourceEntry, sourceData, companions)
       }
     } catch (err) {
       this.logger.error(
@@ -259,30 +300,33 @@ export class RecordActionListener {
   private matchesCondition(
     condition: unknown,
     event: EntryFieldValueChangedEvent,
+    sourceData: Record<string, unknown>,
+    companions: CompanionsBag,
   ): boolean {
     if (!condition) return true
-    return this.evalCondition(condition as ActionCondition, event)
+    return this.evalCondition(condition as ActionCondition, event, sourceData, companions)
   }
 
   private evalCondition(
     cond: ActionCondition,
     event: EntryFieldValueChangedEvent,
+    sourceData: Record<string, unknown>,
+    companions: CompanionsBag,
   ): boolean {
     if (cond.type === 'AND') {
-      return cond.conditions.every((c) => this.evalCondition(c, event))
+      return cond.conditions.every((c) => this.evalCondition(c, event, sourceData, companions))
     }
     if (cond.type === 'OR') {
-      return cond.conditions.some((c) => this.evalCondition(c, event))
+      return cond.conditions.some((c) => this.evalCondition(c, event, sourceData, companions))
     }
-    // Tras los checks AND/OR, el resto necesariamente matchea ActionConditionPrimitive
-    // (EQUALS / NOT_EQUALS / IN / NOT_IN). TS no estrecha el union por nombres de
-    // propiedad — cast explícito.
-    return this.evalPrimitive(cond as ActionConditionPrimitive, event)
+    return this.evalPrimitive(cond as ActionConditionPrimitive, event, sourceData, companions)
   }
 
   private evalPrimitive(
     cond: ActionConditionPrimitive,
     event: EntryFieldValueChangedEvent,
+    sourceData: Record<string, unknown>,
+    companions: CompanionsBag,
   ): boolean {
     if (!cond.type || !cond.field) return false
 
@@ -298,9 +342,12 @@ export class RecordActionListener {
         actual = event.fromValue
         break
       default:
-        // Path no soportado: no matcheamos para evitar disparar acciones por
-        // error con configs malformadas (fail-closed).
-        return false
+        // Para cualquier otro path delegamos en resolveSource — soporta
+        // `<fieldId>` plano (equivalente a $entry.<fieldId>),
+        // `$entry.<fieldId>`, `$batch.X`, `$sample.X`, `$instrument.X`.
+        // Si el path no resuelve a nada, fail-closed (no matchea).
+        actual = this.resolveSource(cond.field, event, sourceData, companions)
+        if (actual === undefined) return false
     }
 
     const expected = cond.value
@@ -338,6 +385,12 @@ export class RecordActionListener {
    * Resuelve un `sourceFieldId` del fieldMapping a su valor actual. Soporta:
    *   - `$entry.id` → id de la entry que disparó el evento.
    *   - `$entry.<fieldId>` → valor de un field específico de la entry padre.
+   *   - `$batch.<key>` → campo del Batch companion (lotNumber, status,
+   *     producedQuantity, unit). Solo aplica si el record es type BATCH.
+   *   - `$sample.<key>` → campo del Sample companion (sampleCode, status,
+   *     client, matrixId). Solo aplica si el record es type SAMPLE.
+   *   - `$instrument.<key>` → campo del Instrument companion (status,
+   *     nextCalibrationAt). Solo aplica si el record es type INSTRUMENTAL.
    *   - `$event.toValue` / `$event.fromValue` / `$event.fieldId` → del evento FIELD_VALUE_CHANGED.
    *   - `<fieldId>` (default) → valor del field en la entry padre. Caso histórico.
    */
@@ -345,10 +398,35 @@ export class RecordActionListener {
     sourceFieldId: string,
     event: EntryFieldValueChangedEvent,
     sourceData: Record<string, unknown>,
+    companions?: {
+      batch?: Record<string, unknown> | null
+      sample?: Record<string, unknown> | null
+      instrument?: Record<string, unknown> | null
+    },
   ): unknown {
     if (sourceFieldId === '$entry.id') return event.entryId
     if (sourceFieldId.startsWith('$entry.')) {
       return sourceData[sourceFieldId.slice('$entry.'.length)]
+    }
+    if (sourceFieldId.startsWith('$batch.')) {
+      const key = sourceFieldId.slice('$batch.'.length)
+      // Caso especial: `$batch.quantity` combina producedQuantity + unit
+      // en un objeto compatible con fields tipo QUANTITY del target.
+      if (key === 'quantity' && companions?.batch) {
+        const value = companions.batch.producedQuantity
+        const unit = companions.batch.unit
+        if (value == null && unit == null) return undefined
+        return { value: value ?? null, unit: unit ?? null }
+      }
+      return companions?.batch?.[key] ?? undefined
+    }
+    if (sourceFieldId.startsWith('$sample.')) {
+      const key = sourceFieldId.slice('$sample.'.length)
+      return companions?.sample?.[key] ?? undefined
+    }
+    if (sourceFieldId.startsWith('$instrument.')) {
+      const key = sourceFieldId.slice('$instrument.'.length)
+      return companions?.instrument?.[key] ?? undefined
     }
     if (sourceFieldId === '$event.toValue') return event.toValue
     if (sourceFieldId === '$event.fromValue') return event.fromValue
@@ -364,10 +442,13 @@ export class RecordActionListener {
   private async dispatchAction(
     action: ActionWithTarget,
     event: EntryFieldValueChangedEvent,
+    sourceEntry: { createdById: string },
+    sourceData: Record<string, unknown>,
+    companions: CompanionsBag,
   ) {
     switch (action.actionType) {
       case 'CREATE_ENTRY':
-        await this.executeCreateEntry(action, event)
+        await this.executeCreateEntry(action, event, sourceEntry, sourceData, companions)
         break
       case 'UPDATE_FIELD':
         await this.executeUpdateField(action, event)
@@ -397,21 +478,17 @@ export class RecordActionListener {
   private async executeCreateEntry(
     action: ActionWithTarget,
     event: EntryFieldValueChangedEvent,
+    _sourceEntry: { createdById: string },
+    sourceData: Record<string, unknown>,
+    companions: CompanionsBag,
   ) {
-    const sourceEntry = await this.prisma.entry.findUnique({
-      where: { id: event.entryId },
-      select: { data: true, createdById: true },
-    })
-    if (!sourceEntry) return
-
-    const sourceData = sourceEntry.data as Record<string, unknown>
     const mapping = action.fieldMapping as Array<{
       sourceFieldId: string
       targetFieldId: string
     }>
     const targetData: Record<string, unknown> = {}
     for (const map of mapping ?? []) {
-      const value = this.resolveSource(map.sourceFieldId, event, sourceData)
+      const value = this.resolveSource(map.sourceFieldId, event, sourceData, companions)
       if (value !== undefined) {
         targetData[map.targetFieldId] = value
       }
@@ -602,4 +679,10 @@ type ActionWithTarget = {
     periodicity: number | null
     fields: Array<{ id: string; isActive: boolean }>
   }
+}
+
+type CompanionsBag = {
+  batch: Record<string, unknown> | null
+  sample: Record<string, unknown> | null
+  instrument: Record<string, unknown> | null
 }

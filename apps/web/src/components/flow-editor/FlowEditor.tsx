@@ -38,18 +38,26 @@ import type {
 interface FlowEditorProps {
   recordId: string
   recordName?: string
+  /** Tipo del Record fuente — habilita las opciones $batch.* / $sample.* /
+   *  $instrument.* en el selector de fieldMapping cuando aplica. */
+  recordType?: string
   recordFields: RecordFieldSummary[]
 }
 
-export function FlowEditor({ recordId, recordName, recordFields }: FlowEditorProps) {
+export function FlowEditor({ recordId, recordName, recordType, recordFields }: FlowEditorProps) {
   return (
     <ReactFlowProvider>
-      <FlowEditorInner recordId={recordId} recordName={recordName} recordFields={recordFields} />
+      <FlowEditorInner
+        recordId={recordId}
+        recordName={recordName}
+        recordType={recordType}
+        recordFields={recordFields}
+      />
     </ReactFlowProvider>
   )
 }
 
-function FlowEditorInner({ recordId, recordName, recordFields }: FlowEditorProps) {
+function FlowEditorInner({ recordId, recordName, recordType, recordFields }: FlowEditorProps) {
   const qc = useQueryClient()
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null)
   const [draft, setDraft] = useState<FlowDraft | null>(null)
@@ -265,6 +273,7 @@ function FlowEditorInner({ recordId, recordName, recordFields }: FlowEditorProps
             draft={draft}
             onChange={setDraft}
             sourceFields={recordFields}
+            sourceRecordType={recordType}
             orgRecords={orgRecords.filter((r) => r.id !== recordId).concat(
               orgRecords.find((r) => r.id === recordId) ? [orgRecords.find((r) => r.id === recordId)!] : [],
             )}
@@ -652,11 +661,12 @@ interface PropertiesPanelProps {
   draft: FlowDraft
   onChange: (next: FlowDraft) => void
   sourceFields: RecordFieldSummary[]
+  sourceRecordType?: string
   orgRecords: RecordSummary[]
   targetRecordFields: RecordFieldSummary[]
 }
 
-function PropertiesPanel({ draft, onChange, sourceFields, orgRecords, targetRecordFields }: PropertiesPanelProps) {
+function PropertiesPanel({ draft, onChange, sourceFields, sourceRecordType, orgRecords, targetRecordFields }: PropertiesPanelProps) {
   return (
     <div className="flex flex-col gap-4">
       {/* Trigger */}
@@ -707,6 +717,7 @@ function PropertiesPanel({ draft, onChange, sourceFields, orgRecords, targetReco
           <ConditionEditor
             condition={draft.condition}
             sourceFields={sourceFields}
+            sourceRecordType={sourceRecordType}
             triggerType={draft.trigger}
             onChange={(condition) => onChange({ ...draft, condition })}
           />
@@ -749,6 +760,7 @@ function PropertiesPanel({ draft, onChange, sourceFields, orgRecords, targetReco
           draft={draft}
           onChange={onChange}
           sourceFields={sourceFields}
+          sourceRecordType={sourceRecordType}
           orgRecords={orgRecords}
           targetRecordFields={targetRecordFields}
         />
@@ -785,11 +797,13 @@ function PropertiesPanel({ draft, onChange, sourceFields, orgRecords, targetReco
 function ConditionEditor({
   condition,
   sourceFields,
+  sourceRecordType,
   triggerType,
   onChange,
 }: {
   condition: ConditionExpression
   sourceFields: RecordFieldSummary[]
+  sourceRecordType?: string
   triggerType: TriggerType
   onChange: (next: ConditionExpression) => void
 }) {
@@ -803,32 +817,129 @@ function ConditionEditor({
   }
   const c = condition
 
-  const fieldOptions = useMemo(() => {
-    const opts: Array<{ value: string; label: string }> = []
-    if (triggerType === 'FIELD_VALUE_CHANGED') {
-      opts.push(
-        { value: 'fieldId', label: 'fieldId (qué field cambió)' },
-        { value: 'toValue', label: 'toValue (valor nuevo)' },
-        { value: 'fromValue', label: 'fromValue (valor anterior)' },
-      )
+  // Opciones companion del Record fuente — se muestran solo si el record es
+  // BATCH/SAMPLE/INSTRUMENTAL. Permiten condiciones tipo "si el batch.status
+  // es REJECTED, disparar acción". Las comparaciones EQUALS / NOT_EQUALS / IN
+  // / NOT_IN soportan strings y enums, no son solo numéricas.
+  const companionOptions: Array<{ value: string; label: string }> =
+    sourceRecordType === 'BATCH'
+      ? [
+          { value: '$batch.status', label: 'Lote · estado' },
+          { value: '$batch.lotNumber', label: 'Lote · número' },
+          { value: '$batch.producedQuantity', label: 'Lote · cantidad producida' },
+          { value: '$batch.unit', label: 'Lote · unidad' },
+        ]
+      : sourceRecordType === 'SAMPLE'
+        ? [
+            { value: '$sample.status', label: 'Muestra · estado' },
+            { value: '$sample.sampleCode', label: 'Muestra · código' },
+            { value: '$sample.client', label: 'Muestra · cliente' },
+          ]
+        : sourceRecordType === 'INSTRUMENTAL'
+          ? [
+              { value: '$instrument.status', label: 'Instrumento · estado' },
+              { value: '$instrument.nextCalibrationAt', label: 'Instrumento · próx. cal.' },
+            ]
+          : []
+  const companionGroupLabel =
+    sourceRecordType === 'BATCH'
+      ? 'Lote (companion)'
+      : sourceRecordType === 'SAMPLE'
+        ? 'Muestra (companion)'
+        : sourceRecordType === 'INSTRUMENTAL'
+          ? 'Instrumento (companion)'
+          : null
+
+  // Enums conocidos del backend — se ofrecen como <select> en lugar de input
+  // texto libre cuando el field elegido coincide. Sincronizado con
+  // packages/types/src/enums.ts y schema.prisma.
+  const KNOWN_ENUMS: Record<string, Array<{ value: string; label: string }>> = {
+    '$batch.status': [
+      { value: 'PLANNED', label: 'PLANNED · Planificado' },
+      { value: 'IN_PROGRESS', label: 'IN_PROGRESS · En progreso' },
+      { value: 'COMPLETED', label: 'COMPLETED · Finalizado' },
+      { value: 'APPROVED', label: 'APPROVED · Aprobado' },
+      { value: 'REJECTED', label: 'REJECTED · Rechazado (fallido)' },
+      { value: 'CANCELLED', label: 'CANCELLED · Cancelado' },
+    ],
+    '$sample.status': [
+      { value: 'RECEIVED', label: 'RECEIVED · Recibida' },
+      { value: 'IN_TESTING', label: 'IN_TESTING · En ensayo' },
+      { value: 'COMPLETED', label: 'COMPLETED · Completada' },
+      { value: 'CANCELLED', label: 'CANCELLED · Cancelada' },
+    ],
+    '$instrument.status': [
+      { value: 'ACTIVE', label: 'ACTIVE · Activo' },
+      { value: 'IN_CALIBRATION', label: 'IN_CALIBRATION · En calibración' },
+      { value: 'IN_REPAIR', label: 'IN_REPAIR · En reparación' },
+      { value: 'DECOMMISSIONED', label: 'DECOMMISSIONED · Dado de baja' },
+    ],
+  }
+
+  // Si el field seleccionado es un DROPDOWN del propio record, sus options
+  // (incluso las del workflow engine v2 con label/color/isStatus) se exponen
+  // también — el técnico no tiene que adivinar.
+  function getDropdownOptions(fieldId: string): Array<{ value: string; label: string }> | null {
+    const f = sourceFields.find((sf) => sf.id === fieldId)
+    if (!f || f.fieldType !== 'DROPDOWN') return null
+    const cfg = f.comparisonConfig as { options?: unknown } | null
+    const opts = cfg?.options
+    if (!Array.isArray(opts) || opts.length === 0) return null
+    if (typeof opts[0] === 'string') {
+      return (opts as string[]).map((v) => ({ value: v, label: v }))
     }
-    sourceFields.forEach((f) => {
-      opts.push({ value: f.id, label: `data.${f.label}` })
-    })
-    return opts
-  }, [triggerType, sourceFields])
+    if (typeof opts[0] === 'object' && opts[0] !== null) {
+      return (opts as Array<{ value: string; label?: string }>).map((o) => ({
+        value: o.value,
+        label: o.label ? `${o.value} · ${o.label}` : o.value,
+      }))
+    }
+    return null
+  }
+
+  // Para `fieldId` (qué field cambió) en FIELD_VALUE_CHANGED, las options
+  // útiles son los IDs de los fields del record.
+  const fieldIdOptions: Array<{ value: string; label: string }> | null =
+    c.field === 'fieldId'
+      ? sourceFields.map((f) => ({ value: f.id, label: f.label }))
+      : null
+
+  // Para `toValue`/`fromValue` en FIELD_VALUE_CHANGED, no sabemos a priori
+  // qué field cambió, así que dejamos el input libre. Excepción: si en la
+  // misma condición ya hay un AND con `fieldId EQUALS X` podríamos deducir,
+  // pero el editor actual solo soporta primitivas — futura iteración.
+  const knownValueOptions = KNOWN_ENUMS[c.field] ?? getDropdownOptions(c.field)
 
   return (
     <div className="flex flex-col gap-2 rounded-[8px] border p-2" style={{ background: 'var(--bg-2)', borderColor: 'var(--line-2)' }}>
       <select
         value={c.field}
-        onChange={(e) => onChange({ ...c, field: e.target.value })}
+        onChange={(e) => onChange({ ...c, field: e.target.value, value: '' })}
         className="rounded-[6px] border px-2 py-1 text-[12.5px]"
         style={{ background: 'var(--bg-1)', borderColor: 'var(--line-2)', color: 'var(--ink-0)' }}
       >
-        {fieldOptions.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
+        <option value="" disabled>Elegí un campo</option>
+        {triggerType === 'FIELD_VALUE_CHANGED' && (
+          <optgroup label="Del evento (qué cambió)">
+            <option value="fieldId">¿Qué campo cambió? (fieldId)</option>
+            <option value="toValue">Valor nuevo (toValue)</option>
+            <option value="fromValue">Valor anterior (fromValue)</option>
+          </optgroup>
+        )}
+        {sourceFields.length > 0 && (
+          <optgroup label="Campos del registro">
+            {sourceFields.map((f) => (
+              <option key={f.id} value={f.id}>{f.label}</option>
+            ))}
+          </optgroup>
+        )}
+        {companionGroupLabel && companionOptions.length > 0 && (
+          <optgroup label={companionGroupLabel}>
+            {companionOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </optgroup>
+        )}
       </select>
       <select
         value={c.type}
@@ -846,31 +957,99 @@ function ConditionEditor({
         <option value="GTE">&ge; Mayor o igual</option>
         <option value="BETWEEN">Entre (rango)</option>
       </select>
-      <input
-        type="text"
-        value={Array.isArray(c.value) ? c.value.join(',') : String(c.value)}
-        onChange={(e) => {
-          const raw = e.target.value
-          let v: PrimitiveCondition['value'] = raw
-          if (['IN', 'NOT_IN'].includes(c.type)) {
-            v = raw.split(',').map((s) => s.trim()).filter(Boolean)
-          } else if (c.type === 'BETWEEN') {
-            v = raw.split(',').map((s) => Number(s.trim())).filter((n) => !isNaN(n))
-          } else if (['LT', 'LTE', 'GT', 'GTE'].includes(c.type)) {
-            v = Number(raw)
-          }
-          onChange({ ...c, value: v })
-        }}
-        placeholder={
-          ['IN', 'NOT_IN'].includes(c.type)
-            ? 'valor1, valor2, valor3'
-            : c.type === 'BETWEEN'
-              ? 'min, max'
-              : 'valor'
+      {(() => {
+        // Determinar qué render usar para el "valor":
+        //   - Si el field elegido es `fieldId` → select con los fields del record.
+        //   - Si el field es un enum conocido (companion status / DROPDOWN del
+        //     record) y la operación es EQUALS/NOT_EQUALS → <select> simple.
+        //   - Si es IN/NOT_IN sobre enum conocido → checkboxes multi-select.
+        //   - Caso contrario → input texto libre (con parsing por type).
+        const enumOpts = fieldIdOptions ?? knownValueOptions
+        const useSelect =
+          enumOpts && (c.type === 'EQUALS' || c.type === 'NOT_EQUALS')
+        const useChecklist =
+          enumOpts && (c.type === 'IN' || c.type === 'NOT_IN')
+
+        if (useSelect && enumOpts) {
+          return (
+            <select
+              value={typeof c.value === 'string' ? c.value : ''}
+              onChange={(e) => onChange({ ...c, value: e.target.value })}
+              className="rounded-[6px] border px-2 py-1 text-[12.5px]"
+              style={{
+                background: 'var(--bg-1)',
+                borderColor: 'var(--line-2)',
+                color: 'var(--ink-0)',
+              }}
+            >
+              <option value="" disabled>Elegí un valor</option>
+              {enumOpts.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          )
         }
-        className="rounded-[6px] border px-2 py-1 text-[12.5px]"
-        style={{ background: 'var(--bg-1)', borderColor: 'var(--line-2)', color: 'var(--ink-0)' }}
-      />
+
+        if (useChecklist && enumOpts) {
+          const selected = Array.isArray(c.value)
+            ? (c.value as unknown[]).map(String)
+            : []
+          return (
+            <div
+              className="flex flex-col gap-1 rounded-[6px] border px-2 py-2 text-[12.5px]"
+              style={{ background: 'var(--bg-1)', borderColor: 'var(--line-2)' }}
+            >
+              {enumOpts.map((o) => (
+                <label
+                  key={o.value}
+                  className="flex items-center gap-2 cursor-pointer"
+                  style={{ color: 'var(--ink-0)' }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(o.value)}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? [...selected, o.value]
+                        : selected.filter((v) => v !== o.value)
+                      onChange({ ...c, value: next })
+                    }}
+                  />
+                  <span>{o.label}</span>
+                </label>
+              ))}
+            </div>
+          )
+        }
+
+        return (
+          <input
+            type="text"
+            value={Array.isArray(c.value) ? c.value.join(',') : String(c.value)}
+            onChange={(e) => {
+              const raw = e.target.value
+              let v: PrimitiveCondition['value'] = raw
+              if (['IN', 'NOT_IN'].includes(c.type)) {
+                v = raw.split(',').map((s) => s.trim()).filter(Boolean)
+              } else if (c.type === 'BETWEEN') {
+                v = raw.split(',').map((s) => Number(s.trim())).filter((n) => !isNaN(n))
+              } else if (['LT', 'LTE', 'GT', 'GTE'].includes(c.type)) {
+                v = Number(raw)
+              }
+              onChange({ ...c, value: v })
+            }}
+            placeholder={
+              ['IN', 'NOT_IN'].includes(c.type)
+                ? 'valor1, valor2, valor3'
+                : c.type === 'BETWEEN'
+                  ? 'min, max'
+                  : 'valor'
+            }
+            className="rounded-[6px] border px-2 py-1 text-[12.5px]"
+            style={{ background: 'var(--bg-1)', borderColor: 'var(--line-2)', color: 'var(--ink-0)' }}
+          />
+        )
+      })()}
     </div>
   )
 }
@@ -881,15 +1060,54 @@ function CreateEntryConfig({
   draft,
   onChange,
   sourceFields,
+  sourceRecordType,
   orgRecords,
   targetRecordFields,
 }: {
   draft: FlowDraft
   onChange: (n: FlowDraft) => void
   sourceFields: RecordFieldSummary[]
+  sourceRecordType?: string
   orgRecords: RecordSummary[]
   targetRecordFields: RecordFieldSummary[]
 }) {
+  // Opciones companion del Record fuente. Solo se exponen si el record es
+  // BATCH/SAMPLE/INSTRUMENTAL — el backend (resolveSource) las resuelve
+  // contra la entry source cargada con sus relaciones companion.
+  const companionOptions: Array<{ value: string; label: string }> =
+    sourceRecordType === 'BATCH'
+      ? [
+          { value: '$batch.lotNumber', label: 'Lote · número' },
+          { value: '$batch.status', label: 'Lote · estado' },
+          // Combinado para mapear a un field tipo QUANTITY del target.
+          // Devuelve { value, unit } compatible con QUANTITY.
+          { value: '$batch.quantity', label: 'Lote · cantidad + unidad (QUANTITY)' },
+          // Sueltos por si el target tiene NUMBER o TEXT por separado.
+          { value: '$batch.producedQuantity', label: 'Lote · cantidad producida (solo número)' },
+          { value: '$batch.unit', label: 'Lote · unidad (solo texto)' },
+        ]
+      : sourceRecordType === 'SAMPLE'
+        ? [
+            { value: '$sample.sampleCode', label: 'Muestra · código' },
+            { value: '$sample.status', label: 'Muestra · estado' },
+            { value: '$sample.client', label: 'Muestra · cliente' },
+            { value: '$sample.matrixId', label: 'Muestra · matriz' },
+          ]
+        : sourceRecordType === 'INSTRUMENTAL'
+          ? [
+              { value: '$instrument.status', label: 'Instrumento · estado' },
+              { value: '$instrument.nextCalibrationAt', label: 'Instrumento · próx. cal.' },
+            ]
+          : []
+  const companionGroupLabel =
+    sourceRecordType === 'BATCH'
+      ? 'Lote (companion)'
+      : sourceRecordType === 'SAMPLE'
+        ? 'Muestra (companion)'
+        : sourceRecordType === 'INSTRUMENTAL'
+          ? 'Instrumento (companion)'
+          : null
+
   return (
     <section className="flex flex-col gap-2">
       <label className="font-mono text-[10px] uppercase tracking-[0.14em]" style={{ color: 'var(--ink-3)' }}>
@@ -924,10 +1142,24 @@ function CreateEntryConfig({
               style={{ background: 'var(--bg-2)', borderColor: 'var(--line-2)', color: 'var(--ink-0)' }}
             >
               <option value="" disabled>—</option>
-              <option value="$entry.id">$entry.id (referencia al padre)</option>
-              {sourceFields.map((f) => (
-                <option key={f.id} value={f.id}>{f.label}</option>
-              ))}
+              <option
+                value="$entry.id"
+                title="ID de la entry padre — útil cuando el target tiene un field RELATED_ENTRY que debe apuntar de vuelta a esta entry"
+              >
+                ID de esta entrada (para campo RELATED_ENTRY del target)
+              </option>
+              <optgroup label="Campos del registro">
+                {sourceFields.map((f) => (
+                  <option key={f.id} value={f.id}>{f.label}</option>
+                ))}
+              </optgroup>
+              {companionGroupLabel && companionOptions.length > 0 && (
+                <optgroup label={companionGroupLabel}>
+                  {companionOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <span style={{ color: 'var(--ink-3)' }}>→</span>
             <select
