@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Ruler,
@@ -12,6 +12,7 @@ import {
   Loader2,
   X,
   Send,
+  FileText,
 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
@@ -50,6 +51,13 @@ interface CalibrationTemplate {
   status: string
   tests: CalibrationTest[]
   _count?: { calibrations: number }
+  // Manual de verificación interna (PDF). Lo consultan los técnicos al ejecutar
+  // la calibración desde /calibrations.
+  manualPdfUrl: string | null
+  manualPdfKey: string | null
+  manualPdfName: string | null
+  manualPdfSize: number | null
+  manualPdfUploadedAt: string | null
 }
 
 const statusChipCls: Record<string, string> = {
@@ -68,12 +76,16 @@ export default function CalibrationTemplatesPage() {
   const [search, setSearch] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<CalibrationTemplate | null>(null)
-  const [viewingTemplate, setViewingTemplate] = useState<CalibrationTemplate | null>(null)
+  const [viewingTemplateId, setViewingTemplateId] = useState<string | null>(null)
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ['calibration-templates'],
     queryFn: () => api.calibrationTemplates.list() as Promise<CalibrationTemplate[]>,
   })
+
+  const viewingTemplate = viewingTemplateId
+    ? templates.find((t) => t.id === viewingTemplateId) ?? null
+    : null
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.calibrationTemplates.delete(id),
@@ -214,7 +226,7 @@ export default function CalibrationTemplatesPage() {
               <button
                 type="button"
                 key={t.id}
-                onClick={() => setViewingTemplate(t)}
+                onClick={() => setViewingTemplateId(t.id)}
                 className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-[var(--bg-3)]"
                 style={{ borderTop: idx === 0 ? 'none' : '1px solid var(--line)' }}
               >
@@ -261,19 +273,19 @@ export default function CalibrationTemplatesPage() {
       {viewingTemplate && (
         <CalibrationTemplateDetailDialog
           template={viewingTemplate}
-          onClose={() => setViewingTemplate(null)}
+          onClose={() => setViewingTemplateId(null)}
           onEdit={() => {
             setEditingTemplate(viewingTemplate)
-            setViewingTemplate(null)
+            setViewingTemplateId(null)
           }}
           onSubmit={() => {
             submitMutation.mutate(viewingTemplate.id)
-            setViewingTemplate(null)
+            setViewingTemplateId(null)
           }}
           onDelete={() => {
             if (confirm(`¿Eliminar la plantilla "${viewingTemplate.name}"?`)) {
               deleteMutation.mutate(viewingTemplate.id)
-              setViewingTemplate(null)
+              setViewingTemplateId(null)
             }
           }}
         />
@@ -376,6 +388,15 @@ function CalibrationTemplateDetailDialog({
 
         {/* Content */}
         <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+          {/* Manual de verificación interna (PDF) */}
+          <CalibrationTemplateManualPdfSection
+            templateId={template.id}
+            manualPdfUrl={template.manualPdfUrl}
+            manualPdfName={template.manualPdfName}
+            manualPdfSize={template.manualPdfSize}
+            canEdit={template.status !== 'IN_REVIEW'}
+          />
+
           {template.tests.length === 0 ? (
             <p
               className="py-4 text-center text-[13px]"
@@ -1081,6 +1102,193 @@ function CalibrationTemplateForm({
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ===========================================================================
+// CalibrationTemplateManualPdfSection — manual de verificación interna (PDF)
+// ===========================================================================
+
+const MANUAL_PDF_MAX_BYTES = 10 * 1024 * 1024
+const apiBaseCT = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+
+function formatBytesCT(b: number): string {
+  if (b < 1024) return `${b} B`
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function CalibrationTemplateManualPdfSection({
+  templateId,
+  manualPdfUrl,
+  manualPdfName,
+  manualPdfSize,
+  canEdit,
+}: {
+  templateId: string
+  manualPdfUrl: string | null
+  manualPdfName: string | null
+  manualPdfSize: number | null
+  canEdit: boolean
+}) {
+  const queryClient = useQueryClient()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleFile(file: File) {
+    setError(null)
+    if (file.type !== 'application/pdf') {
+      setError('Solo se permiten archivos PDF.')
+      return
+    }
+    if (file.size > MANUAL_PDF_MAX_BYTES) {
+      setError('El archivo supera el tamaño máximo (10 MB).')
+      return
+    }
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const token =
+        typeof window !== 'undefined' ? localStorage.getItem('synapse_token') : null
+      const res = await fetch(
+        `${apiBaseCT}/calibration-templates/${templateId}/manual-pdf`,
+        {
+          method: 'POST',
+          body: formData,
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      )
+      if (!res.ok) {
+        const body = await res
+          .json()
+          .catch(() => ({ message: 'Error subiendo el archivo' }))
+        throw new Error(body.message || `Error ${res.status}`)
+      }
+      queryClient.invalidateQueries({ queryKey: ['calibration-templates'] })
+      toast.success('Manual cargado')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error subiendo el archivo')
+    } finally {
+      setUploading(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  async function handleRemove() {
+    setError(null)
+    try {
+      const token =
+        typeof window !== 'undefined' ? localStorage.getItem('synapse_token') : null
+      const res = await fetch(
+        `${apiBaseCT}/calibration-templates/${templateId}/manual-pdf`,
+        {
+          method: 'DELETE',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      )
+      if (!res.ok) throw new Error('No se pudo eliminar el PDF')
+      queryClient.invalidateQueries({ queryKey: ['calibration-templates'] })
+      toast.success('Manual eliminado')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error')
+    }
+  }
+
+  return (
+    <div>
+      <div className="kicker mb-2">· Manual de verificación interna</div>
+      {manualPdfUrl ? (
+        <div
+          className="rounded-[8px] border px-3 py-2.5 flex items-center gap-3"
+          style={{ borderColor: 'var(--line)' }}
+        >
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px]"
+            style={{ background: 'var(--info-soft)', color: 'var(--info)' }}
+          >
+            <FileText className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div
+              className="truncate text-[13px]"
+              style={{ color: 'var(--ink-0)', fontWeight: 500 }}
+            >
+              {manualPdfName || 'manual.pdf'}
+            </div>
+            <div className="text-[11px]" style={{ color: 'var(--ink-3)' }}>
+              {manualPdfSize ? formatBytesCT(manualPdfSize) : '—'}
+            </div>
+          </div>
+          <a
+            href={`${apiBaseCT}${manualPdfUrl.replace(/^\/api/, '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="syn-btn syn-btn-subtle"
+            style={{ padding: '4px 10px', fontSize: 12 }}
+          >
+            Ver
+          </a>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              className="syn-btn"
+              style={{ padding: '4px 8px', fontSize: 12, color: 'var(--danger)' }}
+            >
+              Quitar
+            </button>
+          )}
+        </div>
+      ) : canEdit ? (
+        <>
+          <button
+            type="button"
+            disabled={uploading}
+            onClick={() => inputRef.current?.click()}
+            className="rounded-[8px] border-2 border-dashed px-3 py-4 text-[12.5px] transition w-full text-left"
+            style={{
+              borderColor: 'var(--line)',
+              background: 'var(--bg-1)',
+              color: 'var(--ink-2)',
+              cursor: uploading ? 'not-allowed' : 'pointer',
+              opacity: uploading ? 0.6 : 1,
+            }}
+          >
+            {uploading
+              ? 'Subiendo…'
+              : 'Click para adjuntar el manual de verificación (PDF, máx. 10 MB)'}
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="application/pdf"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) handleFile(f)
+            }}
+          />
+        </>
+      ) : (
+        <div
+          className="rounded-[8px] border px-3 py-2.5 text-[12.5px]"
+          style={{
+            borderColor: 'var(--line)',
+            background: 'var(--bg-1)',
+            color: 'var(--ink-3)',
+          }}
+        >
+          Sin manual cargado.
+        </div>
+      )}
+      {error && (
+        <div className="text-[11.5px] mt-1" style={{ color: 'var(--danger)' }}>
+          {error}
+        </div>
+      )}
     </div>
   )
 }

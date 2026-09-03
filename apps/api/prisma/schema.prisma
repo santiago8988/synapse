@@ -769,6 +769,15 @@ model CalibrationTemplate {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  // Manual de verificación interna (PDF). Lo consulta el técnico al ejecutar
+  // la calibración desde /calibrations. Una sola versión vigente — al
+  // reemplazarlo se sobrescribe (no es append-only como InstrumentCertificate).
+  manualPdfUrl        String?
+  manualPdfKey        String?
+  manualPdfName       String?
+  manualPdfSize       Int?
+  manualPdfUploadedAt DateTime?
+
   organization Organization    @relation(fields: [organizationId], references: [id])
   tests        CalibrationTest[]
   calibrations Calibration[]

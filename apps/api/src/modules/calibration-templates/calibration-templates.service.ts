@@ -255,4 +255,65 @@ export class CalibrationTemplatesService {
 
     return this.prisma.calibrationTemplate.delete({ where: { id } })
   }
+
+  // ─── Manual de verificación interna (PDF) ─────────────────────────────────
+
+  async getManualPdf(id: string, organizationId: string) {
+    const template = await this.prisma.calibrationTemplate.findFirst({
+      where: { id, organizationId },
+      select: {
+        manualPdfUrl: true,
+        manualPdfKey: true,
+        manualPdfName: true,
+        manualPdfSize: true,
+        manualPdfUploadedAt: true,
+      },
+    })
+    if (!template) throw new NotFoundException('Plantilla no encontrada')
+    return template
+  }
+
+  async setManualPdf(
+    id: string,
+    organizationId: string,
+    data: {
+      manualPdfUrl: string
+      manualPdfKey: string
+      manualPdfName: string
+      manualPdfSize: number
+    },
+  ) {
+    await this.findById(id, organizationId)
+    return this.prisma.calibrationTemplate.update({
+      where: { id },
+      data: {
+        manualPdfUrl: data.manualPdfUrl,
+        manualPdfKey: data.manualPdfKey,
+        manualPdfName: data.manualPdfName,
+        manualPdfSize: data.manualPdfSize,
+        manualPdfUploadedAt: new Date(),
+      },
+      select: {
+        manualPdfUrl: true,
+        manualPdfKey: true,
+        manualPdfName: true,
+        manualPdfSize: true,
+        manualPdfUploadedAt: true,
+      },
+    })
+  }
+
+  async clearManualPdf(id: string, organizationId: string) {
+    await this.findById(id, organizationId)
+    return this.prisma.calibrationTemplate.update({
+      where: { id },
+      data: {
+        manualPdfUrl: null,
+        manualPdfKey: null,
+        manualPdfName: null,
+        manualPdfSize: null,
+        manualPdfUploadedAt: null,
+      },
+    })
+  }
 }
