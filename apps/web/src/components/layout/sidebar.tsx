@@ -44,13 +44,25 @@ interface NavGroup {
 function buildNavigation(counts: { ncOpen: number; approvalsPending: number }): NavGroup[] {
   const fmt = (n: number) => (n > 99 ? '99+' : String(n))
   return [
+    // Sin titulo: es un unico item, un encabezado para uno solo es ruido.
     {
-      label: 'Definición',
+      label: '',
+      items: [{ href: '/dashboard', name: 'Dashboard', icon: LayoutDashboard }],
+    },
+    // Lo que define como funciona el sistema. Flujos va aca y no en Calidad:
+    // un flujo es el cableado entre dos registros, no un evento de calidad.
+    {
+      label: 'Estructura',
       items: [
-        { href: '/dashboard', name: 'Dashboard', icon: LayoutDashboard },
         { href: '/records', name: 'Registros', icon: ClipboardList },
         { href: '/flows', name: 'Flujos', icon: Workflow },
         { href: '/documents', name: 'Documentos', icon: FileText },
+      ],
+    },
+    // Datos maestros que los registros referencian, no acciones del dia a dia.
+    {
+      label: 'Catálogos',
+      items: [
         { href: '/recipes', name: 'Fórmulas', icon: FlaskConical },
         { href: '/matrices', name: 'Matrices', icon: Microscope },
         { href: '/methods', name: 'Métodos', icon: FlaskRound },
@@ -197,13 +209,15 @@ export function Sidebar({ open = false, onNavigate }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-0 pb-3.5 pt-2">
         {navigation.map((group) => (
-          <div key={group.label}>
-            <div
-              className="px-6 pb-2 pt-[18px] text-[9.5px] uppercase tracking-[0.22em]"
-              style={{ fontFamily: 'var(--font-mono)', color: '#4E5977' }}
-            >
-              {group.label}
-            </div>
+          <div key={group.label || group.items[0]?.href}>
+            {group.label && (
+              <div
+                className="px-6 pb-2 pt-[18px] text-[9.5px] uppercase tracking-[0.22em]"
+                style={{ fontFamily: 'var(--font-mono)', color: '#4E5977' }}
+              >
+                {group.label}
+              </div>
+            )}
             {group.items.map((item) => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
               const Icon = item.icon
