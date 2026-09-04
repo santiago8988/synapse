@@ -2,13 +2,15 @@
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, ChevronLeft, ChevronRight, Shield } from 'lucide-react'
+import { Search, ChevronLeft, ChevronRight, Shield, ArrowUpRight } from 'lucide-react'
+import Link from 'next/link'
 import { api } from '@/lib/api'
 
 interface AuditLog {
   id: string
   userId: string
-  userName?: string
+  /** null si el usuario ya no existe: el log es historico. */
+  user: { id: string; name: string | null; email: string } | null
   action: string
   entityType: string
   entityId: string
@@ -26,32 +28,69 @@ interface AuditResponse {
   }
 }
 
+// El backend registra la accion como "<entidad>.<verbo>" (records.updated).
+// Antes estos mapas se indexaban con la accion completa y con claves viejas
+// tipo CREATE, asi que nunca matcheaban: todo salia con el chip gris y el
+// texto crudo. Se indexa por el verbo, que es la parte estable.
 const actionChipCls: Record<string, string> = {
-  CREATE: 'syn-chip-ok',
-  UPDATE: 'syn-chip-active',
-  DELETE: 'syn-chip-fail',
-  STATUS_CHANGE: 'syn-chip-warn',
-  COMPLETE: 'syn-chip-ok',
-  APPROVE: 'syn-chip-active',
+  created: 'syn-chip-ok',
+  updated: 'syn-chip-active',
+  deleted: 'syn-chip-fail',
+  status_changed: 'syn-chip-warn',
+  completed: 'syn-chip-ok',
+  approved: 'syn-chip-active',
 }
 const actionLabel: Record<string, string> = {
-  CREATE: 'Creado',
-  UPDATE: 'Actualizado',
-  DELETE: 'Eliminado',
-  STATUS_CHANGE: 'Cambio estado',
-  COMPLETE: 'Completado',
-  APPROVE: 'Aprobado',
+  created: 'Creado',
+  updated: 'Actualizado',
+  deleted: 'Eliminado',
+  status_changed: 'Cambio de estado',
+  completed: 'Completado',
+  approved: 'Aprobado',
 }
 
+/** Verbo de la accion: "records.updated" -> "updated". */
+function actionVerb(action: string): string {
+  return action.includes('.') ? action.split('.').pop()! : action
+}
+
+// Las claves van en plural porque el interceptor deriva entityType del nombre
+// del controller (RecordsController -> RECORDS). Antes estaban en singular y no
+// matcheaba ninguna, por eso se veia "RECORDS" crudo en la tabla.
 const entityTypeLabels: Record<string, string> = {
-  RECORD: 'Registro',
-  ENTRY: 'Entrada',
-  DOCUMENT: 'Documento',
-  INSTRUMENT: 'Instrumento',
-  NON_CONFORMITY: 'No conformidad',
-  ORGANIZATION: 'Organización',
-  USER: 'Usuario',
-  AREA: 'Área',
+  RECORDS: 'Registro',
+  ENTRIES: 'Entrada',
+  DOCUMENTS: 'Documento',
+  INSTRUMENTS: 'Instrumento',
+  NON_CONFORMITIES: 'No conformidad',
+  ORGANIZATIONS: 'Organización',
+  AREAS: 'Área',
+  BATCHES: 'Lote',
+  SAMPLES: 'Muestra',
+  RECIPES: 'Fórmula',
+  MATRICES: 'Matriz',
+  METHODS: 'Método',
+  CALIBRATIONS: 'Calibración',
+  CALIBRATION_TEMPLATES: 'Plantilla de calibración',
+  STOCK: 'Stock',
+  APPROVAL: 'Aprobación',
+}
+
+// Solo estas entidades tienen pagina de detalle. Para el resto se muestra el id
+// como texto: es preferible a un enlace que lleve a un 404.
+const entityDetailRoute: Record<string, string> = {
+  RECORDS: '/records',
+  INSTRUMENTS: '/instruments',
+  BATCHES: '/batches',
+  SAMPLES: '/samples',
+  NON_CONFORMITIES: '/non-conformities',
+  CALIBRATIONS: '/calibrations',
+}
+
+function entityHref(entityType: string, entityId: string): string | null {
+  const base = entityDetailRoute[entityType]
+  if (!base || !entityId || entityId === 'unknown') return null
+  return `${base}/${entityId}`
 }
 
 function formatDate(dateStr: string): string {
@@ -282,10 +321,12 @@ export default function AuditPage() {
               </thead>
               <tbody>
                 {logs.map((log) => {
-                  const chipCls = actionChipCls[log.action] ?? 'syn-chip-draft'
-                  const label = actionLabel[log.action] ?? log.action
+                  const verb = actionVerb(log.action)
+                  const chipCls = actionChipCls[verb] ?? 'syn-chip-draft'
+                  const label = actionLabel[verb] ?? log.action
                   const entityLabel =
                     entityTypeLabels[log.entityType] ?? log.entityType
+                  const href = entityHref(log.entityType, log.entityId)
                   return (
                     <tr key={log.id}>
                       <td
@@ -297,10 +338,17 @@ export default function AuditPage() {
                         {formatDate(log.createdAt)}
                       </td>
                       <td data-label="Usuario" style={{ color: 'var(--ink-1)' }}>
-                        {log.userName ?? (
+                        {log.user ? (
+                          <span title={log.user.email}>
+                            {log.user.name || log.user.email}
+                          </span>
+                        ) : (
+                          // Usuario eliminado: queda el id, que es lo unico que
+                          // guarda el log.
                           <span
                             className="font-mono text-[11px]"
                             style={{ color: 'var(--ink-3)' }}
+                            title={log.userId}
                           >
                             {log.userId.slice(0, 8)}…
                           </span>
@@ -313,12 +361,28 @@ export default function AuditPage() {
                         {entityLabel}
                       </td>
                       <td data-label="ID entidad">
-                        <code
-                          className="rounded px-1.5 py-0.5 font-mono text-[11px]"
-                          style={{ background: 'var(--bg-3)', color: 'var(--ink-2)' }}
-                        >
-                          {log.entityId.slice(0, 8)}…
-                        </code>
+                        {href ? (
+                          <Link
+                            href={href}
+                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] hover:underline"
+                            style={{
+                              background: 'var(--bg-3)',
+                              color: 'var(--primary-hex)',
+                            }}
+                            title={`Abrir ${entityLabel} ${log.entityId}`}
+                          >
+                            {log.entityId.slice(0, 8)}…
+                            <ArrowUpRight className="h-3 w-3" />
+                          </Link>
+                        ) : (
+                          <code
+                            className="rounded px-1.5 py-0.5 font-mono text-[11px]"
+                            style={{ background: 'var(--bg-3)', color: 'var(--ink-2)' }}
+                            title={log.entityId}
+                          >
+                            {log.entityId.slice(0, 8)}…
+                          </code>
+                        )}
                       </td>
                     </tr>
                   )

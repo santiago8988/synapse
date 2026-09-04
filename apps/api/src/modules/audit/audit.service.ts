@@ -47,8 +47,26 @@ export class AuditService {
       this.prisma.auditLog.count({ where }),
     ])
 
+    // AuditLog guarda userId suelto: no hay relacion con User en el schema, y
+    // agregarle una FK a una tabla append-only con filas historicas es un
+    // riesgo innecesario. Se resuelven los usuarios de la pagina en una sola
+    // query y se adjuntan al resultado.
+    const userIds = Array.from(new Set(data.map((log) => log.userId)))
+    const users = userIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, name: true, email: true },
+        })
+      : []
+    const byId = new Map(users.map((u) => [u.id, u]))
+
     return {
-      data,
+      data: data.map((log) => ({
+        ...log,
+        // null cuando el usuario ya no existe: el log es historico y la fila a
+        // la que apunta puede haberse borrado. La UI muestra el id en ese caso.
+        user: byId.get(log.userId) ?? null,
+      })),
       pagination: {
         page,
         pageSize,
