@@ -1606,18 +1606,29 @@ textarea:focus-visible,
 
 /* ---------------------------------------------------------------------------
    xyflow (@xyflow/react) — overrides
-   La libreria pone `cursor: grab` sobre el fondo del canvas. En Windows ese
-   cursor se dibuja como una manito chica, abierta y sin contorno, que no pega
-   con el resto de la UI. `move` comunica lo mismo (se puede desplazar) y usa
-   el cursor nativo del sistema.
+   La libreria pone `cursor: grab` sobre el fondo del canvas. En Windows Chrome
+   ese cursor se dibuja como una mano blanca solida, chica y sin contorno: sobre
+   fondo claro queda casi invisible y desentona. `move` comunica lo mismo (el
+   canvas se desplaza) y usa el cursor nativo del sistema.
+
+   Los selectores llevan `.react-flow` adelante a proposito: xyflow define esto
+   como `.react-flow__pane.draggable` (dos clases), asi que un override con una
+   sola clase pierde por especificidad. El prefijo extra ademas gana sin
+   depender del orden en que Next inyecte los stylesheets.
 --------------------------------------------------------------------------- */
-.react-flow__pane {
+.react-flow .react-flow__pane.draggable,
+.react-flow .react-flow__pane.dragging {
   cursor: move;
 }
-.react-flow__pane.dragging {
+
+/* Nodos arrastrables: mismo criterio. Los nodos que definen su propio cursor
+   lo hacen inline, y el inline gana sobre estas reglas. */
+.react-flow .react-flow__node.draggable,
+.react-flow .react-flow__node.draggable.dragging {
   cursor: move;
 }
-/* Los nodos con cursor propio lo declaran inline, que gana sobre esto. */
-.react-flow__node {
-  cursor: default;
+
+/* Seleccion por arrastre sobre el fondo. */
+.react-flow .react-flow__nodesselection-rect {
+  cursor: move;
 }
