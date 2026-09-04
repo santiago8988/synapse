@@ -332,6 +332,8 @@ function RecordNode({ data }: NodeProps) {
         boxShadow: 'var(--shadow-xs)',
         minWidth: 190,
         maxWidth: 240,
+        // Estos nodos si se pueden arrastrar para reacomodar el mapa.
+        cursor: 'move',
       }}
     >
       <Handle type="target" position={Position.Left} style={{ width: 7, height: 7, border: 'none', background: 'var(--line-strong)' }} />

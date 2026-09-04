@@ -1603,3 +1603,21 @@ textarea:focus-visible,
 ::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.45);
 }
+
+/* ---------------------------------------------------------------------------
+   xyflow (@xyflow/react) — overrides
+   La libreria pone `cursor: grab` sobre el fondo del canvas. En Windows ese
+   cursor se dibuja como una manito chica, abierta y sin contorno, que no pega
+   con el resto de la UI. `move` comunica lo mismo (se puede desplazar) y usa
+   el cursor nativo del sistema.
+--------------------------------------------------------------------------- */
+.react-flow__pane {
+  cursor: move;
+}
+.react-flow__pane.dragging {
+  cursor: move;
+}
+/* Los nodos con cursor propio lo declaran inline, que gana sobre esto. */
+.react-flow__node {
+  cursor: default;
+}
