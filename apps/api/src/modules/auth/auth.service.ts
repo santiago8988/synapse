@@ -82,6 +82,29 @@ export class AuthService {
     return { user, memberships }
   }
 
+  /**
+   * Organizaciones que el usuario puede elegir al iniciar sesion. Se cruza lo
+   * que autoriza el codigo con las membresias activas de la base: si a alguien
+   * le revocaron el acceso entre el login y la eleccion, la organizacion ya no
+   * aparece.
+   */
+  async listOrganizations(userId: string, organizationIds: string[]) {
+    const memberships = await this.prisma.organizationUser.findMany({
+      where: {
+        userId,
+        organizationId: { in: organizationIds },
+        isActive: true,
+      },
+      include: { organization: { select: { id: true, name: true, slug: true } } },
+    })
+    return memberships.map((m) => ({
+      id: m.organization.id,
+      name: m.organization.name,
+      slug: m.organization.slug,
+      role: m.role,
+    }))
+  }
+
   async generateToken(userId: string, organizationId: string): Promise<string> {
     const membership = await this.prisma.organizationUser.findUnique({
       where: {
