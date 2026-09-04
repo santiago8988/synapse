@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
@@ -8,17 +8,22 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
 function CallbackHandler({ onError }: { onError: (msg: string) => void }) {
   const router = useRouter()
   const searchParams = useSearchParams()
+  // El código se canjea una sola vez, así que el efecto tiene que dispararse
+  // una sola vez. En desarrollo React monta los efectos dos veces (StrictMode)
+  // y sin esta guarda el segundo intento encuentra el código ya consumido y
+  // muestra "el código venció", aunque el login haya salido bien.
+  // El ref sobrevive al desmontaje simulado de StrictMode; un booleano común no.
+  const exchangeStarted = useRef(false)
 
   useEffect(() => {
-    // La URL trae un código de un solo uso, no el JWT: el token se pide por
-    // POST para que no quede en logs de servidor ni en el historial.
     const code = searchParams.get('code')
     if (!code) {
       router.replace('/login')
       return
     }
+    if (exchangeStarted.current) return
+    exchangeStarted.current = true
 
-    let cancelled = false
     ;(async () => {
       try {
         const res = await fetch(`${API_URL}/auth/exchange`, {
@@ -31,18 +36,14 @@ function CallbackHandler({ onError }: { onError: (msg: string) => void }) {
           throw new Error(body.message || 'No se pudo completar el ingreso')
         }
         const { token } = await res.json()
-        if (cancelled) return
+        // Se guarda sin condicionar a que el componente siga montado: el código
+        // ya se consumió y no hay segunda oportunidad de obtener este token.
         localStorage.setItem('synapse_token', token)
         router.replace('/dashboard')
       } catch (err) {
-        if (cancelled) return
         onError(err instanceof Error ? err.message : 'No se pudo completar el ingreso')
       }
     })()
-
-    return () => {
-      cancelled = true
-    }
   }, [router, searchParams, onError])
 
   return null
