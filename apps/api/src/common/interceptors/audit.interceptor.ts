@@ -24,9 +24,21 @@ function extractEntityType(controllerName: string): string {
     .toUpperCase()
 }
 
-// Mapeo de método HTTP a acción
-function methodToAction(method: string, path: string): string {
-  const entity = path.split('/')[1] || 'unknown'
+/**
+ * Mapeo de método HTTP a acción.
+ *
+ * El recurso sale de `entityType` (derivado del nombre del controller) y no de
+ * la URL. Antes se tomaba `path.split('/')[1]`, que con el prefijo global de
+ * main.ts siempre devolvia "api": toda accion quedaba registrada como
+ * "api.updated" en vez de "records.updated".
+ *
+ * Derivarlo del controller ademas evita que accion y entityType se
+ * contradigan: `POST /api/records/:r/entries/:e/complete` lo maneja
+ * EntriesController, asi que es "entries.completed" y no "records.completed"
+ * como daba al leer el primer segmento util de la ruta.
+ */
+function methodToAction(method: string, path: string, entityType: string): string {
+  const entity = entityType.toLowerCase() || 'unknown'
   switch (method) {
     case 'POST':
       return path.includes('complete')
@@ -80,7 +92,7 @@ export class AuditInterceptor implements NestInterceptor {
     const controllerName = context.getClass().name
     const entityType = extractEntityType(controllerName)
     const entityId = request.params?.id || request.params?.entryId || null
-    const action = methodToAction(method, request.path)
+    const action = methodToAction(method, request.path, entityType)
     const ip = request.ip || request.headers['x-forwarded-for'] || null
 
     // El estado previo hay que leerlo ANTES de que el handler mute la fila.
