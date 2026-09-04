@@ -31,7 +31,13 @@ export class R2StorageService extends StorageService {
 
   constructor(private config: ConfigService) {
     super()
-    const accountId = this.config.getOrThrow<string>('R2_ACCOUNT_ID')
+    // El dashboard de Cloudflare muestra el account id dentro del endpoint
+    // completo, asi que es facil pegar "https://<id>.r2.cloudflarestorage.com"
+    // en la variable. Si no se normaliza, el endpoint queda malformado y el
+    // error que se ve es un fallo de DNS, que no ayuda en nada a entenderlo.
+    const accountId = normalizeAccountId(
+      this.config.getOrThrow<string>('R2_ACCOUNT_ID'),
+    )
     this.bucket = this.config.getOrThrow<string>('R2_BUCKET_NAME')
     this.client = new S3Client({
       region: 'auto',
@@ -106,4 +112,13 @@ export class R2StorageService extends StorageService {
  */
 function sanitizeHeaderFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._ -]/g, '_')
+}
+
+/** Acepta el id pelado o pegado dentro del endpoint que muestra el dashboard. */
+export function normalizeAccountId(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^https?:\/\//, '')
+    .replace(/\.r2\.cloudflarestorage\.com.*$/, '')
+    .replace(/\/+$/, '')
 }
