@@ -45,18 +45,30 @@ export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
 }
 
-/** Guarda la sesión tras un login o un cambio de organización. */
-export function saveSession(token: string): void {
-  if (typeof window === 'undefined') return
+/** ¿Ya existe la cookie que lee el middleware? */
+export function hasSessionCookie(): boolean {
+  if (typeof document === 'undefined') return false
+  return document.cookie.split('; ').some((c) => c.startsWith(`${SESSION_COOKIE}=`))
+}
+
+/**
+ * Guarda la sesión tras un login o un cambio de organización.
+ * Devuelve false si el token no trae un vencimiento usable o ya venció: en ese
+ * caso no se escribe la cookie y el middleware sigue tratando la sesión como
+ * inexistente, que es lo correcto.
+ */
+export function saveSession(token: string): boolean {
+  if (typeof window === 'undefined') return false
   localStorage.setItem(TOKEN_KEY, token)
 
   const exp = readExpiry(token)
-  if (exp === null) return
+  if (exp === null || exp * 1000 <= Date.now()) return false
 
   // La cookie vence junto con el token, así el navegador la limpia solo.
   const expires = new Date(exp * 1000).toUTCString()
   const secure = window.location.protocol === 'https:' ? '; Secure' : ''
   document.cookie = `${SESSION_COOKIE}=${exp}; Path=/; Expires=${expires}; SameSite=Lax${secure}`
+  return true
 }
 
 /** Cierra la sesión: borra el token y la cookie del middleware. */

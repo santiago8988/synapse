@@ -1,8 +1,23 @@
 'use client'
 
+import { useEffect } from 'react'
 import { BrainMark } from '@/components/brand/brain-mark'
+import { getToken, hasSessionCookie, saveSession } from '@/lib/session'
 
 export default function LoginPage() {
+  // Migración de las sesiones abiertas antes de que existiera el middleware:
+  // tenían el token en localStorage pero no la cookie, así que el middleware
+  // las rebotaba acá aunque siguieran siendo válidas. Si el token está vigente
+  // se reescribe la cookie y se sigue de largo, en vez de obligar a volver a
+  // entrar. Cuando ya no queden sesiones de esa época, esto se puede borrar.
+  useEffect(() => {
+    const token = getToken()
+    if (!token || hasSessionCookie()) return
+    if (saveSession(token)) {
+      window.location.replace('/dashboard')
+    }
+  }, [])
+
   const handleGoogleLogin = () => {
     window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/auth/google`
   }

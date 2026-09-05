@@ -19,14 +19,7 @@ reescribiendo `formula-evaluator.service` sobre mathjs.
 
 ## Seguridad
 
-### 3. No hay `middleware.ts` que proteja las rutas privadas
-
-`apps/web` — las páginas bajo `(app)/*` no verifican sesión del lado del
-servidor. Si no hay token, la protección real la da la API, que responde 401 y
-recién ahí el cliente redirige a `/login`. El efecto es que se renderiza el
-armazón de una página privada antes de rebotar.
-
-Falta un `middleware.ts` que redirija a `/login` cuando no hay sesión válida.
+> §3 (middleware que proteja las rutas privadas) se resolvió el 2026-09-04.
 
 ### 4. La CSP acepta cualquier bucket de R2
 

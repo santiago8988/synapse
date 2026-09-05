@@ -164,8 +164,18 @@ El código vence a los 2 minutos y sirve una sola vez.
 `lib/api.ts` agrega el header `Authorization` en cada llamada y redirige a
 `/login` ante un 401.
 
-Falta un `middleware.ts` que proteja las rutas `(app)/*` del lado del servidor
-(`TO_DO.md` §3).
+`middleware.ts` corta el acceso a las páginas privadas antes de renderizarlas.
+Lee una cookie que **solo contiene el vencimiento** del JWT, nunca el token: es
+lo único que necesita para enrutar, y meter el JWT en una cookie legible por
+JavaScript no agregaría seguridad sobre `localStorage`.
+
+Es enrutado, **no control de acceso**. La autorización real sigue en la API;
+quien fabrique la cookie llega al cascarón de la app y a ningún dato.
+
+`lib/session.ts` centraliza `saveSession` / `clearSession` / `getToken` y
+mantiene `localStorage` y cookie en sincronía. Después de guardar la sesión hay
+que navegar con `window.location`, no con `router.replace`: una navegación de
+cliente no vuelve a pasar por el middleware y no vería la cookie nueva.
 
 ## PWA
 
