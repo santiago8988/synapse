@@ -754,9 +754,14 @@ function PropertiesPanel({ draft, onChange, sourceFields, sourceRecordType, orgR
             onChange({
               ...draft,
               actionType,
-              actionConfig: actionType === 'UPDATE_FIELD'
-                ? { entryIdSource: '$entry.id', fieldId: '', value: '' }
-                : null,
+              actionConfig:
+                actionType === 'UPDATE_FIELD'
+                  ? { entryIdSource: '$entry.id', fieldId: '', value: '' }
+                  : actionType === 'NOTIFY'
+                    ? { recipients: 'area_owner', message: '' }
+                    : actionType === 'WEBHOOK'
+                      ? { url: '', method: 'POST' }
+                      : null,
               fieldMapping: actionType === 'CREATE_ENTRY' ? draft.fieldMapping : [],
             })
           }}
@@ -765,9 +770,11 @@ function PropertiesPanel({ draft, onChange, sourceFields, sourceRecordType, orgR
         >
           <option value="CREATE_ENTRY">Crear entrada en otro registro</option>
           <option value="UPDATE_FIELD">Actualizar campo de una entrada</option>
-          <option value="NOTIFY" disabled>Notificar usuario (próximamente)</option>
+          <option value="NOTIFY">Notificar dentro de la app</option>
+          <option value="WEBHOOK">Llamar a un webhook</option>
+          {/* EMAIL sigue sin implementarse: deshabilitado para que nadie
+              configure un flujo que no va a enviar nada. */}
           <option value="EMAIL" disabled>Enviar email (próximamente)</option>
-          <option value="WEBHOOK" disabled>Webhook (próximamente)</option>
         </select>
       </section>
 
@@ -789,6 +796,14 @@ function PropertiesPanel({ draft, onChange, sourceFields, sourceRecordType, orgR
           onChange={onChange}
           sourceFields={sourceFields}
         />
+      )}
+
+      {draft.actionType === 'NOTIFY' && (
+        <NotifyConfig draft={draft} onChange={onChange} />
+      )}
+
+      {draft.actionType === 'WEBHOOK' && (
+        <WebhookConfig draft={draft} onChange={onChange} />
       )}
 
       {/* allowCascade */}
@@ -1215,6 +1230,115 @@ function CreateEntryConfig({
           + Agregar mapeo
         </button>
       </div>
+    </section>
+  )
+}
+
+// =============================================================================
+// Config de NOTIFY y WEBHOOK
+// =============================================================================
+
+const RECIPIENT_OPTIONS = [
+  { value: 'area_owner', label: 'Responsable del área del registro' },
+  { value: 'role:ADMIN', label: 'Todos los administradores' },
+  { value: 'role:QUALITY_MANAGER', label: 'Todos los responsables de calidad' },
+  { value: 'role:TECHNICIAN', label: 'Todos los técnicos' },
+  { value: 'role:AUDITOR', label: 'Todos los auditores' },
+]
+
+function NotifyConfig({
+  draft,
+  onChange,
+}: {
+  draft: FlowDraft
+  onChange: (next: FlowDraft) => void
+}) {
+  const config = (draft.actionConfig ?? {}) as { recipients?: string; message?: string }
+
+  const set = (patch: Record<string, unknown>) =>
+    onChange({ ...draft, actionConfig: { ...config, ...patch } })
+
+  return (
+    <section className="flex flex-col gap-2">
+      <label className="kicker">Destinatario</label>
+      <select
+        value={config.recipients ?? 'area_owner'}
+        onChange={(e) => set({ recipients: e.target.value })}
+        className="rounded-[8px] border px-2 py-1.5 text-[13px]"
+        style={{ background: 'var(--bg-2)', borderColor: 'var(--line-2)', color: 'var(--ink-0)' }}
+      >
+        {RECIPIENT_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <p className="text-[11px]" style={{ color: 'var(--ink-3)' }}>
+        Si elegís el responsable del área y el área no tiene uno asignado, no se
+        notifica a nadie.
+      </p>
+
+      <label className="kicker mt-2">Mensaje</label>
+      <input
+        type="text"
+        value={config.message ?? ''}
+        onChange={(e) => set({ message: e.target.value })}
+        placeholder="{campo} cambió a {nuevo} en {registro}"
+        className="rounded-[8px] border px-2 py-1.5 text-[13px]"
+        style={{ background: 'var(--bg-2)', borderColor: 'var(--line-2)', color: 'var(--ink-0)' }}
+      />
+      <p className="text-[11px]" style={{ color: 'var(--ink-3)' }}>
+        Podés usar <code>{'{registro}'}</code>, <code>{'{campo}'}</code>,{' '}
+        <code>{'{anterior}'}</code> y <code>{'{nuevo}'}</code>. Si lo dejás vacío se
+        usa el texto de ejemplo.
+      </p>
+    </section>
+  )
+}
+
+function WebhookConfig({
+  draft,
+  onChange,
+}: {
+  draft: FlowDraft
+  onChange: (next: FlowDraft) => void
+}) {
+  const config = (draft.actionConfig ?? {}) as { url?: string; method?: string }
+
+  const set = (patch: Record<string, unknown>) =>
+    onChange({ ...draft, actionConfig: { ...config, ...patch } })
+
+  return (
+    <section className="flex flex-col gap-2">
+      <label className="kicker">URL</label>
+      <input
+        type="url"
+        value={config.url ?? ''}
+        onChange={(e) => set({ url: e.target.value })}
+        placeholder="https://ejemplo.com/webhook"
+        className="rounded-[8px] border px-2 py-1.5 text-[13px]"
+        style={{ background: 'var(--bg-2)', borderColor: 'var(--line-2)', color: 'var(--ink-0)' }}
+      />
+      <p className="text-[11px]" style={{ color: 'var(--ink-3)' }}>
+        Debe ser https y apuntar a un servidor accesible desde internet. Las
+        direcciones internas se rechazan por seguridad.
+      </p>
+
+      <label className="kicker mt-2">Método</label>
+      <select
+        value={config.method ?? 'POST'}
+        onChange={(e) => set({ method: e.target.value })}
+        className="rounded-[8px] border px-2 py-1.5 text-[13px]"
+        style={{ background: 'var(--bg-2)', borderColor: 'var(--line-2)', color: 'var(--ink-0)' }}
+      >
+        <option value="POST">POST</option>
+        <option value="PATCH">PATCH</option>
+      </select>
+
+      <p className="text-[11px]" style={{ color: 'var(--ink-3)' }}>
+        Se envía qué registro, qué campo cambió y con qué valores. No se manda el
+        contenido completo de la entrada. Si el destino falla no se reintenta.
+      </p>
     </section>
   )
 }

@@ -84,6 +84,12 @@ export const api = {
     createVersion: (id: string) =>
       fetchApi(`/documents/${id}/version`, { method: 'POST' }),
   },
+  notifications: {
+    list: <T = unknown>() => fetchApi<T>('/notifications'),
+    unreadCount: <T = unknown>() => fetchApi<T>('/notifications/unread-count'),
+    markRead: (id: string) => fetchApi(`/notifications/${id}/read`, { method: 'POST' }),
+    markAllRead: () => fetchApi('/notifications/read-all', { method: 'POST' }),
+  },
   records: {
     list: (archived = false) => fetchApi(`/records${archived ? '?archived=true' : ''}`),
     get: (id: string) => fetchApi(`/records/${id}`),

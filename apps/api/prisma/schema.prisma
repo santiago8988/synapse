@@ -187,6 +187,7 @@ model Organization {
   calibrations             Calibration[]
   entryStatusLogs          EntryStatusLog[]
   instrumentCertificates   InstrumentCertificate[]
+  notifications            Notification[]
 }
 
 model Area {
@@ -217,6 +218,7 @@ model User {
 
   organizations          OrganizationUser[]
   instrumentCertificates InstrumentCertificate[]
+  notifications          Notification[]
 }
 
 model OrganizationUser {
@@ -967,6 +969,34 @@ model ApprovalDecision {
 // ─────────────────────────────────────────────
 // AUDIT LOG
 // ─────────────────────────────────────────────
+
+// Aviso dentro de la app, generado por la accion NOTIFY del motor de flujos.
+//
+// A diferencia de AuditLog y los *StatusLog, NO es append-only: el usuario la
+// marca como leida. El paper trail de lo que ocurrio vive en esas tablas; esto
+// es solo el aviso de que ocurrio.
+model Notification {
+  id             String    @id @default(cuid())
+  organizationId String
+  // El destinatario se resuelve al crear el aviso, no al leerlo: si despues
+  // cambia el rol o el area del usuario, lo que ya recibio sigue siendo suyo.
+  userId         String
+  title          String
+  body           String?
+  /// Ruta relativa del frontend a la que lleva el aviso.
+  link           String?
+  /// Origen, para poder rastrearlo. Nullable: puede haber avisos que no
+  /// vengan de un flujo.
+  recordActionId String?
+  entryId        String?
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, organizationId, createdAt])
+}
 
 model AuditLog {
   id             String   @id @default(cuid())

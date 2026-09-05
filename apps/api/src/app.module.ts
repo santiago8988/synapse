@@ -14,6 +14,7 @@ import { EntriesModule } from './modules/entries/entries.module'
 import { InstrumentsModule } from './modules/instruments/instruments.module'
 import { NonConformitiesModule } from './modules/non-conformities/non-conformities.module'
 import { AuditModule } from './modules/audit/audit.module'
+import { NotificationsModule } from './modules/notifications/notifications.module'
 import { DashboardModule } from './modules/dashboard/dashboard.module'
 import { ApprovalModule } from './modules/approval/approval.module'
 import { RecipesModule } from './modules/recipes/recipes.module'
@@ -42,6 +43,7 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor'
     InstrumentsModule,
     NonConformitiesModule,
     AuditModule,
+    NotificationsModule,
     DashboardModule,
     ApprovalModule,
     RecipesModule,

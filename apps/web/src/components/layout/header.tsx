@@ -1,11 +1,12 @@
 'use client'
 
-import { Bell, Search, ChevronRight, Home, Menu } from 'lucide-react'
+import { Search, ChevronRight, Home, Menu } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { TweaksPanel } from '@/components/tweaks/tweaks-panel'
 import { useMe } from '@/lib/use-me'
+import { NotificationsPanel } from '@/components/layout/notifications-panel'
 
 const breadcrumbMap: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -172,9 +173,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         <IcoBtn aria-label="Buscar">
           <Search className="h-[18px] w-[18px]" />
         </IcoBtn>
-        <IcoBtn aria-label="Notificaciones" notif>
-          <Bell className="h-[18px] w-[18px]" />
-        </IcoBtn>
+        <NotificationsPanel />
         <button
           type="button"
           onClick={() => setTweaksOpen((o) => !o)}

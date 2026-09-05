@@ -12,6 +12,14 @@ import {
   type CompanionsBag,
 } from '../../../common/flows/flow-evaluation'
 import {
+  sanitizeWebhookHeaders,
+  validateWebhookUrl,
+} from '../../../common/flows/webhook-target'
+import {
+  parseRecipients,
+  renderMessage,
+} from '../../../common/flows/notify-recipients'
+import {
   EntryCreatedEvent,
   EntryFieldValueChangedEvent,
 } from '../../../common/events/domain-events'
@@ -23,6 +31,9 @@ import { Prisma } from '@prisma/client'
  * Si el source es INSTRUMENTAL, valida que el instrumento esté ACTIVE.
  * Crea companion entities (Batch/Sample) cuando el target lo requiere.
  */
+/** Un destino que no responde no puede dejar el listener colgado. */
+const WEBHOOK_TIMEOUT_MS = 10_000
+
 @Injectable()
 export class RecordActionListener {
   private readonly logger = new Logger(RecordActionListener.name)
@@ -524,9 +535,111 @@ export class RecordActionListener {
     action: ActionWithTarget,
     event: EntryFieldValueChangedEvent,
   ) {
-    this.logger.log(
-      `RecordAction ${action.id} (NOTIFY) — STUB: actionConfig=${JSON.stringify(action.actionConfig)}, event=${event.entryId}`,
+    const config = (action.actionConfig ?? {}) as {
+      recipients?: unknown
+      message?: unknown
+    }
+
+    const destinatarios = parseRecipients(config.recipients)
+    if (!destinatarios) {
+      this.logger.warn(
+        `RecordAction ${action.id} (NOTIFY) sin destinatario valido: ${JSON.stringify(config.recipients)}`,
+      )
+      return
+    }
+
+    const userIds = await this.resolveRecipientUserIds(
+      destinatarios,
+      event.organizationId,
+      event.recordId,
     )
+    if (userIds.length === 0) {
+      this.logger.warn(
+        `RecordAction ${action.id} (NOTIFY) no resolvio ningun destinatario`,
+      )
+      return
+    }
+
+    // El contexto sale del Record y del field para que el aviso diga algo
+    // concreto en vez de un texto fijo.
+    const record = await this.prisma.record.findFirst({
+      where: { id: event.recordId, organizationId: event.organizationId },
+      select: {
+        name: true,
+        fields: { where: { id: event.fieldId }, select: { label: true } },
+      },
+    })
+
+    const plantilla =
+      typeof config.message === 'string' && config.message.trim()
+        ? config.message
+        : '{campo} cambio a {nuevo} en {registro}'
+
+    const body = renderMessage(plantilla, {
+      recordName: record?.name,
+      fieldLabel: record?.fields[0]?.label,
+      from: event.fromValue,
+      to: event.toValue,
+    })
+
+    await this.prisma.notification.createMany({
+      data: userIds.map((userId) => ({
+        organizationId: event.organizationId,
+        userId,
+        title: record?.name ?? 'Actualizacion de registro',
+        body,
+        link: `/records/${event.recordId}`,
+        recordActionId: action.id,
+        entryId: event.entryId,
+      })),
+    })
+
+    this.logger.log(
+      `RecordAction ${action.id} (NOTIFY): ${userIds.length} notificacion(es) creadas`,
+    )
+  }
+
+  /**
+   * Traduce el destinatario configurado a ids de usuario.
+   *
+   * Toda consulta va acotada a la organizacion: es lo que impide que un
+   * `user:<id>` copiado de otro tenant genere una notificacion cruzada.
+   */
+  private async resolveRecipientUserIds(
+    spec: ReturnType<typeof parseRecipients> & object,
+    organizationId: string,
+    recordId: string,
+  ): Promise<string[]> {
+    if (spec.kind === 'user') {
+      const miembro = await this.prisma.organizationUser.findFirst({
+        where: { userId: spec.userId, organizationId, isActive: true },
+        select: { userId: true },
+      })
+      return miembro ? [miembro.userId] : []
+    }
+
+    if (spec.kind === 'role') {
+      const miembros = await this.prisma.organizationUser.findMany({
+        where: { organizationId, isActive: true, role: spec.role as never },
+        select: { userId: true },
+      })
+      return miembros.map((m) => m.userId)
+    }
+
+    // area_owner: el lider del area del registro. Un Record puede pertenecer a
+    // varias areas, asi que se notifica al lider de cada una, sin repetir.
+    const record = await this.prisma.record.findFirst({
+      where: { id: recordId, organizationId },
+      select: {
+        areas: {
+          select: { area: { select: { leader: { select: { userId: true } } } } },
+        },
+      },
+    })
+    const ids = (record?.areas ?? [])
+      .map((ra) => ra.area.leader?.userId)
+      .filter((id): id is string => Boolean(id))
+    return Array.from(new Set(ids))
   }
 
   /**
@@ -543,16 +656,97 @@ export class RecordActionListener {
   }
 
   /**
-   * WEBHOOK — POST/PATCH a URL externa. STUB: implementación real requiere
-   * retry + circuit breaker + log de respuestas para auditoría.
+   * WEBHOOK — avisa a un sistema externo emitiendo un pedido HTTP.
+   *
+   * `actionConfig`: { url, method?: 'POST' | 'PATCH', headers?: Record<string,string> }
+   *
+   * La URL la elige un usuario y el pedido lo emite el servidor, asi que pasa
+   * por `validateWebhookUrl`, que bloquea las direcciones internas. Sin eso un
+   * ADMIN podria leer los metadatos de la instancia o alcanzar servicios que
+   * nunca se expusieron.
+   *
+   * No hay reintentos: si el destino falla, se loguea y se sigue. Reintentar
+   * necesita una cola, que hoy no existe (TO_DO.md 11), y hacerlo en el mismo
+   * proceso bloquearia el listener.
    */
   private async executeWebhook(
     action: ActionWithTarget,
     event: EntryFieldValueChangedEvent,
   ) {
-    this.logger.log(
-      `RecordAction ${action.id} (WEBHOOK) — STUB: actionConfig=${JSON.stringify(action.actionConfig)}, event=${event.entryId}`,
-    )
+    const config = (action.actionConfig ?? {}) as {
+      url?: string
+      method?: string
+      headers?: unknown
+    }
+    if (!config.url) {
+      this.logger.warn(`RecordAction ${action.id} (WEBHOOK) sin url configurada`)
+      return
+    }
+
+    // En desarrollo se permite apuntar a la propia maquina, que es la forma
+    // normal de probar un webhook.
+    const allowInternal = process.env.NODE_ENV !== 'production'
+    const validacion = await validateWebhookUrl(config.url, { allowInternal })
+    if (!validacion.ok) {
+      this.logger.warn(
+        `RecordAction ${action.id} (WEBHOOK) rechazado: ${validacion.reason}`,
+      )
+      return
+    }
+
+    const method = config.method === 'PATCH' ? 'PATCH' : 'POST'
+    // El payload es deliberadamente acotado: identifica que paso y donde, sin
+    // volcar el contenido de la entry a un tercero.
+    const payload = {
+      event: 'record_action.triggered',
+      actionId: action.id,
+      organizationId: event.organizationId,
+      recordId: event.recordId,
+      entryId: event.entryId,
+      field: {
+        id: event.fieldId,
+        from: event.fromValue,
+        to: event.toValue,
+      },
+      occurredAt: new Date().toISOString(),
+    }
+
+    // Sin timeout, un destino que no responde deja el listener colgado.
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), WEBHOOK_TIMEOUT_MS)
+
+    try {
+      const res = await fetch(validacion.target.url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          ...sanitizeWebhookHeaders(config.headers),
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+        redirect: 'error', // Un redirect podria llevar a una direccion interna.
+      })
+
+      if (!res.ok) {
+        this.logger.warn(
+          `RecordAction ${action.id} (WEBHOOK) a ${validacion.target.url.origin} respondio ${res.status}`,
+        )
+        return
+      }
+      this.logger.log(
+        `RecordAction ${action.id} (WEBHOOK) a ${validacion.target.url.origin}: ${res.status}`,
+      )
+    } catch (err) {
+      const motivo =
+        err instanceof Error && err.name === 'AbortError'
+          ? `no respondio en ${WEBHOOK_TIMEOUT_MS} ms`
+          : String(err)
+      this.logger.warn(
+        `RecordAction ${action.id} (WEBHOOK) a ${validacion.target.url.origin} fallo: ${motivo}`,
+      )
+    } finally {
+      clearTimeout(timeout)
+    }
   }
 }
 

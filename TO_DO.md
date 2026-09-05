@@ -64,18 +64,19 @@ existiendo.
 
 ## Motor de flujos
 
-### 6. `NOTIFY`, `EMAIL` y `WEBHOOK` son stubs
+### 6. `EMAIL` sigue sin implementarse
 
-`apps/api/src/modules/entries/listeners/record-action.listener.ts` — los tres
-`actionType` existen en el enum y se pueden elegir desde el editor visual, pero
-sus handlers solo escriben una línea en el log.
+`apps/api/src/modules/entries/listeners/record-action.listener.ts` — el handler
+solo escribe una línea en el log. En el editor visual la opción está
+deshabilitada, así que nadie puede configurar un flujo que no vaya a enviar
+nada.
 
-El usuario puede configurar un flujo que "envía un email" y nunca se entera de
-que no pasa nada. O se implementan, o el editor debería marcarlos como no
-disponibles.
+Necesita un transport (Resend tiene plan gratuito de 3.000 correos al mes) y,
+sobre todo, **un dominio propio verificado**: sin SPF/DKIM los avisos caen en
+spam, y un sistema de calidad que avisa a la carpeta de correo no deseado es
+peor que uno que no avisa, porque todos creen que sí.
 
-`EMAIL` necesita un transport (Resend o nodemailer); `NOTIFY` necesita definir
-el modelo de notificaciones, que hoy no existe.
+`NOTIFY` y `WEBHOOK` se implementaron el 2026-09-04.
 
 ### 7. `triggeredByCascade` no se propaga en las cascadas
 
