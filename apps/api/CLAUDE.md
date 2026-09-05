@@ -309,6 +309,53 @@ Ubicación: `apps/api/prisma/migrations/<YYYYMMDD>_<descriptive_name>/migration.
 
 **Workflow**: editar `schema.prisma` → crear la carpeta y el `migration.sql` a mano → revisar el SQL → `npx prisma migrate deploy` → `npx prisma generate`. Si toca una tabla append-only o borra datos, frenar y revisar el plan de rollback.
 
+## Deploy
+
+La API **no puede ir a Vercel ni a ningún runtime serverless**, por dos razones
+concretas:
+
+- `auth-code.service` guarda los códigos de login de un solo uso en un `Map` en
+  memoria del proceso. Con más de una instancia, el callback de Google y el
+  `POST /auth/exchange` caen en instancias distintas y el login falla de forma
+  intermitente. Ver `TO_DO.md` §11.
+- Los flujos corren en listeners de `EventEmitter2` **después** de responder.
+  Una función serverless se congela al devolver la respuesta, así que un
+  webhook o una entrada en cascada podría no ejecutarse.
+
+Va en un proceso persistente (Railway, Render, Fly) y por ahora en **una sola
+instancia**, por el mismo `Map` de arriba.
+
+### `NODE_ENV=production` es un control de seguridad, no una etiqueta
+
+Dos comportamientos dependen de él:
+
+- `storage.module` **aborta el arranque** si faltan las variables de R2, para
+  que no se caiga en silencio al disco local: los PDFs son evidencia ISO.
+- `record-action.listener` habilita destinos internos para los webhooks
+  **solo** fuera de producción. Sin `NODE_ENV=production`, la protección
+  anti-SSRF queda abierta.
+
+**Pero no hay que declararlo como variable del servicio**: pnpm saltea las
+`devDependencies` cuando `NODE_ENV=production`, y ahí viven `@nestjs/cli` y el
+CLI de Prisma — el build fallaría. Va en el comando de arranque:
+
+```
+NODE_ENV=production node apps/api/dist/main
+```
+
+### Prisma en el host de deploy
+
+No hay `postinstall`: se probó y en Windows rompe `pnpm install` cuando el
+servidor de desarrollo tiene tomado el motor de consultas. El `prisma generate`
+va explícito en el comando de build.
+
+Las migraciones se aplican con `pnpm --filter @synapse/api db:deploy`
+(`prisma migrate deploy`), a mano y una vez, no en cada arranque.
+
+> **Antes del primer deploy contra una base existente**: `migrate deploy` va a
+> ver 4 migraciones como no aplicadas —carpetas que alguien renombró— y va a
+> intentar correrlas de nuevo. Ver `TO_DO.md` §5. Con una base nueva no pasa.
+
 ## Testing
 
 **Vitest**, config en `vitest.config.mts`. Los tests van al lado del código como
