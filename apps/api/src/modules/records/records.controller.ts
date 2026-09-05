@@ -162,7 +162,13 @@ export class RecordsController {
 
   @Delete(':id/actions/:actionId')
   @Roles('ADMIN', 'QUALITY_MANAGER')
-  deleteAction(@Param('actionId') actionId: string) {
-    return this.service.deleteAction(actionId)
+  deleteAction(
+    @Param('id') id: string,
+    @Param('actionId') actionId: string,
+    // La organización sale del JWT, nunca de la ruta: es lo que impide borrar
+    // el flujo de otra organización pasando su actionId.
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.service.deleteAction(id, actionId, user.organizationId)
   }
 }

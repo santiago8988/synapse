@@ -612,7 +612,33 @@ export class RecordsService {
     })
   }
 
-  async deleteAction(actionId: string) {
+  /**
+   * Borra un flujo.
+   *
+   * Antes recibía solo el `actionId` y hacía el `delete` con ese id a secas:
+   * con un JWT válido de una organización y el id de un flujo de otra, se
+   * borraba el flujo ajeno. Los otros tres endpoints de flujos sí validaban,
+   * así que era el único agujero — y el más caro, porque borrar no se deshace.
+   *
+   * Se verifica primero, en la misma consulta, que el flujo cuelgue del
+   * registro de la URL y que ese registro sea de la organización del token.
+   * `deleteMany` con el `where` completo tampoco alcanzaría: devolvería
+   * `count: 0` sin decir por qué, y un borrado que falla en silencio es peor
+   * que uno que falla.
+   */
+  async deleteAction(recordId: string, actionId: string, organizationId: string) {
+    const action = await this.prisma.recordAction.findFirst({
+      where: {
+        id: actionId,
+        sourceRecordId: recordId,
+        sourceRecord: { organizationId },
+      },
+      select: { id: true },
+    })
+    // Mismo error para "no existe" y "no es tuyo": distinguirlos le confirmaría
+    // a quien prueba ids que ese flujo existe en otra organización.
+    if (!action) throw new NotFoundException('Flujo no encontrado')
+
     return this.prisma.recordAction.delete({ where: { id: actionId } })
   }
 

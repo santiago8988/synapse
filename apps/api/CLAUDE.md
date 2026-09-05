@@ -132,6 +132,25 @@ queda desactualizada el síntoma es un login que "no hace nada", sin error.
 al arrancar: cambiarla exige rebuildear. Es lo que impide probar la app desde
 un celular apuntando a `localhost`. Ver `TO_DO.md` §22.
 
+## Flujos (`RecordAction`)
+
+Un flujo = **una fila** en `RecordAction`. No hay grafo serializado: el canvas
+del editor visual se reconstruye desde las filas.
+
+**Agregar o cambiar un flujo NO versiona el registro.** `Record.version`
+significa la estructura de campos: existe para que `Entry.recordVersion`
+congele con qué formulario se cargó cada entrada y `getFieldsForVersion` pueda
+reconstruirlo. Un flujo no cambia esa respuesta, y versionarlo llenaría el
+historial de versiones idénticas entre sí. La trazabilidad de los flujos va por
+el `AuditLog` — hoy con el nombre equivocado, ver `TO_DO.md` §25.
+
+`RecordAction` **no tiene `organizationId`**: cuelga de `sourceRecord`. Toda
+consulta sobre flujos tiene que filtrar por ahí. `deleteAction` no lo hacía
+—recibía solo el `actionId`— y permitía borrar el flujo de otra organización;
+hay tests de regresión en `record-actions.isolation.spec.ts` que verifican el
+`where`, no el resultado, porque contra una base real el filtro se puede caer y
+el test seguir pasando.
+
 ## Visibilidad por área
 
 La regla: **cada usuario ve su área y todas las que dependen de ella.** `ADMIN`

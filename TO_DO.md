@@ -190,11 +190,48 @@ Queda por decidir dónde vive la API: Vercel hostea el frontend, pero el backend
 NestJS necesita un proceso propio (Railway, Fly, Render). Con eso definido se
 cierra también §13c.
 
+### 25. Los cambios de flujo se auditan con el nombre equivocado
+
+Los cuatro endpoints de flujos viven en `RecordsController`, y el
+`AuditInterceptor` deriva la entidad del **nombre del controller**. Resultado:
+
+| Acción | Lo que queda escrito |
+|---|---|
+| Crear un flujo | `records.created`, con `entityId` = id del **registro** |
+| Editar un flujo | `records.updated` |
+| Borrar un flujo | `records.deleted` |
+
+La última es la peor: en el registro de auditoría parece que se borró el
+registro entero. Y en los tres casos el `before` que se captura es la fila del
+`Record`, que no cambió, así que un auditor ve una acción con estado anterior y
+posterior idénticos.
+
+Lo importante de fondo: **no queda rastro de qué flujo era ni de cómo estaba
+configurado antes**. Si alguien le cambia el destino a un flujo o le apaga una
+condición, el valor anterior se pierde — y un flujo crea entradas, modifica
+campos y manda datos afuera por webhook, así que es exactamente el tipo de
+configuración que una auditoría quiere poder reconstruir.
+
+El arreglo: mover los endpoints a un `RecordActionsController` propio. El
+interceptor deriva `RECORD_ACTIONS` solo, el `entityId` pasa a ser el del flujo
+y sumándolo a `AUDITABLE_ENTITIES` se captura el `before` real. Hace falta un
+`TenantScope` nuevo, porque `RecordAction` no tiene `organizationId` propio:
+cuelga de `sourceRecord`. Y hay que incluir ese tipo en `audit.service.findForRecord`,
+para que los cambios de flujo aparezcan en la pestaña Auditoría del registro,
+que es donde alguien los va a buscar.
+
+> **Decidido el 2026-09-05**: agregar o cambiar un flujo **no** versiona el
+> registro. `Record.version` significa la estructura de campos —existe para que
+> `Entry.recordVersion` congele con qué formulario se cargó cada entrada— y un
+> flujo no cambia esa respuesta. Versionarlo llenaría el historial de versiones
+> idénticas entre sí, que es la forma más rápida de que nadie lo mire más. La
+> trazabilidad de los flujos va por el AuditLog, no por la versión.
+
 ---
 
 ## Tests
 
-Hay 131 tests en `apps/api` y 47 en `apps/web`. Corren con `pnpm test` y en CI.
+Hay 135 tests en `apps/api` y 47 en `apps/web`. Corren con `pnpm test` y en CI.
 
 > §14 (tests del frontend) se resolvió el 2026-09-05: runner montado, helpers de
 > fórmulas y comparaciones, manejo de sesión y el `DynamicRecordForm`.
