@@ -141,6 +141,55 @@ cuál manda para los vencimientos.
 
 Queda pendiente de decisión, junto con §9.
 
+### 13c. La PWA no está verificada en un dispositivo real
+
+El service worker está implementado y el build lo genera, pero **nadie lo vio
+funcionar en un celular todavía**. Se intentó el 2026-09-05 con el reenvío de
+puertos de VS Code y no se llegó: el frontend cargó, el login no.
+
+La razón no es un bug sino cómo está armada la configuración, y conviene
+tenerla escrita porque va a volver a aparecer:
+
+- `NEXT_PUBLIC_API_URL` se hornea en el bundle **al construir**, no al
+  arrancar. Con el valor de desarrollo (`http://localhost:3001/api`), el
+  celular le pide la API a sí mismo y recibe `ERR_CONNECTION_REFUSED`.
+- Probar de verdad exige que coincidan cuatro URLs: `NEXT_PUBLIC_API_URL` en
+  el front, `FRONTEND_URL` y `GOOGLE_CALLBACK_URL` en la API, y el *authorized
+  redirect URI* registrado en Google Cloud Console.
+- No sirve la IP de la LAN: `http://192.168.x.x` no es un contexto seguro, así
+  que el navegador **no registra ningún service worker**. Hace falta HTTPS.
+
+Por eso se difiere al deploy en Vercel, donde las cuatro URLs son estables y el
+HTTPS viene dado. Ver §22.
+
+Lo que falta comprobar ahí: que la app se instale desde el celular, que una
+pantalla ya visitada siga abriendo en modo avión, que una no visitada caiga en
+`/offline`, y que el banner de sin conexión aparezca.
+
+---
+
+## Deploy
+
+### 22. Primer deploy a Vercel
+
+Nunca se desplegó. Además de conectar el repo, hay que dejar consistentes las
+URLs que hoy apuntan a `localhost`:
+
+| Dónde | Variable | Hoy |
+|---|---|---|
+| Vercel (web) | `NEXT_PUBLIC_API_URL` | `http://localhost:3001/api` |
+| API | `FRONTEND_URL` | `http://localhost:3000` |
+| API | `GOOGLE_CALLBACK_URL` | `http://localhost:3001/api/auth/google/callback` |
+| Google Cloud Console | *Authorized redirect URI* | debe igualar a `GOOGLE_CALLBACK_URL` |
+
+`FRONTEND_URL` cumple doble función en el backend: es el origen que acepta por
+CORS (`main.ts`) y a dónde redirige después del login (`auth.controller.ts`).
+Si queda desactualizada, el síntoma es un login que "no hace nada".
+
+Queda por decidir dónde vive la API: Vercel hostea el frontend, pero el backend
+NestJS necesita un proceso propio (Railway, Fly, Render). Con eso definido se
+cierra también §13c.
+
 ---
 
 ## Tests

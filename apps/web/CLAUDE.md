@@ -233,6 +233,20 @@ implícito.
 
 El service worker está **apagado en desarrollo** (`disable: isDev`).
 
+**Todavía no se verificó en un celular.** Para probarlo hacen falta dos cosas
+que no se dan en local, y conviene saberlas antes de perder una tarde:
+
+- **HTTPS.** El navegador no registra ningún service worker fuera de un
+  contexto seguro, así que `http://<ip-de-la-lan>:3000` no sirve: la app se ve,
+  pero de PWA no tiene nada.
+- **Que `NEXT_PUBLIC_API_URL` apunte a algo que el celular pueda alcanzar.** Se
+  hornea en el bundle **al construir**, no al arrancar; con el valor de
+  desarrollo el teléfono le pide la API a sí mismo. Cambiarla exige rebuildear,
+  y arrastra `FRONTEND_URL` y `GOOGLE_CALLBACK_URL` en la API más el *redirect
+  URI* registrado en Google Cloud Console — las cuatro tienen que coincidir.
+
+Se difiere al deploy. Ver `TO_DO.md` §13c y §22.
+
 ## Paleta y estados de badges
 
 Los tokens de color están en `globals.css`. Estados visuales canónicos:

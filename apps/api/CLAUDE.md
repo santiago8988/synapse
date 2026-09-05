@@ -11,11 +11,11 @@ Backend NestJS del sistema de gestión de calidad Synapse. Maneja la lógica de 
 - **Zod** — validación de DTOs
 - **Cloudflare R2** vía `@aws-sdk/client-s3` — storage de archivos, detrás de `StorageService`
 - **EventEmitter2** (`@nestjs/event-emitter`) — domain events
+- **mathjs** — evaluación de fórmulas sobre una instancia restringida
 - **Vitest** — tests unitarios (`pnpm test`)
 
-> `REDIS_URL` está en el `.env` pero BullMQ/Redis **no están cableados**, y
-> **mathjs no está instalado**: las fórmulas se evalúan con `Function()` sobre
-> una expresión saneada. Ver `TO_DO.md` §2 y §11.
+> `REDIS_URL` está en el `.env` pero BullMQ/Redis **no están cableados**. Ver
+> `TO_DO.md` §11.
 
 ## Estructura
 
@@ -95,13 +95,36 @@ apps/api/src/
 1. Frontend redirige a Google OAuth
 2. Callback → Passport verifica id_token → extrae email
 3. Buscar email en EmailWhitelist (puede estar en múltiples orgs)
-4. Si está en una org: emitir JWT
-   Si está en varias: redirigir a /select-org y emitir JWT al elegir
-5. JWT payload: { sub, email, organizationId, role, areaId }
-6. Cookie httpOnly al frontend
+4. Se emite un código de un solo uso y se redirige al frontend con él:
+   una org  → /callback?code=...
+   varias   → /select-org?code=...
+5. El frontend canjea el código por el JWT vía POST /auth/exchange
+6. JWT payload: { sub, email, organizationId, role, areaId }
 ```
 
+El JWT **nunca viaja en la URL**: quedaría escrito en los logs del servidor y
+en el historial del navegador. El código vence a los 2 minutos, sirve una sola
+vez y vive en memoria del proceso (`auth-code.service.ts`) — lo que ata la API
+a una sola instancia hasta que exista Redis, ver `TO_DO.md` §11.
+
 Para cambiar de organización activa: `POST /auth/switch-org` re-emite JWT con la nueva org.
+
+### Las URLs tienen que coincidir en cuatro lugares
+
+| Dónde | Variable |
+|---|---|
+| API | `FRONTEND_URL` |
+| API | `GOOGLE_CALLBACK_URL` |
+| Frontend | `NEXT_PUBLIC_API_URL` |
+| Google Cloud Console | *Authorized redirect URI* |
+
+`FRONTEND_URL` cumple doble función: es el origen que se acepta por CORS
+(`main.ts`) y a dónde se redirige después del login (`auth.controller.ts`). Si
+queda desactualizada el síntoma es un login que "no hace nada", sin error.
+
+`NEXT_PUBLIC_API_URL` se hornea en el bundle del frontend **al construir**, no
+al arrancar: cambiarla exige rebuildear. Es lo que impide probar la app desde
+un celular apuntando a `localhost`. Ver `TO_DO.md` §22.
 
 ## Patrones obligatorios para controllers
 
