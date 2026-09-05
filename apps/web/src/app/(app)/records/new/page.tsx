@@ -31,6 +31,20 @@ export default function NewRecordPage() {
   const [name, setName] = useState('')
   const [type, setType] = useState<RecordType>('PERIODIC')
   const [areaIds, setAreaIds] = useState<string[]>([])
+  /**
+   * Alcance del registro. `null` es "todavía no lo decidió" y bloquea el alta.
+   *
+   * Antes el campo de áreas era opcional y vacío significaba dos cosas a la
+   * vez: "es de toda la organización" y "no lo clasifiqué". El sistema no las
+   * podía distinguir, y con la visibilidad por área en juego esa ambigüedad se
+   * volvió una decisión de permisos tomada por omisión.
+   *
+   * Lo obligatorio es **decidir**, no elegir un área: "toda la organización" es
+   * una respuesta legítima —una revisión por la dirección o una evaluación de
+   * proveedores no son de un área— y forzar una haría que la gente elija
+   * cualquiera, convirtiendo el filtro en ruido.
+   */
+  const [alcance, setAlcance] = useState<'org' | 'areas' | null>(null)
   const [periodicity, setPeriodicity] = useState<number | ''>('')
   const [notifyDaysBefore, setNotifyDaysBefore] = useState<number | ''>('')
   const [fields, setFields] = useState<FieldDef[]>([])
@@ -128,6 +142,11 @@ export default function NewRecordPage() {
       if (missing.length > 0) return toast.error(`Stock requiere: ${missing.join(', ')}`)
     }
 
+    if (alcance === null)
+      return toast.error('Elegí el alcance del registro: toda la organización o áreas específicas')
+    if (alcance === 'areas' && areaIds.length === 0)
+      return toast.error('Elegí al menos un área, o marcá "Toda la organización"')
+
     const resolveComparisonConfig = (config: FieldDef['comparisonConfig']) => {
       if (!config) return undefined
       const resolved = { ...config }
@@ -145,7 +164,8 @@ export default function NewRecordPage() {
     createMutation.mutate({
       name,
       type,
-      areaIds: areaIds.length > 0 ? areaIds : undefined,
+      // Vacío explícito = toda la organización. Ya no es "sin decidir".
+      areaIds: alcance === 'areas' ? areaIds : [],
       periodicity:
         (type === 'PERIODIC' || type === 'INSTRUMENTAL') && periodicity !== ''
           ? periodicity
@@ -330,8 +350,35 @@ export default function NewRecordPage() {
                   </>
                 )}
                 <div className="syn-field" style={{ gridColumn: 'span 2' }}>
-                  <span className="syn-field-label">Áreas</span>
-                  <AreaPicker areaIds={areaIds} setAreaIds={setAreaIds} flatAreas={flatAreas} />
+                  <span className="syn-field-label">
+                    Alcance <span style={{ color: 'var(--danger)' }}>*</span>
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <OpcionAlcance
+                      activa={alcance === 'org'}
+                      onClick={() => {
+                        setAlcance('org')
+                        setAreaIds([])
+                      }}
+                    >
+                      Toda la organización
+                    </OpcionAlcance>
+                    <OpcionAlcance activa={alcance === 'areas'} onClick={() => setAlcance('areas')}>
+                      Áreas específicas
+                    </OpcionAlcance>
+                  </div>
+                  {alcance === 'areas' && (
+                    <div className="mt-2">
+                      <AreaPicker areaIds={areaIds} setAreaIds={setAreaIds} flatAreas={flatAreas} />
+                    </div>
+                  )}
+                  <p className="mt-2 text-[11.5px]" style={{ color: 'var(--ink-3)' }}>
+                    {alcance === 'org'
+                      ? 'Lo ven todos los usuarios de la organización.'
+                      : alcance === 'areas'
+                        ? 'Lo ven quienes estén en esas áreas o en alguna que dependa de ellas. Los administradores y auditores lo ven siempre.'
+                        : 'Define quién ve este registro.'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -548,6 +595,46 @@ export default function NewRecordPage() {
 // ───────────────────────────────────────────────────────────────────────────
 // AreaPicker — multi-area picker con chips + dropdown popover
 // ───────────────────────────────────────────────────────────────────────────
+
+/** Botón de las dos opciones de alcance. Se comporta como un radio. */
+function OpcionAlcance({
+  activa,
+  onClick,
+  children,
+}: {
+  activa: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={activa}
+      onClick={onClick}
+      className="inline-flex items-center gap-2 rounded-[10px] border px-3 py-2 text-[12.5px] transition-colors"
+      style={{
+        background: activa ? 'var(--info-soft)' : 'var(--bg-1)',
+        borderColor: activa ? 'var(--info)' : 'var(--line-2)',
+        color: activa ? 'var(--info)' : 'var(--ink-2)',
+        fontWeight: activa ? 500 : 400,
+      }}
+    >
+      <span
+        className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border"
+        style={{ borderColor: activa ? 'var(--info)' : 'var(--line-strong)' }}
+      >
+        {activa && (
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ background: 'var(--info)' }}
+          />
+        )}
+      </span>
+      {children}
+    </button>
+  )
+}
 
 function AreaPicker({
   areaIds,

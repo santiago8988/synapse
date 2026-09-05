@@ -151,8 +151,10 @@ El orden de los dos filtros importa y no es negociable: primero
 lo propio se muestra. El filtro de áreas **nunca** reemplaza al de organización.
 
 **Un `Record` sin área se muestra a todos.** Pertenece a 0..N áreas
-(`RecordArea`), y ese cero significa "sin clasificar", no "de otro". Esconderlo
-haría desaparecer trabajo sin que nadie se entere.
+(`RecordArea`), y ese cero significa "toda la organización", no "de otro".
+Desde el 2026-09-05 el Record Builder obliga a elegir el alcance de forma
+explícita, así que en los registros nuevos el vacío es una decisión y no una
+omisión; los anteriores quedan tratados igual que antes.
 
 > **Hoy solo lo aplica el dashboard.** `AreaAccessGuard` implementa la misma
 > regla con consultas recursivas y **no está referenciado en ningún

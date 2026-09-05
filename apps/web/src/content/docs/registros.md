@@ -16,6 +16,22 @@ Registro "Control de pH - Agua Potable"     <-- Plantilla (se crea una vez)
     +-- Entrada 3: RESERVORIO ESTE, pH 7.0, 21.8 C, PH-001 -- PASA
 ```
 
+
+## Alcance: quién ve el registro
+
+Al crear un registro hay que elegir su alcance. No es opcional, aunque una de
+las dos respuestas sea "todos":
+
+- **Toda la organización** — lo ve cualquier usuario. Es lo correcto para lo que
+  no pertenece a un área: una revisión por la dirección, una evaluación de
+  proveedores, un procedimiento general.
+- **Áreas específicas** — lo ven quienes estén en esas áreas o en alguna que
+  dependa de ellas. Los administradores y auditores lo ven siempre.
+
+Se pide decidir, y no simplemente elegir un área, porque forzar un área para
+algo que no la tiene haría que se elija cualquiera, y el filtro por área dejaría
+de significar nada.
+
 ## Tipos de registro
 
 | Tipo | Clave | Seguimiento | Caso de uso |

@@ -272,8 +272,11 @@ empezar por `records`, que es de donde cuelga el área de casi todo lo demás.
 Decisiones ya tomadas al resolver §23, para no reabrirlas en cada módulo:
 
 - `ADMIN` y `AUDITOR` no tienen restricción.
-- Un registro **sin área** se muestra a todos: no es "de otro", está sin
-  clasificar, y esconderlo hace desaparecer trabajo sin que nadie se entere.
+- Un registro **sin área** se muestra a todos. Desde el 2026-09-05 el alta
+  obliga a elegir alcance explícitamente —"toda la organización" o áreas
+  concretas— así que para los registros nuevos el vacío ya no es una omisión
+  sino una decisión. Los anteriores quedan grandfathered como "toda la
+  organización", que es como el sistema ya los trataba.
 - Sin área asignada, un usuario solo ve lo no clasificado — y la pantalla se lo
   dice, en vez de mostrarle un tablero vacío que parece "todo en orden".
 - Las aprobaciones no se filtran por área: un `ApprovalRequest` apunta a su

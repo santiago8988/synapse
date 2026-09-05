@@ -1725,14 +1725,19 @@ export default function RecordDetailPage() {
                 <span className="mv">Cada {record.periodicity} días</span>
               </div>
             )}
-            {record.areas && record.areas.length > 0 && (
-              <div className="m">
-                <span className="mk">{record.areas.length === 1 ? 'ÁREA' : 'ÁREAS'}</span>
-                <span className="mv">
-                  {record.areas.map((ra: { area: { name: string } }) => ra.area.name).join(', ')}
-                </span>
-              </div>
-            )}
+            {/* Se muestra siempre, tambien sin areas: es lo que decide quien ve
+                el registro, y ocultarlo cuando esta vacio dejaba invisible
+                justamente el caso mas amplio. */}
+            <div className="m">
+              <span className="mk">
+                {record.areas && record.areas.length === 1 ? 'ÁREA' : 'ÁREAS'}
+              </span>
+              <span className="mv">
+                {record.areas && record.areas.length > 0
+                  ? record.areas.map((ra: { area: { name: string } }) => ra.area.name).join(', ')
+                  : 'Toda la organización'}
+              </span>
+            </div>
             <div className="m">
               <span className="mk">VERSIÓN</span>
               <span className="mv font-mono">v{record.version}</span>
