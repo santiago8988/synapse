@@ -19,16 +19,8 @@ reescribiendo `formula-evaluator.service` sobre mathjs.
 
 ## Seguridad
 
-> §3 (middleware que proteja las rutas privadas) se resolvió el 2026-09-04.
-
-### 4. La CSP acepta cualquier bucket de R2
-
-`apps/web/next.config.js` — `frame-src` e `img-src` permiten
-`https://*.r2.cloudflarestorage.com` porque el account id no está expuesto al
-frontend. Funciona, pero es más amplio de lo necesario.
-
-Se endurece definiendo `NEXT_PUBLIC_R2_URL` con el origen exacto; el código ya
-lo prefiere si está presente.
+> §3 (middleware) y §4 (origen exacto de R2 en la CSP) se resolvieron el
+> 2026-09-04. No queda nada abierto en esta sección.
 
 ---
 
@@ -115,9 +107,11 @@ desde 2026-09-04, y `/audit` los lista de forma global.
 
 ## Stack declarado que no existe
 
-Estas tres cosas figuraban en los `CLAUDE.md` como parte del stack sin estar
-implementadas. Ya se corrigió la documentación; queda decidir si se implementan
-o se descartan definitivamente.
+Figuraban en los `CLAUDE.md` como parte del stack sin estar implementadas. Ya
+se corrigió la documentación; queda decidir si se implementan o se descartan.
+
+`next-auth` se desinstaló el 2026-09-04: era dependencia y no se importaba en
+ningún lado.
 
 ### 11. BullMQ + Redis
 
@@ -128,12 +122,6 @@ fallidas— hoy no tiene dónde correr.
 
 El almacén de códigos de login (`auth-code.service.ts`) también lo necesitaría
 si la API pasa a correr en más de una instancia; hoy es memoria del proceso.
-
-### 12. `next-auth`
-
-Es dependencia de `apps/web` pero **no se importa en ningún archivo**. El login
-es un flujo propio: Google OAuth contra la API, código de un solo uso, y el JWT
-en `localStorage`. Se puede desinstalar.
 
 ### 13. `next-pwa`
 
@@ -174,11 +162,6 @@ pasa con las entries y companions que dependen de una entry inactivada.
 
 `records/[id]/entries/new` está previsto en la estructura de rutas pero hoy la
 creación se maneja inline en el detalle del registro.
-
-### 18. `caniuse-lite` desactualizado
-
-El build avisa que la base de datos de browsers tiene 6 meses. Se arregla con
-`npx update-browserslist-db@latest`.
 
 ---
 
