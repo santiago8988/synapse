@@ -20,6 +20,13 @@ export type TenantScope =
   | { kind: 'column'; field: 'organizationId' | 'orgId' }
   /** La fila cuelga de un Record, que es el que tiene la organización. */
   | { kind: 'record' }
+  /**
+   * La fila cuelga de su Record **de origen**. Es el caso de `RecordAction`:
+   * un flujo referencia dos registros —origen y destino— y solo el de origen
+   * define de quién es el flujo. Filtrar por el destino dejaría entrar los
+   * flujos ajenos que apuntan a un registro propio.
+   */
+  | { kind: 'sourceRecord' }
 
 export interface AuditableEntity {
   /** Nombre del delegate en PrismaClient. */
@@ -54,6 +61,10 @@ export const AUDITABLE_ENTITIES: Record<string, AuditableEntity> = {
   // no pertenece a la organizacion que lo esta tocando.
   METHODS: { model: 'orgMethod', scope: { kind: 'column', field: 'orgId' } },
   AREAS: { model: 'area', scope: { kind: 'column', field: 'organizationId' } },
+  // Los flujos: un cambio acá altera qué entradas se crean solas, qué campos se
+  // pisan y qué datos salen por webhook. Sin `before` no se puede reconstruir
+  // cómo estaba configurado un flujo antes de que alguien lo cambiara.
+  RECORD_ACTIONS: { model: 'recordAction', scope: { kind: 'sourceRecord' } },
 }
 
 /** Construye el `where` acotado al tenant para leer la fila previa. */
@@ -64,6 +75,9 @@ export function buildTenantWhere(
 ): Record<string, unknown> {
   if (entity.scope.kind === 'record') {
     return { id, record: { organizationId } }
+  }
+  if (entity.scope.kind === 'sourceRecord') {
+    return { id, sourceRecord: { organizationId } }
   }
   return { id, [entity.scope.field]: organizationId }
 }

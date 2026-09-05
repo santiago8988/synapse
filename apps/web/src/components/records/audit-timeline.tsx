@@ -41,6 +41,7 @@ const verboLabel: Record<string, string> = {
 const entidadLabel: Record<string, string> = {
   RECORDS: 'el registro',
   ENTRIES: 'una entrada',
+  RECORD_ACTIONS: 'un flujo',
 }
 
 const verboColor: Record<string, string> = {

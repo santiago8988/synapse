@@ -70,6 +70,7 @@ apps/api/src/
     areas/                             ← árbol recursivo
     documents/                         ← versionado (DRAFT/ACTIVE/SUPERSEDED)
     records/                           ← templates con campos OWN
+      record-actions.controller.ts     ← flujos; separado por el AuditLog
     entries/                           ← instancias, evalúa fórmulas y comparisons
       services/
         comparison-evaluator.service.ts
@@ -142,9 +143,21 @@ significa la estructura de campos: existe para que `Entry.recordVersion`
 congele con qué formulario se cargó cada entrada y `getFieldsForVersion` pueda
 reconstruirlo. Un flujo no cambia esa respuesta, y versionarlo llenaría el
 historial de versiones idénticas entre sí. La trazabilidad de los flujos va por
-el `AuditLog` — hoy con el nombre equivocado, ver `TO_DO.md` §25.
+el `AuditLog`.
 
-`RecordAction` **no tiene `organizationId`**: cuelga de `sourceRecord`. Toda
+Los cuatro endpoints viven en **`RecordActionsController`**, no en
+`RecordsController`, y eso no es organización del código: el `AuditInterceptor`
+deriva el tipo de entidad del **nombre de la clase**. Mientras estuvieron
+juntos, crear un flujo quedaba escrito como `records.created` y borrarlo como
+`records.deleted` —en el log parecía que se había borrado el registro entero— y
+el `before` capturado era la fila del `Record`, que no había cambiado. El
+parámetro del flujo se llama `id` y no `actionId` porque de ahí sale el
+`entityId`.
+
+`RecordAction` **no tiene `organizationId`**: cuelga de `sourceRecord`, y por
+eso `TenantScope` tiene una variante propia. Se filtra por el registro de
+**origen** y no por el destino: un flujo referencia los dos, y filtrar por el
+destino dejaría entrar los flujos ajenos que apuntan a un registro propio. Toda
 consulta sobre flujos tiene que filtrar por ahí. `deleteAction` no lo hacía
 —recibía solo el `actionId`— y permitía borrar el flujo de otra organización;
 hay tests de regresión en `record-actions.isolation.spec.ts` que verifican el

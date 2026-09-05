@@ -28,6 +28,14 @@ describe('buildTenantWhere', () => {
     expect(where).toEqual({ id: 'e-1', record: { organizationId: 'org-1' } })
   })
 
+  it('acota los flujos por su registro de origen', () => {
+    // Un RecordAction referencia dos registros y solo el de origen define de
+    // quién es: filtrar por el destino dejaría entrar los flujos ajenos que
+    // apuntan a un registro propio.
+    const where = buildTenantWhere(AUDITABLE_ENTITIES.RECORD_ACTIONS, 'flow-1', 'org-1')
+    expect(where).toEqual({ id: 'flow-1', sourceRecord: { organizationId: 'org-1' } })
+  })
+
   it('usa orgId en OrgMethod, que no sigue la convención', () => {
     const where = buildTenantWhere(AUDITABLE_ENTITIES.METHODS, 'm-1', 'org-1')
     expect(where).toEqual({ id: 'm-1', orgId: 'org-1' })

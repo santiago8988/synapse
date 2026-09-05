@@ -57,11 +57,27 @@ export class AuditService {
           ...(entryIds.length > 0
             ? [{ entityType: 'ENTRIES', entityId: { in: entryIds } }]
             : []),
+          // Los flujos se localizan por el sourceRecordId que viaja dentro del
+          // payload, y no por la lista de flujos actuales: si se buscaran por
+          // id, los flujos borrados desaparecerian del historial — justo los que
+          // mas interesa poder revisar. El precio es que este filtro no usa el
+          // indice; queda acotado por organizationId y por el take.
+          {
+            entityType: 'RECORD_ACTIONS',
+            OR: [
+              { before: { path: ['sourceRecordId'], equals: recordId } },
+              { after: { path: ['sourceRecordId'], equals: recordId } },
+            ],
+          },
         ],
       },
       orderBy: { createdAt: 'desc' },
       take: Math.min(options.take ?? 50, 200),
     })
+
+    // Los flujos guardan ids de registro destino; mostrar un cuid crudo en el
+    // historial no le dice nada a nadie.
+    const nombresDeRegistros = await this.nombresDeRegistros(logs, organizationId)
 
     const userIds = Array.from(new Set(logs.map((l) => l.userId)))
     const users = userIds.length
@@ -79,8 +95,36 @@ export class AuditService {
       entityId: log.entityId,
       createdAt: log.createdAt,
       user: porId.get(log.userId) ?? null,
-      changes: diffEntryData(log.before, log.after, etiquetas),
+      changes:
+        log.entityType === 'RECORD_ACTIONS'
+          ? diffRecordAction(log.before, log.after, nombresDeRegistros)
+          : diffEntryData(log.before, log.after, etiquetas),
     }))
+  }
+
+  /**
+   * Resuelve los ids de registro que aparecen en los logs de flujos a nombres.
+   * Se hace en una sola consulta para todos los logs de la tanda.
+   */
+  private async nombresDeRegistros(
+    logs: Array<{ entityType: string; before: unknown; after: unknown }>,
+    organizationId: string,
+  ): Promise<Map<string, string>> {
+    const ids = new Set<string>()
+    for (const log of logs) {
+      if (log.entityType !== 'RECORD_ACTIONS') continue
+      for (const lado of [log.before, log.after]) {
+        const destino = (lado as { targetRecordId?: unknown } | null)?.targetRecordId
+        if (typeof destino === 'string') ids.add(destino)
+      }
+    }
+    if (ids.size === 0) return new Map()
+
+    const registros = await this.prisma.record.findMany({
+      where: { id: { in: [...ids] }, organizationId },
+      select: { id: true, name: true },
+    })
+    return new Map(registros.map((r) => [r.id, r.name]))
   }
 
   async findAll(organizationId: string, filters: AuditFilters) {
@@ -171,6 +215,83 @@ function diffEntryData(
     // MATRIX_METHOD) y comparar por referencia daria siempre distinto.
     if (JSON.stringify(antes) === JSON.stringify(despues)) continue
     cambios.push({ field: etiquetas.get(clave) ?? clave, from: antes, to: despues })
+  }
+  return cambios
+}
+
+/**
+ * Diferencias de un flujo (`RecordAction`), en los términos en que se configura
+ * en el editor visual.
+ *
+ * No se puede usar `diffEntryData`: ese compara el objeto `data` de una entrada,
+ * y un flujo no tiene `data` — tiene columnas. Sin esto los cambios de flujo
+ * aparecerían en el historial sin ningún detalle, que es casi lo mismo que no
+ * aparecer.
+ *
+ * Se comparan solo las columnas que representan una decisión del usuario.
+ * `createdAt` o `id` cambiarían el diff sin decir nada.
+ */
+const CAMPOS_DE_FLUJO: Array<{ clave: string; etiqueta: string }> = [
+  { clave: 'targetRecordId', etiqueta: 'Registro destino' },
+  { clave: 'trigger', etiqueta: 'Cuándo se dispara' },
+  { clave: 'actionType', etiqueta: 'Qué hace' },
+  { clave: 'condition', etiqueta: 'Condición' },
+  { clave: 'actionConfig', etiqueta: 'Configuración' },
+  { clave: 'fieldMapping', etiqueta: 'Mapeo de campos' },
+  { clave: 'allowCascade', etiqueta: 'Permitir encadenado' },
+]
+
+/** Mismas palabras que muestra el editor visual, para que no haya que traducir. */
+const ETIQUETAS_DE_TRIGGER: Record<string, string> = {
+  ENTRY_CREATED: 'Cuando se crea una entrada',
+  ENTRY_COMPLETED: 'Cuando se completa una entrada',
+  FIELD_VALUE_CHANGED: 'Cuando cambia un campo de la entrada',
+  COMPARISON_FAILED: 'Cuando falla una comparación',
+}
+
+const ETIQUETAS_DE_ACCION: Record<string, string> = {
+  CREATE_ENTRY: 'Crear entrada en otro registro',
+  UPDATE_FIELD: 'Actualizar campo de una entrada',
+  NOTIFY: 'Notificar dentro de la app',
+  WEBHOOK: 'Llamar a un webhook',
+  EMAIL: 'Enviar email',
+}
+
+export function diffRecordAction(
+  before: unknown,
+  after: unknown,
+  nombresDeRegistros: Map<string, string>,
+): Array<{ field: string; from: unknown; to: unknown }> {
+  const previo = (before ?? null) as Record<string, unknown> | null
+  const nuevo = (after ?? null) as Record<string, unknown> | null
+  if (previo === null && nuevo === null) return []
+
+  const legible = (clave: string, valor: unknown): unknown => {
+    if (valor === undefined) return undefined
+    if (clave === 'targetRecordId' && typeof valor === 'string') {
+      return nombresDeRegistros.get(valor) ?? valor
+    }
+    if (clave === 'trigger' && typeof valor === 'string') {
+      return ETIQUETAS_DE_TRIGGER[valor] ?? valor
+    }
+    if (clave === 'actionType' && typeof valor === 'string') {
+      return ETIQUETAS_DE_ACCION[valor] ?? valor
+    }
+    // El mapeo es una lista y mostrarla cruda no aporta; interesa cuántos
+    // campos viajan, y el detalle está en el editor.
+    if (clave === 'fieldMapping' && Array.isArray(valor)) {
+      return valor.length === 1 ? '1 campo' : `${valor.length} campos`
+    }
+    return valor
+  }
+
+  const cambios: Array<{ field: string; from: unknown; to: unknown }> = []
+  for (const { clave, etiqueta } of CAMPOS_DE_FLUJO) {
+    const antes = legible(clave, previo?.[clave])
+    const despues = legible(clave, nuevo?.[clave])
+    // Serializado, porque `condition` y `actionConfig` son objetos anidados.
+    if (JSON.stringify(antes) === JSON.stringify(despues)) continue
+    cambios.push({ field: etiqueta, from: antes, to: despues })
   }
   return cambios
 }

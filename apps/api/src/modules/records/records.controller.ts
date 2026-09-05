@@ -111,64 +111,7 @@ export class RecordsController {
     return this.service.restore(id, user.organizationId)
   }
 
-  // ─── Actions (RecordAction / Visual Flow Editor) ──────────────────────────
-
-  @Get(':id/actions')
-  listActions(
-    @Param('id') id: string,
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.service.listActions(id, user.organizationId)
-  }
-
-  @Post(':id/actions')
-  @Roles('ADMIN', 'QUALITY_MANAGER')
-  addAction(
-    @Param('id') id: string,
-    @CurrentUser() user: JwtPayload,
-    @Body()
-    body: {
-      targetRecordId: string
-      fieldMapping: Array<{ sourceFieldId: string; targetFieldId: string }>
-      trigger?: 'ENTRY_CREATED' | 'ENTRY_COMPLETED' | 'FIELD_VALUE_CHANGED' | 'COMPARISON_FAILED'
-      condition?: Prisma.InputJsonValue | null
-      allowCascade?: boolean
-      actionType?: 'CREATE_ENTRY' | 'UPDATE_FIELD' | 'NOTIFY' | 'EMAIL' | 'WEBHOOK'
-      actionConfig?: Prisma.InputJsonValue | null
-    },
-  ) {
-    return this.service.addAction(id, user.organizationId, body)
-  }
-
-  @Patch(':id/actions/:actionId')
-  @Roles('ADMIN', 'QUALITY_MANAGER')
-  updateAction(
-    @Param('id') id: string,
-    @Param('actionId') actionId: string,
-    @CurrentUser() user: JwtPayload,
-    @Body()
-    body: {
-      targetRecordId?: string
-      fieldMapping?: Array<{ sourceFieldId: string; targetFieldId: string }>
-      trigger?: 'ENTRY_CREATED' | 'ENTRY_COMPLETED' | 'FIELD_VALUE_CHANGED' | 'COMPARISON_FAILED'
-      condition?: Prisma.InputJsonValue | null
-      allowCascade?: boolean
-      actionType?: 'CREATE_ENTRY' | 'UPDATE_FIELD' | 'NOTIFY' | 'EMAIL' | 'WEBHOOK'
-      actionConfig?: Prisma.InputJsonValue | null
-    },
-  ) {
-    return this.service.updateAction(id, actionId, user.organizationId, body)
-  }
-
-  @Delete(':id/actions/:actionId')
-  @Roles('ADMIN', 'QUALITY_MANAGER')
-  deleteAction(
-    @Param('id') id: string,
-    @Param('actionId') actionId: string,
-    // La organización sale del JWT, nunca de la ruta: es lo que impide borrar
-    // el flujo de otra organización pasando su actionId.
-    @CurrentUser() user: JwtPayload,
-  ) {
-    return this.service.deleteAction(id, actionId, user.organizationId)
-  }
+  // Los flujos (RecordAction) viven en RecordActionsController: el
+  // AuditInterceptor deriva la entidad del nombre del controller, y aca
+  // quedaban registrados como records.* con el id del registro.
 }
