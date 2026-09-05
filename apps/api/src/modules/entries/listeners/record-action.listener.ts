@@ -7,11 +7,15 @@ import {
   type TargetFieldRef,
 } from '../../../common/flows/flow-config'
 import {
+  matchesCondition,
+  resolveSource,
+  type CompanionsBag,
+} from '../../../common/flows/flow-evaluation'
+import {
   EntryCreatedEvent,
   EntryFieldValueChangedEvent,
 } from '../../../common/events/domain-events'
 import { Prisma } from '@prisma/client'
-import type { ActionCondition, ActionConditionPrimitive } from '@synapse/types'
 
 /**
  * Escucha EntryCreatedEvent y dispara la creación automática
@@ -288,7 +292,7 @@ export class RecordActionListener {
         if (event.triggeredByCascade && !action.allowCascade) continue
 
         // Filtrar por condition (recursiva).
-        if (!this.matchesCondition(action.condition, event, sourceData, companions)) continue
+        if (!matchesCondition(action.condition, event, sourceData, companions)) continue
 
         // Dispatch por actionType — default CREATE_ENTRY mantiene back-compat.
         await this.dispatchAction(action, event, sourceEntry, sourceData, companions)
@@ -305,150 +309,6 @@ export class RecordActionListener {
       )
       // No re-throwear: el update original ya commiteó.
     }
-  }
-
-  /**
-   * Evalúa una `condition` (JSON guardada en RecordAction.condition) contra
-   * el payload del evento. Soporta:
-   *  - Primitivas: { type: 'EQUALS' | 'NOT_EQUALS' | 'IN' | 'NOT_IN', field, value }
-   *  - Composite: { type: 'AND' | 'OR', conditions: ActionCondition[] } (recursivo)
-   * Si condition es null/undefined, siempre matchea.
-   */
-  private matchesCondition(
-    condition: unknown,
-    event: EntryFieldValueChangedEvent,
-    sourceData: Record<string, unknown>,
-    companions: CompanionsBag,
-  ): boolean {
-    if (!condition) return true
-    return this.evalCondition(condition as ActionCondition, event, sourceData, companions)
-  }
-
-  private evalCondition(
-    cond: ActionCondition,
-    event: EntryFieldValueChangedEvent,
-    sourceData: Record<string, unknown>,
-    companions: CompanionsBag,
-  ): boolean {
-    if (cond.type === 'AND') {
-      return cond.conditions.every((c) => this.evalCondition(c, event, sourceData, companions))
-    }
-    if (cond.type === 'OR') {
-      return cond.conditions.some((c) => this.evalCondition(c, event, sourceData, companions))
-    }
-    return this.evalPrimitive(cond as ActionConditionPrimitive, event, sourceData, companions)
-  }
-
-  private evalPrimitive(
-    cond: ActionConditionPrimitive,
-    event: EntryFieldValueChangedEvent,
-    sourceData: Record<string, unknown>,
-    companions: CompanionsBag,
-  ): boolean {
-    if (!cond.type || !cond.field) return false
-
-    let actual: unknown
-    switch (cond.field) {
-      case 'fieldId':
-        actual = event.fieldId
-        break
-      case 'toValue':
-        actual = event.toValue
-        break
-      case 'fromValue':
-        actual = event.fromValue
-        break
-      default:
-        // Para cualquier otro path delegamos en resolveSource — soporta
-        // `<fieldId>` plano (equivalente a $entry.<fieldId>),
-        // `$entry.<fieldId>`, `$batch.X`, `$sample.X`, `$instrument.X`.
-        // Si el path no resuelve a nada, fail-closed (no matchea).
-        actual = this.resolveSource(cond.field, event, sourceData, companions)
-        if (actual === undefined) return false
-    }
-
-    const expected = cond.value
-
-    switch (cond.type) {
-      case 'EQUALS':
-        return String(actual) === String(expected)
-      case 'NOT_EQUALS':
-        return String(actual) !== String(expected)
-      case 'IN':
-        return Array.isArray(expected) && expected.map(String).includes(String(actual))
-      case 'NOT_IN':
-        return Array.isArray(expected) && !expected.map(String).includes(String(actual))
-      case 'LT':
-        return Number(actual) < Number(expected)
-      case 'LTE':
-        return Number(actual) <= Number(expected)
-      case 'GT':
-        return Number(actual) > Number(expected)
-      case 'GTE':
-        return Number(actual) >= Number(expected)
-      case 'BETWEEN':
-        return (
-          Array.isArray(expected) &&
-          expected.length === 2 &&
-          Number(actual) >= Number(expected[0]) &&
-          Number(actual) <= Number(expected[1])
-        )
-      default:
-        return false
-    }
-  }
-
-  /**
-   * Resuelve un `sourceFieldId` del fieldMapping a su valor actual. Soporta:
-   *   - `$entry.id` → id de la entry que disparó el evento.
-   *   - `$entry.<fieldId>` → valor de un field específico de la entry padre.
-   *   - `$batch.<key>` → campo del Batch companion (lotNumber, status,
-   *     producedQuantity, unit). Solo aplica si el record es type BATCH.
-   *   - `$sample.<key>` → campo del Sample companion (sampleCode, status,
-   *     client, matrixId). Solo aplica si el record es type SAMPLE.
-   *   - `$instrument.<key>` → campo del Instrument companion (status,
-   *     nextCalibrationAt). Solo aplica si el record es type INSTRUMENTAL.
-   *   - `$event.toValue` / `$event.fromValue` / `$event.fieldId` → del evento FIELD_VALUE_CHANGED.
-   *   - `<fieldId>` (default) → valor del field en la entry padre. Caso histórico.
-   */
-  private resolveSource(
-    sourceFieldId: string,
-    event: EntryFieldValueChangedEvent,
-    sourceData: Record<string, unknown>,
-    companions?: {
-      batch?: Record<string, unknown> | null
-      sample?: Record<string, unknown> | null
-      instrument?: Record<string, unknown> | null
-    },
-  ): unknown {
-    if (sourceFieldId === '$entry.id') return event.entryId
-    if (sourceFieldId.startsWith('$entry.')) {
-      return sourceData[sourceFieldId.slice('$entry.'.length)]
-    }
-    if (sourceFieldId.startsWith('$batch.')) {
-      const key = sourceFieldId.slice('$batch.'.length)
-      // Caso especial: `$batch.quantity` combina producedQuantity + unit
-      // en un objeto compatible con fields tipo QUANTITY del target.
-      if (key === 'quantity' && companions?.batch) {
-        const value = companions.batch.producedQuantity
-        const unit = companions.batch.unit
-        if (value == null && unit == null) return undefined
-        return { value: value ?? null, unit: unit ?? null }
-      }
-      return companions?.batch?.[key] ?? undefined
-    }
-    if (sourceFieldId.startsWith('$sample.')) {
-      const key = sourceFieldId.slice('$sample.'.length)
-      return companions?.sample?.[key] ?? undefined
-    }
-    if (sourceFieldId.startsWith('$instrument.')) {
-      const key = sourceFieldId.slice('$instrument.'.length)
-      return companions?.instrument?.[key] ?? undefined
-    }
-    if (sourceFieldId === '$event.toValue') return event.toValue
-    if (sourceFieldId === '$event.fromValue') return event.fromValue
-    if (sourceFieldId === '$event.fieldId') return event.fieldId
-    return sourceData[sourceFieldId]
   }
 
   /**
@@ -517,7 +377,7 @@ export class RecordActionListener {
     const mapping = sanitizeFieldMapping(action.fieldMapping)
     const targetData: Record<string, unknown> = {}
     for (const map of mapping) {
-      const value = this.resolveSource(map.sourceFieldId, event, sourceData, companions)
+      const value = resolveSource(map.sourceFieldId, event, sourceData, companions)
       if (value !== undefined) {
         targetData[map.targetFieldId] = value
       }
@@ -710,8 +570,3 @@ type ActionWithTarget = {
   }
 }
 
-type CompanionsBag = {
-  batch: Record<string, unknown> | null
-  sample: Record<string, unknown> | null
-  instrument: Record<string, unknown> | null
-}
