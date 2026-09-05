@@ -1,6 +1,9 @@
 {
   "name": "synapse",
   "private": true,
+  "engines": {
+    "node": ">=20 <21"
+  },
   "scripts": {
     "dev": "concurrently --names api,web --prefix-colors blue,green \"pnpm --filter @synapse/api dev\" \"pnpm --filter @synapse/web dev\"",
     "dev:turbo": "turbo dev",
