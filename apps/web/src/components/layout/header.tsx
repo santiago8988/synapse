@@ -3,10 +3,9 @@
 import { Search, ChevronRight, Home, Menu, HelpCircle } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
-import { TweaksPanel } from '@/components/tweaks/tweaks-panel'
 import { useMe } from '@/lib/use-me'
 import { NotificationsPanel } from '@/components/layout/notifications-panel'
+import { ThemeToggle } from '@/components/layout/theme-toggle'
 
 const breadcrumbMap: Record<string, string> = {
   dashboard: 'Dashboard',
@@ -74,7 +73,6 @@ interface HeaderProps {
 export function Header({ onMenuClick }: HeaderProps) {
   const pathname = usePathname()
   const segments = pathname.split('/').filter(Boolean)
-  const [tweaksOpen, setTweaksOpen] = useState(false)
   const { data: me } = useMe()
   const areaText = me?.areaName ?? 'Sin área'
   const positionText = me?.positionName
@@ -194,20 +192,8 @@ export function Header({ onMenuClick }: HeaderProps) {
           <HelpCircle className="h-[18px] w-[18px]" />
         </Link>
         <NotificationsPanel />
-        <button
-          type="button"
-          onClick={() => setTweaksOpen((o) => !o)}
-          aria-label="Abrir tweaks"
-          className="syn-hide-mobile flex items-center gap-2 rounded-[10px] border px-3 py-[7px] text-[12px] transition-colors hover:bg-[var(--bg-3)]"
-          style={{ borderColor: 'var(--line-2)', color: 'var(--ink-1)' }}
-        >
-          <span className="font-mono uppercase tracking-[0.14em]" style={{ fontSize: 10 }}>
-            Tweaks
-          </span>
-        </button>
+        <ThemeToggle />
       </div>
-
-      <TweaksPanel open={tweaksOpen} onClose={() => setTweaksOpen(false)} />
     </header>
   )
 }

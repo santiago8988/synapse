@@ -65,11 +65,14 @@
     --font-serif: "Instrument Serif", "Times New Roman", serif;
 
     /* Density (default = normal) */
-    --dens-row: 44px;
-    --dens-pad-y: 10px;
-    --dens-pad-x: 14px;
-    --dens-font: 14px;
-    --dens-gap: 16px;
+    /* Medidas de los controles de formulario y las tablas. Fueron variables
+       de un ajuste de densidad que se quito: solo movia estos cinco valores y
+       en "densa" bajaba los inputs a 36px, por debajo del minimo tactil de
+       44px que la app necesita para usarse con guantes en planta. */
+    --control-h: 44px;
+    --control-pad-y: 10px;
+    --control-pad-x: 14px;
+    --control-font: 14px;
 
     --sidebar-w: 256px;
 
@@ -157,21 +160,6 @@
     --border: 222 30% 20%;
     --input: 222 30% 20%;
     --ring: 213 100% 74%;
-  }
-
-  [data-density="dense"] {
-    --dens-row: 36px;
-    --dens-pad-y: 6px;
-    --dens-pad-x: 10px;
-    --dens-font: 13px;
-    --dens-gap: 10px;
-  }
-  [data-density="cozy"] {
-    --dens-row: 52px;
-    --dens-pad-y: 14px;
-    --dens-pad-x: 18px;
-    --dens-font: 15px;
-    --dens-gap: 20px;
   }
 
   * {
@@ -475,7 +463,7 @@ textarea::placeholder {
 .syn-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--dens-font);
+  font-size: var(--control-font);
 }
 .syn-table thead th {
   text-align: left;
@@ -890,13 +878,13 @@ textarea::placeholder {
   background: var(--bg-1);
   border: 1px solid var(--line-2);
   border-radius: 8px;
-  padding: var(--dens-pad-y) var(--dens-pad-x);
-  font-size: var(--dens-font);
+  padding: var(--control-pad-y) var(--control-pad-x);
+  font-size: var(--control-font);
   color: var(--ink-0);
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
   width: 100%;
   outline: none;
-  min-height: var(--dens-row);
+  min-height: var(--control-h);
   font-family: inherit;
 }
 .syn-input:hover,
@@ -953,8 +941,8 @@ textarea::placeholder {
   flex: 1;
   min-width: 0;
   background: transparent;
-  padding: var(--dens-pad-y) var(--dens-pad-x);
-  font-size: var(--dens-font);
+  padding: var(--control-pad-y) var(--control-pad-x);
+  font-size: var(--control-font);
   color: var(--ink-0);
   font-family: inherit;
 }
@@ -1197,7 +1185,7 @@ textarea::placeholder {
   }
 }
 
-/* Hide on mobile (e.g. area-pill, tweaks button) */
+/* Hide on mobile (e.g. area-pill) */
 @media (max-width: 767px) {
   .syn-hide-mobile {
     display: none !important;
@@ -1473,8 +1461,9 @@ textarea::placeholder {
   .syn-btn.syn-btn-ghost {
     min-height: 44px;
   }
-  /* Inputs y selects con densidad "normal" respetan --dens-row; en cozy ya son 52px.
-     En mobile bajamos el mínimo a 44px aunque el usuario tenga "dense" activo. */
+  /* En mobile los controles nunca bajan de 44px: la app se usa con guantes.
+     Era la red de seguridad contra el ajuste de densidad, que ya no existe;
+     se conserva porque el mínimo táctil vale igual. */
   .syn-input,
   .syn-select,
   .syn-textarea,

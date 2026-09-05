@@ -27,7 +27,7 @@ apps/web/src/app/
     select-org/page.tsx                 ← cuando email está en múltiples orgs
   
   (app)/
-    layout.tsx                          ← shell con sidebar + header + density provider
+    layout.tsx                          ← shell con sidebar + header + aviso sin conexión
     dashboard/page.tsx
     records/
       page.tsx                          ← lista
@@ -64,6 +64,7 @@ apps/web/src/
       sidebar.tsx · header.tsx · logo.tsx · offline-banner.tsx
       org-switcher.tsx                 ← cambiar de organización (switch-org)
       user-menu.tsx                    ← perfil + cerrar sesión
+      theme-toggle.tsx                 ← claro/oscuro, en la topbar
       ↳ grupos de la sidebar: Dashboard (suelto) · Estructura · Catálogos ·
         Seguimiento · Calidad · Organización. Un grupo con label vacío se
         renderiza sin encabezado.
@@ -88,8 +89,6 @@ apps/web/src/
       kanban-board.tsx · types.ts · index.ts ← drag-drop entre columnas
     docs/
       doc-nav.tsx · doc-markdown.tsx    ← índice con buscador · render del markdown
-    tweaks/
-      density-provider.tsx · tweaks-panel.tsx
   
   lib/
     api.ts                              ← API client centralizado
@@ -304,6 +303,24 @@ Los enlaces entre secciones se escriben relativos (`[Flujos](flujos)`) y
 La ayuda se abre desde el ícono de interrogación de la topbar, no desde el menú
 lateral: se consulta desde cualquier pantalla y no compite por espacio con los
 módulos de trabajo.
+
+## Tema claro/oscuro
+
+`next-themes` con `attribute="data-theme"`, sin seguir el tema del sistema. Se
+alterna con `components/layout/theme-toggle.tsx`, un botón en la topbar.
+
+Reemplazó al panel **Tweaks**, que envolvía este único control útil junto a un
+ajuste de densidad que se quitó el 2026-09-05: solo movía cinco variables CSS
+—tipografía de tablas y alto, padding y tipografía de los inputs— y en "densa"
+bajaba los controles a 36px, por debajo del mínimo táctil de 44px que la app
+necesita para usarse con guantes. Un control que casi no se nota y que además
+puede romper una regla de accesibilidad es peor que no tenerlo.
+
+Las variables sobrevivieron con nombre honesto (`--control-h`,
+`--control-pad-*`, `--control-font`) fijas en los valores que eran "normal".
+
+El icono del botón muestra **a dónde vas**, no dónde estás, y hay una guarda de
+montaje: el tema real solo se conoce en el navegador.
 
 ## Paleta y estados de badges
 
