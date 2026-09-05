@@ -11,9 +11,8 @@ Frontend Next.js 14 (App Router) del sistema Synapse. PWA mobile-first orientada
 - **Zustand** para estado global liviano (`store/organization.store.ts`)
 - **@xyflow/react** para el editor visual de flujos y el mapa global
 
-> `next-auth` figura en las dependencias pero **no se importa en ningún lado**:
-> el login es un flujo propio. `next-pwa` **no está instalado**, así que hay
-> `manifest.json` pero no service worker. Ver `TO_DO.md` §12 y §13.
+> `next-pwa` **no está instalado**: hay `manifest.json` pero no service worker,
+> así que la app es instalable pero no funciona offline. Ver `TO_DO.md` §13.
 
 ## Estructura de rutas (App Router)
 
@@ -63,6 +62,10 @@ apps/web/src/
       brain-mark.tsx
     layout/
       sidebar.tsx · header.tsx · logo.tsx
+      notifications-panel.tsx          ← campanita: avisos de la acción NOTIFY
+    records/
+      column-picker.tsx                ← qué columnas ve cada usuario
+      use-column-preferences.ts        ← preferencia por usuario y registro
       ↳ grupos: Dashboard (suelto) · Estructura · Catálogos · Seguimiento ·
         Calidad · Configuración. Un grupo con label vacío se renderiza sin
         encabezado.

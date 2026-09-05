@@ -44,7 +44,7 @@ pnpm dev            # api + web en paralelo (concurrently)
 pnpm dev:turbo      # idem vía turbo
 pnpm build          # build de todo el monorepo
 pnpm typecheck      # tsc --noEmit en todos los workspaces
-pnpm test           # tests (hoy solo apps/api, 70 tests con Vitest)
+pnpm test           # tests (hoy solo apps/api, 116 tests con Vitest)
 pnpm lint           # lint de todo el monorepo
 pnpm db:generate    # genera Prisma Client
 pnpm db:push        # push del schema (sin migración)
@@ -123,7 +123,7 @@ El motor de workflows configurable inspirado en Microsoft Lists + Power Automate
 - **`RecordAction` generalizado** (Power Automate-like): cada flow es 1 row de la tabla `RecordAction`. Campos:
   - `trigger`: `ENTRY_CREATED | ENTRY_COMPLETED | FIELD_VALUE_CHANGED | COMPARISON_FAILED`.
   - `condition` (JSONB recursivo): primitivas `EQUALS / NOT_EQUALS / IN / NOT_IN / LT / LTE / GT / GTE / BETWEEN` + composite `AND / OR` anidables.
-  - `actionType`: `CREATE_ENTRY` (funcional) | `UPDATE_FIELD` (funcional) | `NOTIFY` / `EMAIL` / `WEBHOOK` (stubs).
+  - `actionType`: `CREATE_ENTRY`, `UPDATE_FIELD`, `NOTIFY` y `WEBHOOK` funcionales; `EMAIL` sigue sin implementar y está deshabilitado en el editor.
   - `actionConfig` (JSONB): shape según `actionType`.
   - `fieldMapping`: array `[{ sourceFieldId, targetFieldId }]`. Soporta `$entry.id` y `$entry.<fieldId>` como source para referenciar la entry padre.
   - `allowCascade`: anti-loop — un flow no se dispara cuando el evento que lo activa fue causado por otro flow, salvo que esté en `true`.

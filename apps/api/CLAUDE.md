@@ -51,6 +51,8 @@ apps/api/src/
     flows/
       flow-config.ts                   ← valida config de flujos; decide si se ejecutan
       flow-evaluation.ts               ← resuelve paths y evalúa condiciones
+      webhook-target.ts                ← valida el destino de un webhook (anti-SSRF)
+      notify-recipients.ts             ← resuelve destinatarios de NOTIFY
     filters/
       prisma-exception.filter.ts       ← P2002→409, P2025→404, otros→500
     pipes/
@@ -74,6 +76,7 @@ apps/api/src/
     instruments/                       ← + InstrumentStatusLog (append-only)
     non-conformities/                  ← + CorrectiveAction
     audit/                             ← lectura de AuditLog
+    notifications/                     ← avisos in-app que genera la acción NOTIFY
     dashboard/                         ← KPIs y agregados
     approval/                          ← circuito ISO de aprobación documental
     recipes/                           ← BOM + pasos para BATCH
@@ -175,7 +178,9 @@ Para saltear el log en un endpoint específico: `@AuditIgnore()` (justificar el 
 5. **Cascadas (`RecordAction`)**: el motor está generalizado tipo Power Automate. Cada flow es 1 row de la tabla `RecordAction` con:
    - `trigger` (`ENTRY_CREATED | ENTRY_COMPLETED | FIELD_VALUE_CHANGED | COMPARISON_FAILED`).
    - `condition` JSONB recursivo (primitivas + `AND/OR`, operadores `EQUALS / NOT_EQUALS / IN / NOT_IN / LT / LTE / GT / GTE / BETWEEN`).
-   - `actionType` (`CREATE_ENTRY` y `UPDATE_FIELD` funcionales; `NOTIFY / EMAIL / WEBHOOK` stubs).
+   - `actionType`: `CREATE_ENTRY`, `UPDATE_FIELD`, `NOTIFY` y `WEBHOOK` funcionales. `EMAIL` sigue siendo un stub y está deshabilitado en el editor visual.
+     `WEBHOOK` valida el destino con `common/flows/webhook-target.ts`: la URL la elige un usuario y el pedido lo emite el servidor, así que se bloquean las direcciones internas (SSRF).
+     `NOTIFY` crea filas en `Notification` resolviendo el destinatario con `common/flows/notify-recipients.ts`, siempre acotado a la organización.
    - `actionConfig` JSONB.
    - `fieldMapping` con soporte de `$entry.id` y `$entry.<fieldId>` para referenciar el padre.
    - `allowCascade` (anti-loop con `triggeredByCascade` propagado).
@@ -208,7 +213,7 @@ En services usar `NotFoundException` y `BadRequestException` con mensajes en **e
 
 ## Migraciones Prisma
 
-Ubicación: `apps/api/prisma/migrations/<YYYYMMDD>_<descriptive_name>/migration.sql`. Hay 36 migraciones; ver carpetas para evolución cronológica.
+Ubicación: `apps/api/prisma/migrations/<YYYYMMDD>_<descriptive_name>/migration.sql`. Hay 37 migraciones; ver carpetas para evolución cronológica.
 
 > **No usar `pnpm db:migrate`** (es `prisma migrate dev`): el historial tiene drift y ofrecería resetear la base. Usar `npx prisma migrate deploy`. Ver `TO_DO.md` §5.
 
@@ -225,7 +230,7 @@ pnpm --filter @synapse/api test:watch   # modo watch
 pnpm test                               # todo el monorepo, vía turbo
 ```
 
-Hay 70 tests, todos de lógica pura (sin base de datos):
+Hay 116 tests, todos de lógica pura (sin base de datos):
 
 - `common/flows/flow-config.spec.ts` — qué configuración de flujo se puede
   guardar y cuál se ejecuta.
@@ -236,7 +241,14 @@ Hay 70 tests, todos de lógica pura (sin base de datos):
   filtro de organización; agregar una entidad mal acotada rompe el build.
 - `common/storage/local-storage.service.spec.ts` — firma HMAC, vencimiento y
   escape de directorio.
+- `common/flows/webhook-target.spec.ts` — bloqueo de destinos internos: metadatos
+  del cloud, loopback, rangos privados de IPv4 e IPv6, y la IPv4 mapeada en IPv6
+  que Node normaliza a hexadecimal.
 - `modules/auth/auth-code.service.spec.ts` — un solo uso y vencimiento.
+- `modules/entries/services/formula-evaluator.service.spec.ts` — referencias
+  entre llaves, precedencia, encadenado y bloqueo de funciones peligrosas.
+- `modules/entries/services/comparison-evaluator.service.spec.ts` — bordes de
+  cada operador. Una comparación fallida crea una no conformidad automática.
 
 Se elige Vitest sobre Jest porque entiende TypeScript sin `ts-jest`.
 
