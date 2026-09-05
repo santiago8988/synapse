@@ -131,12 +131,18 @@ ni cachea nada.
 
 ## Tests
 
-Hay 116 tests en `apps/api`, todos de lógica pura. Corren con `pnpm test` y en CI.
+Hay 116 tests en `apps/api` y 25 en `apps/web`, todos de lógica pura. Corren con
+`pnpm test` y en CI.
 
-### 14. El frontend no tiene ningún test
+> §14 (montar el runner en el frontend) se resolvió el 2026-09-05.
 
-Ni runner configurado. Los primeros que valdría la pena: el `DynamicRecordForm`
-(que es el corazón de la app) y los helpers de fórmulas.
+### 14. El frontend no tiene tests de componentes
+
+Lo cubierto hasta ahora es lógica: los helpers de fórmulas y comparaciones, y el
+manejo de sesión. Falta el `DynamicRecordForm` en sí, que es el corazón de la
+app y donde un error se ve directamente en lo que carga el operario.
+
+Requiere `@testing-library/react`, que todavía no está instalado.
 
 ### 15. Backend sin cubrir
 
