@@ -21,6 +21,9 @@ import {
   Ruler,
   ScanLine,
   ChevronDown,
+  Users,
+  Mail,
+  GitBranch,
   type LucideIcon,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
@@ -28,6 +31,7 @@ import { cn } from '@/lib/utils'
 import { BrainMark } from '@/components/brand/brain-mark'
 import { useMe } from '@/lib/use-me'
 import { UserMenu } from '@/components/layout/user-menu'
+import { OrgSwitcher } from '@/components/layout/org-switcher'
 import { api } from '@/lib/api'
 
 interface NavItem {
@@ -99,9 +103,17 @@ function buildNavigation(counts: { ncOpen: number; approvalsPending: number }): 
         { href: '/audit', name: 'Auditoría', icon: Shield },
       ],
     },
+    // Antes era un solo item llamado "Ajustes", que no decia que adentro viven
+    // usuarios, whitelist, areas y puestos: habia que entrar para descubrirlo.
+    // Ahora cada destino se ve desde aca y entra directo a su pestaña.
     {
-      label: 'Configuración',
-      items: [{ href: '/settings', name: 'Ajustes', icon: Settings }],
+      label: 'Organización',
+      items: [
+        { href: '/settings/users', name: 'Usuarios', icon: Users },
+        { href: '/settings/whitelist', name: 'Whitelist', icon: Mail },
+        { href: '/settings/areas', name: 'Áreas', icon: GitBranch },
+        { href: '/settings/general', name: 'Ajustes', icon: Settings },
+      ],
     },
   ]
 }
@@ -138,9 +150,6 @@ export function Sidebar({ open = false, onNavigate }: SidebarProps) {
     approvalsPending: pendingApprovals?.length ?? 0,
   })
 
-  const orgName = me?.organizationName ?? '—'
-  const orgInitial = (orgName ?? '·').slice(0, 1).toUpperCase()
-  const userAreaText = me?.areaName ? ` · ${me.areaName}` : ''
 
   return (
     <aside
@@ -173,36 +182,7 @@ export function Sidebar({ open = false, onNavigate }: SidebarProps) {
         </div>
       </Link>
 
-      {/* Org selector */}
-      <button
-        type="button"
-        className="m-3 flex items-center gap-2.5 rounded-[10px] border border-white/10 bg-white/5 px-4 py-3.5 transition-colors hover:border-white/20 hover:bg-white/10"
-      >
-        <div
-          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-lg border"
-          style={{
-            background: 'linear-gradient(135deg, var(--brand-prusia), #0C1E5C)',
-            borderColor: 'rgba(94,234,254,0.25)',
-            color: 'var(--brand-cian)',
-            fontFamily: 'var(--font-serif)',
-            fontSize: 15,
-          }}
-        >
-          {orgInitial}
-        </div>
-        <div className="min-w-0 flex-1 text-left">
-          <div className="truncate text-[13px] font-medium" style={{ color: '#F3F6FC' }}>
-            {orgName}
-          </div>
-          <div
-            className="mt-0.5 truncate text-[9px] uppercase tracking-[0.14em]"
-            style={{ fontFamily: 'var(--font-mono)', color: '#6A7797' }}
-          >
-            Multitenant{userAreaText}
-          </div>
-        </div>
-        <ChevronDown className="h-3 w-3 shrink-0" style={{ color: '#6A7797' }} />
-      </button>
+      <OrgSwitcher />
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-0 pb-3.5 pt-2">
@@ -217,7 +197,11 @@ export function Sidebar({ open = false, onNavigate }: SidebarProps) {
               </div>
             )}
             {group.items.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+              // `/settings` a secas muestra General, asi que resalta el mismo
+              // item que `/settings/general`.
+              const rutaActual = pathname === '/settings' ? '/settings/general' : pathname
+              const isActive =
+                rutaActual === item.href || rutaActual.startsWith(item.href + '/')
               const Icon = item.icon
               return (
                 <Link

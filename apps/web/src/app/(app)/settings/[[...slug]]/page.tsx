@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import {
   Building2,
@@ -1232,8 +1233,30 @@ function LoadingCard() {
 
 // ─── Página principal ───────────────────────
 
-export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('general')
+/** ¿El segmento de la URL corresponde a una pestaña real? */
+function tabValida(valor: string | undefined): valor is Tab {
+  return tabs.some((t) => t.id === valor)
+}
+
+/**
+ * La pestaña activa es un segmento de la URL (`/settings/users`), no estado
+ * local.
+ *
+ * Se puede linkear una pestaña, recargar sin volver a General, y la sidebar
+ * apunta directo a Usuarios o Whitelist en vez de dejar al usuario buscando
+ * dónde estaban. Se eligió un segmento y no un query param porque la sidebar
+ * necesita saber cuál está activa para resaltarla, y vive en el layout:
+ * leer el query string ahí obligaría a un límite de Suspense que arrastraría a
+ * todas las páginas de la app.
+ */
+export default function SettingsPage({ params }: { params: { slug?: string[] } }) {
+  const router = useRouter()
+  const pedida = params.slug?.[0]
+  const activeTab: Tab = tabValida(pedida) ? pedida : 'general'
+
+  // `replace` y no `push`: las pestañas no son pasos de navegación, y llenar el
+  // historial obligaría a apretar Atrás una vez por pestaña visitada.
+  const setActiveTab = (tab: Tab) => router.replace(`/settings/${tab}`, { scroll: false })
 
   const { data: me, isLoading } = useQuery({
     queryKey: ['auth', 'me'],

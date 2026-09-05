@@ -107,6 +107,14 @@ export class AuthController {
     return { token }
   }
 
+  @Get('my-organizations')
+  @UseGuards(JwtAuthGuard)
+  async myOrganizations(@CurrentUser() user: JwtPayload) {
+    // El usuario sale del JWT, nunca de la query: aceptar un userId por
+    // parametro dejaria listar las organizaciones de cualquiera.
+    return this.authService.myOrganizations(user.sub)
+  }
+
   @Get('me')
   @UseGuards(JwtAuthGuard)
   async getMe(@CurrentUser() user: JwtPayload) {

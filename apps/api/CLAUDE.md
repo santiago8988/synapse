@@ -107,7 +107,11 @@ en el historial del navegador. El código vence a los 2 minutos, sirve una sola
 vez y vive en memoria del proceso (`auth-code.service.ts`) — lo que ata la API
 a una sola instancia hasta que exista Redis, ver `TO_DO.md` §11.
 
-Para cambiar de organización activa: `POST /auth/switch-org` re-emite JWT con la nueva org.
+Para cambiar de organización activa: `GET /auth/my-organizations` lista las
+membresías activas y `POST /auth/switch-org` re-emite el JWT con la nueva org.
+Ninguno de los dos acepta un `userId`: sale del JWT. El listado es para mostrar
+—la autorización real la hace `generateToken`, que revalida la membresía antes
+de firmar—.
 
 ### Las URLs tienen que coincidir en cuatro lugares
 

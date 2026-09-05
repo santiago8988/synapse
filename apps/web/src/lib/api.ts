@@ -38,6 +38,8 @@ async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> 
 export const api = {
   auth: {
     me: () => fetchApi('/auth/me'),
+    /** Organizaciones activas del usuario; alimenta el selector de la sidebar. */
+    myOrganizations: <T = unknown>() => fetchApi<T>('/auth/my-organizations'),
     switchOrg: (organizationId: string) =>
       fetchApi('/auth/switch-org', {
         method: 'POST',

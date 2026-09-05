@@ -105,6 +105,29 @@ export class AuthService {
     }))
   }
 
+  /**
+   * Organizaciones activas del usuario autenticado. Alimenta el selector de la
+   * sidebar.
+   *
+   * Es un listado para mostrar, no para autorizar: quien cambia de
+   * organizacion pasa por `generateToken`, que vuelve a verificar la membresia
+   * antes de emitir el JWT. Si a alguien le revocan el acceso mientras tiene el
+   * menu abierto, el cambio falla igual.
+   */
+  async myOrganizations(userId: string) {
+    const memberships = await this.prisma.organizationUser.findMany({
+      where: { userId, isActive: true },
+      include: { organization: { select: { id: true, name: true, slug: true } } },
+      orderBy: { organization: { name: 'asc' } },
+    })
+    return memberships.map((m) => ({
+      id: m.organization.id,
+      name: m.organization.name,
+      slug: m.organization.slug,
+      role: m.role,
+    }))
+  }
+
   async generateToken(userId: string, organizationId: string): Promise<string> {
     const membership = await this.prisma.organizationUser.findUnique({
       where: {

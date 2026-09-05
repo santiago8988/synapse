@@ -24,7 +24,15 @@ const breadcrumbMap: Record<string, string> = {
   'non-conformities': 'No conformidades',
   approvals: 'Aprobaciones',
   audit: 'Auditoría',
-  settings: 'Ajustes',
+  settings: 'Configuración',
+  // Pestañas de configuración: son segmentos propios desde que la pestaña
+  // activa vive en la URL.
+  general: 'General',
+  areas: 'Áreas',
+  positions: 'Puestos',
+  whitelist: 'Whitelist',
+  users: 'Usuarios',
+  quality: 'Calidad',
   new: 'Nuevo',
 }
 

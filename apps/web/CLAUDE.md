@@ -47,7 +47,7 @@ apps/web/src/app/
     non-conformities/[id]/page.tsx + page.tsx
     approvals/page.tsx
     audit/page.tsx
-    settings/page.tsx
+    settings/[[...slug]]/page.tsx       ← la pestaña activa es el segmento
     docs/page.tsx
 ```
 
@@ -62,9 +62,14 @@ apps/web/src/
       brain-mark.tsx
     layout/
       sidebar.tsx · header.tsx · logo.tsx · offline-banner.tsx
+      org-switcher.tsx                 ← cambiar de organización (switch-org)
+      user-menu.tsx                    ← perfil + cerrar sesión
       ↳ grupos de la sidebar: Dashboard (suelto) · Estructura · Catálogos ·
-        Seguimiento · Calidad · Configuración. Un grupo con label vacío se
+        Seguimiento · Calidad · Organización. Un grupo con label vacío se
         renderiza sin encabezado.
+        El grupo Organización lista destinos concretos —Usuarios, Whitelist,
+        Áreas, Ajustes— y no un único "Ajustes": nadie adivinaba que la
+        whitelist vivía ahí adentro.
       notifications-panel.tsx          ← campanita: avisos de la acción NOTIFY
     records/
       column-picker.tsx                ← qué columnas ve cada usuario
@@ -186,6 +191,26 @@ quien fabrique la cookie llega al cascarón de la app y a ningún dato.
 mantiene `localStorage` y cookie en sincronía. Después de guardar la sesión hay
 que navegar con `window.location`, no con `router.replace`: una navegación de
 cliente no vuelve a pasar por el middleware y no vería la cookie nueva.
+
+**Cerrar sesión** vive en `components/layout/user-menu.tsx`, al pie de la
+sidebar. `clearSession` devuelve la **promesa** del borrado de cachés y hay que
+esperarla antes de navegar: `window.location` descarga la página y cortaría la
+promesa por la mitad, dejando los datos del turno anterior en el disco. Se
+espera con techo de 1,5 s — quedar atrapado sin poder salir es peor que dejar
+una caché sin borrar. El camino del 401 en `lib/api.ts` hace lo mismo.
+
+**Cambiar de organización**: `components/layout/org-switcher.tsx` consume
+`GET /auth/my-organizations` (solo al abrir el menú) y `POST /auth/switch-org`.
+El listado es para mostrar; la autorización la hace el backend al emitir el
+token. Después del cambio se navega duro a `/dashboard`: el JWT nuevo cambia
+organización, rol y área, así que cualquier pantalla abierta muestra datos que
+ya no corresponden.
+
+**Configuración** es `/settings/[[...slug]]`: la pestaña activa es un segmento
+de la URL (`/settings/users`), no estado local. Se eligió segmento y no query
+param porque la sidebar necesita saber cuál está activa para resaltarla, y vive
+en el layout — leer el query string ahí obligaría a un límite de Suspense que
+arrastraría a todas las páginas.
 
 ## PWA
 
@@ -321,10 +346,11 @@ pnpm --filter @synapse/web test
 pnpm test                          # todo el monorepo, vía turbo
 ```
 
-46 tests: los helpers de fórmulas y comparaciones (varios casos existen para
+47 tests: los helpers de fórmulas y comparaciones (varios casos existen para
 fijar que el preview coincida con el evaluador del backend, que son
 implementaciones separadas), el manejo de sesión —incluido uno que verifica que
-la cookie **no** contenga el token—, el nombrado de las cachés offline —que dos
+la cookie **no** contenga el token y otro que el logout espere el borrado de
+las cachés—, el nombrado de las cachés offline —que dos
 usuarios nunca compartan caché— y el `DynamicRecordForm`, sobre todo la regla
 de que un campo identificador queda bloqueado cuando la entrada está
 `COMPLETED`.
