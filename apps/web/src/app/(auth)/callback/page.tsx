@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { saveSession } from '@/lib/session'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
 
@@ -36,10 +37,23 @@ function CallbackHandler({ onError }: { onError: (msg: string) => void }) {
           throw new Error(body.message || 'No se pudo completar el ingreso')
         }
         const { token } = await res.json()
+
+        // El middleware guarda en `next` la página que el usuario quiso abrir.
+        // Se acepta solo una ruta interna: sin esta validación, un `next`
+        // apuntando a otro dominio convertiría el login en un redirector
+        // abierto, útil para phishing.
+        const solicitado = searchParams.get('next')
+        const destino =
+          solicitado && solicitado.startsWith('/') && !solicitado.startsWith('//')
+            ? solicitado
+            : '/dashboard'
+
         // Se guarda sin condicionar a que el componente siga montado: el código
         // ya se consumió y no hay segunda oportunidad de obtener este token.
-        localStorage.setItem('synapse_token', token)
-        router.replace('/dashboard')
+        saveSession(token)
+        // replace() no basta: el middleware necesita ver la cookie recién
+        // escrita, y una navegación de cliente no vuelve a pasar por él.
+        window.location.replace(destino)
       } catch (err) {
         onError(err instanceof Error ? err.message : 'No se pudo completar el ingreso')
       }

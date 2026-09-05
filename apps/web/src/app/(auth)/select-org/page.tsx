@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Logo } from '@/components/layout/logo'
 import { Building2, ArrowRight, Loader2 } from 'lucide-react'
+import { saveSession } from '@/lib/session'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
 
@@ -80,8 +81,9 @@ function SelectOrgContent() {
           throw new Error(body.message || 'No se pudo completar el ingreso')
         }
         const { token } = await res.json()
-        localStorage.setItem('synapse_token', token)
-        router.replace('/dashboard')
+        saveSession(token)
+        // Navegación dura para que el middleware vea la cookie nueva.
+        window.location.replace('/dashboard')
       } catch (err) {
         setPendingId(null)
         setError(err instanceof Error ? err.message : 'No se pudo completar el ingreso')

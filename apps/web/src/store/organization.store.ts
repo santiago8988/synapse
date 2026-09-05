@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { clearSession } from '@/lib/session'
 
 interface OrganizationState {
   token: string | null
@@ -35,7 +36,7 @@ export const useOrganizationStore = create<OrganizationState>((set) => ({
       areaId: data.areaId,
     }),
   clearAuth: () => {
-    localStorage.removeItem('synapse_token')
+    clearSession()
     set({
       token: null,
       organizationId: null,

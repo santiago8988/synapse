@@ -1,9 +1,6 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+import { clearSession, getToken } from './session'
 
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null
-  return localStorage.getItem('synapse_token')
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
 
 async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
@@ -18,7 +15,9 @@ async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> 
   })
 
   if (res.status === 401) {
-    localStorage.removeItem('synapse_token')
+    // Se limpia también la cookie del middleware: si quedara, seguiría
+    // dejando entrar a las páginas privadas para rebotar en cada request.
+    clearSession()
     window.location.href = '/login'
     throw new Error('No autorizado')
   }
