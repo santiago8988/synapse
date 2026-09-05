@@ -106,7 +106,24 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI grid */}
-      {isLoading ? (
+      {/*
+        El orden importa. Antes era `isLoading ? ... : isError ? ... : data!`,
+        que no cubre el estado en que la query esta entre reintentos: ahi
+        isLoading es false, isError todavia false y data undefined, y el `!`
+        afirmaba lo contrario. Alcanzaba con que la API tuviera un hipo para
+        tirar la pagina entera con un TypeError.
+
+        Preguntando por `!data` en vez de por isLoading, el esqueleto cubre
+        cualquier estado sin datos y TypeScript puede angostar el tipo solo en
+        la ultima rama.
+      */}
+      {isError ? (
+        <div className="syn-card mb-6">
+          <div className="syn-card-body" style={{ color: 'var(--danger)' }}>
+            Error al cargar las estadísticas del dashboard.
+          </div>
+        </div>
+      ) : !data ? (
         <div className="syn-kpi-grid">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="syn-kpi">
@@ -116,18 +133,12 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
-      ) : isError ? (
-        <div className="syn-card mb-6">
-          <div className="syn-card-body" style={{ color: 'var(--danger)' }}>
-            Error al cargar las estadísticas del dashboard.
-          </div>
-        </div>
       ) : (
         <div className="syn-kpi-grid">
           <div className="syn-kpi accent">
             <div className="klabel">Vencen en 7 días</div>
             <div className="kval">
-              {data!.overdueEntries || data!.upcomingEntries?.length || 0}
+              {data.overdueEntries || data.upcomingEntries?.length || 0}
             </div>
             <div className="kfoot">
               <span>requieren atención</span>
@@ -166,11 +177,11 @@ export default function DashboardPage() {
 
           <div className="syn-kpi">
             <div className="klabel">NCs abiertas</div>
-            <div className="kval">{data!.nonConformities.total}</div>
+            <div className="kval">{data.nonConformities.total}</div>
             <div className="kfoot">
               <span>
-                {data!.nonConformities.inProgress} en progreso ·{' '}
-                {data!.nonConformities.open} por asignar
+                {data.nonConformities.inProgress} en progreso ·{' '}
+                {data.nonConformities.open} por asignar
               </span>
               <Link
                 href="/non-conformities"
@@ -184,7 +195,7 @@ export default function DashboardPage() {
 
           <div className="syn-kpi">
             <div className="klabel">Registros activos</div>
-            <div className="kval">{data!.activeRecords}</div>
+            <div className="kval">{data.activeRecords}</div>
             <div
               className="mt-3 text-[12px]"
               style={{ color: 'var(--ink-2)' }}
