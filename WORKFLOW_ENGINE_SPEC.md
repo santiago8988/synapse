@@ -46,7 +46,7 @@ Este spec **solo cubre el motor**. La migración de companions (`Sample`, `Calib
   - `BATCH_DROPDOWN_STATUS_SPEC.md`
   - `INSTRUMENT_DROPDOWN_STATUS_SPEC.md`
 - Snapshot fields para assignments (`BatchInstrumentAssignment`, etc.). Patrón documentado en §12 como evolución futura.
-- Reescritura de la página `/non-conformities` legacy: actualmente coexisten dos flujos (enum `NonConformityStatus` + Record "No Conformidades"). Pendiente decidir consolidación.
+- Reescritura de la página `/non-conformities` legacy: coexisten dos flujos (enum `NonConformityStatus` + Record "No Conformidades"). Ver `TO_DO.md` §8.
 - Editor visual de transitions y options ricas en el Record Builder. Hoy el config rico se edita modificando el seed o vía JSON directo en DB; el editor existente bloquea la edición con un mensaje cuando detecta `isStatus`.
 - Trigger `DUE_DATE_APPROACHING` (necesita BullMQ programado).
 - Trigger `DOCUMENT_VERSIONED` (sin caso de uso identificado).
@@ -440,7 +440,7 @@ Todos satisfechos en este worktree:
 
 - **Performance de queries por status**: queries que filtran por status pasan de enum indexado a JSON path. Para los volúmenes esperados de NCs (cientos por org) es aceptable. Si un dominio futuro lo necesita (samples con miles), se mitiga con índice GIN sobre el path o columna proyectada cacheada.
 - **Doble fuente de verdad temporal**: NCs legacy y Record "No Conformidades" coexisten. Usuarios pueden confundirse. Mitigación: spec de consolidación (decidir si redirigir `/non-conformities` al Record o migrar data).
-- **Loops de cascada**: `allowCascade` por default en `false` previene la mayoría. El flag `triggeredByCascade` en el evento aún no se propaga desde el listener al `entries.service.create` cascadeado — refinamiento pendiente.
+- **Loops de cascada**: `allowCascade` por default en `false` previene la mayoría. El flag `triggeredByCascade` **no se propaga** al `entries.service.create` cascadeado, así que el anti-loop no protege más allá del primer salto. Ver `TO_DO.md` §7.
 - **Editor de DROPDOWN-as-status no disponible en UI**: editar el `comparisonConfig` rico hoy requiere modificar el seed o JSON manual en DB. Editor visual diferido.
 
 ### Rollback

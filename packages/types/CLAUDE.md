@@ -28,7 +28,7 @@ Los siguientes enums son críticos para la lógica de negocio y deben mantenerse
 - `UserRole` — ADMIN, QUALITY_MANAGER, TECHNICIAN, AUDITOR
 - `RecordType` — PERIODIC, NOT_PERIODIC, NOT_PERIODIC_WITH_REVISION, INSTRUMENTAL, BATCH, SAMPLE, STOCK, CALIBRATION
 - `FieldType` — NUMBER, TEXT, DATE, DROPDOWN, RELATED_ENTRY, MULTIPLE_RELATED_ENTRY, COMPARISON, FORMULA, RECIPE_SELECT, MATRIX_METHOD, QUANTITY, CALIBRATION_TEMPLATE
-- `EntryStatus` — DRAFT, COMPLETED, REQUIRES_REVISION, APPROVED (+ INACTIVE pendiente — ver `cascada.md`)
+- `EntryStatus` — DRAFT, COMPLETED, REQUIRES_REVISION, APPROVED. `INACTIVE` está previsto pero sin implementar: requiere definir la cascada (`TO_DO.md` §16).
 - `InstrumentStatus` — ACTIVE, IN_CALIBRATION, IN_REPAIR, DECOMMISSIONED
 - `DocumentStatus` — DRAFT, ACTIVE, SUPERSEDED
 - `RecordStatus` — DRAFT, ACTIVE, SUPERSEDED (para plantillas con circuito de aprobación)

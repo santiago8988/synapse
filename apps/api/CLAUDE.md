@@ -1,18 +1,21 @@
 # Synapse API (apps/api)
 
-Backend NestJS del sistema de gestión de calidad Synapse. Maneja la lógica de negocio, persistencia, auth, scheduling de notificaciones, storage de documentos y el audit trail.
+Backend NestJS del sistema de gestión de calidad Synapse. Maneja la lógica de negocio, persistencia, auth, storage de archivos y el audit trail.
 
 ## Stack
 
 - **NestJS** con TypeScript strict
 - **Prisma** + PostgreSQL — ORM y migraciones (`apps/api/prisma/`)
-- **BullMQ + Redis** — colas y scheduling de notificaciones
 - **Passport.js + Google OAuth** — autenticación (sin contraseñas)
 - **JWT** — sesiones post-OAuth
 - **Zod** — validación de DTOs
-- **Cloudflare R2** vía `@aws-sdk/client-s3` — storage de documentos
-- **mathjs** — evaluación de fórmulas en `entries.service`. **Nunca** `eval()`.
+- **Cloudflare R2** vía `@aws-sdk/client-s3` — storage de archivos, detrás de `StorageService`
 - **EventEmitter2** (`@nestjs/event-emitter`) — domain events
+- **Vitest** — tests unitarios (`pnpm test`)
+
+> `REDIS_URL` está en el `.env` pero BullMQ/Redis **no están cableados**, y
+> **mathjs no está instalado**: las fórmulas se evalúan con `Function()` sobre
+> una expresión saneada. Ver `TO_DO.md` §2 y §11.
 
 ## Estructura
 
@@ -38,6 +41,16 @@ apps/api/src/
       audit-ignore.decorator.ts        ← @AuditIgnore() saltea AuditInterceptor
     interceptors/
       audit.interceptor.ts             ← global, loguea POST/PATCH/PUT/DELETE
+      audit-entities.ts                ← mapa entidad→modelo + redacción de secretos
+    storage/
+      storage.service.ts               ← interfaz abstracta (put / signedUrl / remove)
+      local-storage.service.ts         ← disco, con URLs firmadas HMAC (desarrollo)
+      r2-storage.service.ts            ← Cloudflare R2 con presigned URLs (producción)
+      storage.controller.ts            ← sirve los archivos del backend local
+      storage.module.ts                ← elige backend según env
+    flows/
+      flow-config.ts                   ← valida config de flujos; decide si se ejecutan
+      flow-evaluation.ts               ← resuelve paths y evalúa condiciones
     filters/
       prisma-exception.filter.ts       ← P2002→409, P2025→404, otros→500
     pipes/
@@ -135,7 +148,9 @@ Registrado **global** en `app.module.ts`. Loguea automáticamente todo `POST`/`P
 - `entityType` se deriva del nombre del controller (`EntriesController` → `ENTRIES`).
 - `action` se deriva del método HTTP y path (`POST .../complete` → `entries.completed`).
 - `entityId` viene de `request.params.id` o de la respuesta.
-- `before` está pendiente (TODO en el código).
+- `before` se lee **antes** de que el handler mute la fila, con la query siempre acotada por organización. El mapa entidad→modelo y la forma de acotar viven en `audit-entities.ts`; los controllers que no figuran ahí no capturan `before`.
+- `before` y `after` pasan por `redactSensitive()`, que reemplaza los valores de claves que parezcan credenciales (regla 8).
+- La acción se arma como `<entityType en minúsculas>.<verbo>`. Las filas anteriores a 2026-09-04 dicen `api.*` por un bug ya corregido; como la tabla es append-only, no se corrigen.
 
 Para saltear el log en un endpoint específico: `@AuditIgnore()` (justificar el motivo en comentario).
 
@@ -147,7 +162,7 @@ Para saltear el log en un endpoint específico: `@AuditIgnore()` (justificar el 
    - `InstrumentStatusLog` — paper trail específico de `Instrument.status`. Convive con `EntryStatusLog`: aplica a la columna del companion `Instrument`, no a fields de Entry.
    - `InstrumentCertificate` — historial de PDFs de calibración externa por instrumento. Cada certificado emitido por un técnico externo se guarda como nuevo row; nunca se borra ni se sobrescribe (cuenta la historia del equipo).
    - `BatchStatusLog` — idem para `Batch.status`.
-   - `SampleCustodyEvent` — pendiente, ver `SAMPLE_CUSTODY_SPEC.md`.
+   - `SampleCustodyEvent` — sin implementar, ver `SAMPLE_CUSTODY_SPEC.md` y `TO_DO.md` §9.
 
    El `EntryStatusLogListener` (en `entries/listeners/`) es el único writer legítimo de `EntryStatusLog`; cualquier nuevo path que toque la tabla debe pasar por el evento `EntryFieldValueChangedEvent`.
 
@@ -193,17 +208,36 @@ En services usar `NotFoundException` y `BadRequestException` con mensajes en **e
 
 ## Migraciones Prisma
 
-Ubicación: `apps/api/prisma/migrations/<YYYYMMDD>_<descriptive_name>/migration.sql`. Hay 25 migraciones aplicadas; ver carpetas para evolución cronológica.
+Ubicación: `apps/api/prisma/migrations/<YYYYMMDD>_<descriptive_name>/migration.sql`. Hay 36 migraciones; ver carpetas para evolución cronológica.
 
-**Workflow**: editar `schema.prisma` → `pnpm --filter @synapse/api db:migrate -- --name descriptive_name` → revisar SQL → si toca tabla append-only o dropea datos, frenar y revisar plan de rollback.
+> **No usar `pnpm db:migrate`** (es `prisma migrate dev`): el historial tiene drift y ofrecería resetear la base. Usar `npx prisma migrate deploy`. Ver `TO_DO.md` §5.
+
+**Workflow**: editar `schema.prisma` → crear la carpeta y el `migration.sql` a mano → revisar el SQL → `npx prisma migrate deploy` → `npx prisma generate`. Si toca una tabla append-only o borra datos, frenar y revisar el plan de rollback.
 
 ## Testing
 
-(Pendiente de hardening — ver `docs/legacy/06-phases-mvp.md` Fase 6.)
+**Vitest**, config en `vitest.config.mts`. Los tests van al lado del código como
+`*.spec.ts` y quedan fuera del build gracias a `tsconfig.build.json`.
 
-Cuando se agreguen tests, priorizar:
-- `formula-evaluator.service` — casos: variables, operadores, división por cero, expresiones inválidas.
-- `comparison-evaluator.service` — todos los operadores (LT/LTE/GT/GTE/EQ/BETWEEN), constante vs. campo.
-- `area-access.guard` — resolución del árbol recursivo de áreas.
-- Auth flow — whitelist, multi-org, switch-org.
-- Cascadas de RecordAction — fieldMapping, fallos no rollbackean source.
+```bash
+pnpm --filter @synapse/api test         # una corrida
+pnpm --filter @synapse/api test:watch   # modo watch
+pnpm test                               # todo el monorepo, vía turbo
+```
+
+Hay 70 tests, todos de lógica pura (sin base de datos):
+
+- `common/flows/flow-config.spec.ts` — qué configuración de flujo se puede
+  guardar y cuál se ejecuta.
+- `common/flows/flow-evaluation.spec.ts` — resolución de paths (`$entry`,
+  `$batch`, `$sample`, `$instrument`, `$event`) y evaluación de condiciones.
+- `common/interceptors/audit-entities.spec.ts` — incluye un test que recorre
+  **todas** las entidades del mapa y falla si alguna produce un `where` sin
+  filtro de organización; agregar una entidad mal acotada rompe el build.
+- `common/storage/local-storage.service.spec.ts` — firma HMAC, vencimiento y
+  escape de directorio.
+- `modules/auth/auth-code.service.spec.ts` — un solo uso y vencimiento.
+
+Se elige Vitest sobre Jest porque entiende TypeScript sin `ts-jest`.
+
+Lo que falta cubrir está en `TO_DO.md` §15.

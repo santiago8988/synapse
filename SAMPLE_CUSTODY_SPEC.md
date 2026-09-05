@@ -3,7 +3,7 @@
 > **Branch**: `feature/sample-custody`
 > **Target**: `main`
 > **Nivel de cumplimiento**: ISO 17025 §7.4 (Manejo de items de ensayo) — Nivel 2 (cadena completa basada en eventos, sin firma digital ni adjuntos obligatorios)
-> **Estado**: Pendiente de implementacion
+> **Estado**: sin implementar. Seguimiento en `TO_DO.md` §9.
 
 ---
 

@@ -18,9 +18,10 @@ synapse/
     user-guide/                ← guía de usuario activa (12 módulos)
     design/                    ← briefs de diseño activos
     legacy/                    ← markdowns originales (QualitTab) — referencia histórica
+  TO_DO.md                     ← TODO lo pendiente, centralizado
   WORKFLOW_ENGINE_SPEC.md      ← spec del motor v2 (DROPDOWN-as-status + Kanban + RecordAction generalizado)
   VISUAL_FLOW_EDITOR_SPEC.md   ← spec del editor visual de flujos (xyflow, tab Flujos)
-  SAMPLE_CUSTODY_SPEC.md       ← spec ISO 17025 §7.4 pendiente de implementar
+  SAMPLE_CUSTODY_SPEC.md       ← spec ISO 17025 §7.4 (sin implementar)
 ```
 
 Workspace manager: **pnpm** (versión declarada en `package.json` → `packageManager: pnpm@9.15.0`).
@@ -28,7 +29,9 @@ Task runner: **Turborepo** (`turbo.json`).
 
 ## Stack consolidado
 
-**Backend** — NestJS · Prisma + PostgreSQL · BullMQ + Redis · Passport (Google OAuth) · JWT · Zod · Cloudflare R2 (`@aws-sdk/client-s3`) · `mathjs` (evaluación de fórmulas, **nunca** `eval`).
+**Backend** — NestJS · Prisma + PostgreSQL · Passport (Google OAuth) · JWT · Zod · Cloudflare R2 vía `@aws-sdk/client-s3` · Vitest.
+
+> `REDIS_URL` sigue en el `.env` pero **BullMQ y Redis no están cableados** (ni dependencia ni importaciones). Ver `TO_DO.md` §11.
 
 **Frontend** — Next.js 14 App Router · TypeScript strict · Tailwind CSS · shadcn/ui · React Hook Form + Zod · TanStack Query · Zustand · next-pwa.
 
@@ -40,6 +43,8 @@ Task runner: **Turborepo** (`turbo.json`).
 pnpm dev            # api + web en paralelo (concurrently)
 pnpm dev:turbo      # idem vía turbo
 pnpm build          # build de todo el monorepo
+pnpm typecheck      # tsc --noEmit en todos los workspaces
+pnpm test           # tests (hoy solo apps/api, 70 tests con Vitest)
 pnpm lint           # lint de todo el monorepo
 pnpm db:generate    # genera Prisma Client
 pnpm db:push        # push del schema (sin migración)
@@ -60,7 +65,7 @@ Para correr un solo workspace: `pnpm --filter @synapse/api dev` o `pnpm --filter
 
 1. **Nunca** ejecutar queries Prisma sin `where: { organizationId }` — el aislamiento multitenant depende de esto.
 2. **Nunca** tomar `organizationId` del body, params o query string. Siempre desde el JWT (`@CurrentUser() user.organizationId`).
-3. **Nunca** usar `eval()` para fórmulas. Solo `mathjs` con scope explícito de variables.
+3. **Nunca** evaluar fórmulas con entrada sin sanear. Hoy `formula-evaluator.service` usa `Function()` sobre una expresión filtrada a dígitos, operadores y paréntesis — **no** mathjs, que no está instalado. La regla original decía lo contrario que el código; queda pendiente resolver cuál gana (`TO_DO.md` §2).
 4. **Nunca** hacer `UPDATE` o `DELETE` sobre `AuditLog`, `EntryStatusLog`, `InstrumentStatusLog`, `InstrumentCertificate`, `BatchStatusLog`, ni futuros `*StatusLog` o `*Event` (append-only — requisito ISO). `EntryStatusLog` es el reemplazo unificado del workflow engine v2 — todo cambio de field `isStatus: true` se loguea acá. `InstrumentCertificate` guarda el historial de PDFs de calibración externa por instrumento.
 5. **Nunca** modificar valores de campos `isIdentifier` de una `Entry` con `status = COMPLETED`. El frontend deshabilita; el backend valida.
 6. **Nunca** editar in-place un `Document` con `status = ACTIVE`. Crear nueva versión y la anterior pasa a `SUPERSEDED`.
@@ -131,12 +136,14 @@ El motor de workflows configurable inspirado en Microsoft Lists + Power Automate
 
 ## Documentación viva
 
+- **`TO_DO.md`** — todo lo pendiente, en un solo lugar. Los `CLAUDE.md` describen cómo es el sistema hoy; lo que falta va ahí.
+
 - `docs/user-guide/` — 12 módulos describiendo el sistema desde la perspectiva del usuario (administradores, calidad, técnicos, auditores). Es la referencia funcional canónica.
 - `docs/design/` — briefs visuales y mockups del rediseño actual.
 - `docs/legacy/` — markdowns del diseño original (QualitTab). Útil para entender el porqué de decisiones, **no** para inferir estado actual del código.
 - `WORKFLOW_ENGINE_SPEC.md` — spec del motor v2 (13 secciones: arquitectura, schema, backend, frontend, pilot, criterios de aceptación, riesgos, evolución futura).
 - `VISUAL_FLOW_EDITOR_SPEC.md` — spec del editor visual de flujos (xyflow, custom nodes, persistencia 1 flow = 1 RecordAction row).
-- `SAMPLE_CUSTODY_SPEC.md` — spec ISO 17025 §7.4 pendiente. Implementación bloqueada por falta del modelo `SampleCustodyEvent`.
+- `SAMPLE_CUSTODY_SPEC.md` — spec ISO 17025 §7.4, sin implementar (`TO_DO.md` §9).
 
 ## Sub-CLAUDE.md
 
