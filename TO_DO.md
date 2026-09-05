@@ -13,45 +13,9 @@ razón concreta para existir no debería estar en esta lista.
 
 ## Bugs confirmados
 
-### 1. Las fórmulas con espacios no evalúan
-
-`apps/api/src/modules/entries/services/formula-evaluator.service.ts`
-
-`"2+3"` devuelve 5, pero `"2 + 3"` devuelve `null` sin ningún aviso. La causa
-está en el saneado: la cadena que se evalúa conserva los espacios y la que se
-usa para compararla los elimina, así que nunca coinciden si el usuario escribió
-la fórmula con espacios — que es lo normal.
-
-```
-"2+3"          → 5
-"2 + 3"        → null
-"(10-2)*4"     → 32
-"(10 - 2) * 4" → null
-```
-
-Un campo `FORMULA` afectado queda vacío y el usuario no tiene forma de saber por
-qué. Impacto directo en registros que calculan resultados.
-
-### 2. El evaluador de fórmulas usa `Function()`, no mathjs
-
-Mismo archivo. La regla 3 de `CLAUDE.md` dice "**Nunca** usar `eval()` para
-fórmulas. Solo `mathjs` con scope explícito", pero **mathjs no está instalado en
-ningún workspace** y la evaluación se hace con `Function(...)`, que es `eval`
-por otro nombre.
-
-El riesgo real hoy es bajo: antes de evaluar se descarta todo carácter que no
-sea dígito, operador, paréntesis o punto, y con ese alfabeto no se puede
-alcanzar ningún global ni llamar funciones. Pero la defensa depende de que esa
-expresión regular sea correcta para siempre, que es exactamente lo que la regla
-buscaba evitar.
-
-Hay que decidir una de dos: instalar mathjs y usarlo con scope explícito, o
-documentar la excepción en `CLAUDE.md` explicando por qué el whitelist alcanza.
-Lo que no puede quedar es la regla diciendo una cosa y el código haciendo otra.
-
-Conviene resolver esto junto con el punto 1, que toca la misma función.
-
----
+Ninguno abierto. Los dos que había —fórmulas con espacios que devolvían `null`, y
+el evaluador usando `Function()` contra la regla 3— se resolvieron el 2026-09-04
+reescribiendo `formula-evaluator.service` sobre mathjs.
 
 ## Seguridad
 
@@ -192,7 +156,7 @@ ni cachea nada.
 
 ## Tests
 
-Hay 70 tests en `apps/api`, todos de lógica pura. Corren con `pnpm test` y en CI.
+Hay 86 tests en `apps/api`, todos de lógica pura. Corren con `pnpm test` y en CI.
 
 ### 14. El frontend no tiene ningún test
 
@@ -204,7 +168,6 @@ Ni runner configurado. Los primeros que valdría la pena: el `DynamicRecordForm`
 Por orden de valor:
 
 - `comparison-evaluator.service` — todos los operadores, constante contra campo.
-- `formula-evaluator.service` — junto con el arreglo de los puntos 1 y 2.
 - `area-access.guard` — resolución del árbol recursivo de áreas.
 - Flujo de auth completo: whitelist, multi-organización, switch-org.
 - `TransitionValidatorService` — transiciones permitidas y `requireReason`.
@@ -227,3 +190,21 @@ creación se maneja inline en el detalle del registro.
 
 El build avisa que la base de datos de browsers tiene 6 meses. Se arregla con
 `npx update-browserslist-db@latest`.
+
+---
+
+## Consistencia
+
+### 19. El preview de fórmulas y el backend son dos motores distintos
+
+El frontend calcula el valor en vivo con `Function` y un puñado de funciones de
+`Math`; el backend lo calcula con mathjs. Están alineados en lo que importa —se
+tradujo `^` a `**` porque en JavaScript es XOR y en mathjs es potencia, y se
+limitó el preview a la misma lista de funciones— pero son implementaciones
+separadas que pueden divergir de nuevo.
+
+Traer mathjs al bundle resolvería el problema de raíz, al costo de sumarle peso
+a una PWA pensada para usarse en planta. Vale la pena medirlo antes de decidir.
+
+Mientras tanto: cualquier función que se agregue de un lado hay que agregarla
+del otro.

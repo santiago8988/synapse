@@ -48,9 +48,40 @@ export function resolveFieldValue(
 
 /**
  * Evalúa todas las fórmulas del record en cascada (multi-pass), resolviendo
- * referencias {label} o {fieldId}. Acepta mathjs-like expressions —
- * evaluamos con Function constructor (sanitizable: sólo admite chars básicos).
+ * referencias {label} o {fieldId}.
+ *
+ * Esto es solo la vista previa en vivo: el valor que se guarda lo calcula el
+ * backend con mathjs. Se busca que coincidan, no que sean el mismo motor —
+ * traer mathjs al bundle de una PWA mobile-first no se justifica por un
+ * preview.
+ *
+ * Dos cuidados que no son opcionales:
+ *
+ *  - Las fórmulas las escribe un ADMIN y se evalúan en el navegador de quien
+ *    carga la entrada, que puede ser otra persona. Por eso solo se aceptan
+ *    identificadores de una lista blanca: antes el filtro permitía cualquier
+ *    letra, así que una expresión como `fetch(...)` pasaba y `Function` la
+ *    ejecutaba con acceso a los globales.
+ *  - `^` se traduce a `**`. En JavaScript es XOR y en mathjs es potencia, así
+ *    que sin traducir `2^3` mostraba 1 en pantalla y guardaba 8.
  */
+
+/** Únicas funciones que la vista previa reconoce, alineadas con mathjs. */
+const FUNCIONES_PERMITIDAS = [
+  'abs', 'sqrt', 'pow', 'min', 'max', 'round', 'floor', 'ceil', 'log', 'exp',
+] as const
+
+/**
+ * Acepta la expresión solo si todo identificador que aparece está en la lista
+ * blanca. Comprobar caracteres sueltos no alcanza: `fetch` son todas letras.
+ */
+function expresionPermitida(expr: string): boolean {
+  if (!/^[\d\s+\-*/().^%,a-zA-Z_]+$/.test(expr)) return false
+  const identificadores = expr.match(/[a-zA-Z_][a-zA-Z_0-9]*/g) ?? []
+  return identificadores.every((id) =>
+    (FUNCIONES_PERMITIDAS as readonly string[]).includes(id),
+  )
+}
 export function computeFormulaResults(
   record: RecordForForm,
   data: Record<string, unknown>,
@@ -84,13 +115,14 @@ export function computeFormulaResults(
         replaced = replaced.replace(m[0], String(val))
       }
       if (!allResolved) continue
-      // Only allow digits, operators, parentheses, decimals, spaces and basic math functions
-      if (!/^[\d\s+\-*/().^%,a-zA-Z_]+$/.test(replaced)) continue
+      if (!expresionPermitida(replaced)) continue
+      // `^` es potencia en mathjs (lo que usa el backend) pero XOR en JS.
+      const enSintaxisJs = replaced.replace(/\^/g, '**')
       try {
         // eslint-disable-next-line no-new-func
         const v = Function(
           '"use strict"; const {abs,sqrt,pow,min,max,round,floor,ceil,log,exp}=Math; return (' +
-            replaced +
+            enSintaxisJs +
             ')',
         )()
         if (typeof v === 'number' && isFinite(v)) {
