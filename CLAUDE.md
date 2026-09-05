@@ -87,15 +87,20 @@ NEXTAUTH_SECRET=
 NEXTAUTH_URL=
 JWT_SECRET=
 
-# Storage
+# Storage (las cuatro son obligatorias: storage.module aborta el arranque en
+# produccion si falta alguna). R2_PUBLIC_URL no existe mas: el servicio firma
+# las URLs contra el endpoint de la cuenta y nunca necesito un dominio publico.
 R2_ACCOUNT_ID=
 R2_ACCESS_KEY_ID=
 R2_SECRET_ACCESS_KEY=
 R2_BUCKET_NAME=
-R2_PUBLIC_URL=
 
 # App
 NEXT_PUBLIC_API_URL=
+# Opcional, solo frontend: acota el origen de los PDFs en la CSP. Sin ella se
+# cae a un comodin de subdominio de R2, que funciona pero acepta cualquier
+# cuenta de Cloudflare.
+NEXT_PUBLIC_R2_URL=
 ```
 
 ## Modelo de negocio
