@@ -5,11 +5,15 @@ on:
     branches: [main]
   pull_request:
 
-# Un push nuevo sobre la misma rama cancela la corrida anterior: no tiene
-# sentido esperar el resultado de un commit que ya quedó atrás.
+# En un PR, un push nuevo cancela la corrida anterior: no tiene sentido esperar
+# el resultado de un commit que ya quedó atrás.
+#
+# En `main` NO se cancela. Ahí cada corrida es el registro de verificación de
+# ese commit: cancelarla lo deja sin verificar para siempre, y es justo el
+# historial que sirve para saber en qué commit se rompió algo.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   verify:
