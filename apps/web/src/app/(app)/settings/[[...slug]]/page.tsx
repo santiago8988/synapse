@@ -1282,21 +1282,26 @@ export default function SettingsPage({ params }: { params: { slug?: string[] } }
         </p>
       </div>
 
-      <div className="flex gap-6">
-        {/* Sidebar de tabs */}
-        <div className="w-56 shrink-0">
-          <nav className="space-y-1">
+      <div className="flex flex-col gap-6 lg:flex-row">
+        {/*
+          En mobile las pestañas pasan a ser una tira horizontal que scrollea.
+          Antes eran una columna fija de 224px al lado del contenido, y en un
+          teléfono se comían dos tercios del ancho: los datos quedaban cortados
+          contra el borde derecho.
+        */}
+        <div className="lg:w-56 lg:shrink-0">
+          <nav className="-mx-4 flex gap-1 overflow-x-auto px-4 pb-1 lg:mx-0 lg:block lg:space-y-1 lg:overflow-visible lg:px-0">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                className={`flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:w-full lg:gap-3 ${
                   activeTab === tab.id
                     ? 'bg-primary/10 text-primary'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 }`}
               >
-                <tab.icon className="h-4 w-4" />
+                <tab.icon className="h-4 w-4 shrink-0" />
                 {tab.label}
               </button>
             ))}
@@ -1304,7 +1309,7 @@ export default function SettingsPage({ params }: { params: { slug?: string[] } }
         </div>
 
         {/* Contenido */}
-        <div className="flex-1 animate-fade-in">
+        <div className="min-w-0 flex-1 animate-fade-in">
           {activeTab === 'general' && <GeneralTab orgId={orgId} />}
           {activeTab === 'areas' && <AreasTab orgId={orgId} />}
           {activeTab === 'positions' && <PositionsTab orgId={orgId} />}

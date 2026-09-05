@@ -128,79 +128,81 @@ export default function SamplesPage() {
         ) : filtered.length === 0 ? (
           <EmptyState hasFilter={!!search || !!statusFilter} />
         ) : (
-          <table className="syn-table">
-            <thead>
-              <tr>
-                <th>Código</th>
-                <th>Cliente</th>
-                <th>Matriz</th>
-                <th>Registro</th>
-                <th>Recibida</th>
-                <th>Estado</th>
-                <th style={{ textAlign: 'right' }}>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s) => {
-                const next = nextStatus[s.status]
-                return (
-                  <tr key={s.id}>
-                    <td data-label="Código" data-role="identifier">
-                      <Link
-                        href={`/samples/${s.id}`}
-                        style={{ color: 'var(--ink-0)' }}
-                      >
-                        {s.sampleCode}
-                      </Link>
-                    </td>
-                    <td data-label="Cliente" style={{ color: 'var(--ink-1)' }}>
-                      {s.client ?? <span style={{ color: 'var(--ink-4)' }}>—</span>}
-                    </td>
-                    <td data-label="Matriz" style={{ color: 'var(--ink-1)' }}>
-                      {s.matrix?.name ?? <span style={{ color: 'var(--ink-4)' }}>—</span>}
-                    </td>
-                    <td data-label="Registro" style={{ color: 'var(--ink-1)' }}>
-                      {s.record.name}
-                    </td>
-                    <td
-                      data-label="Recibida"
-                      className="font-mono text-[12px]"
-                      style={{ color: 'var(--ink-2)' }}
-                    >
-                      {new Date(s.receivedAt).toLocaleDateString('es-AR')}
-                    </td>
-                    <td data-label="Estado" data-role="status">
-                      <span className={`syn-chip ${statusChipCls[s.status]}`}>
-                        {statusLabel[s.status]}
-                      </span>
-                    </td>
-                    <td data-label="" style={{ textAlign: 'right' }}>
-                      {next ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            changeStatusMutation.mutate({ id: s.id, status: next.status })
-                          }
-                          disabled={changeStatusMutation.isPending}
-                          className="syn-btn syn-btn-ghost"
-                        >
-                          {next.label}
-                        </button>
-                      ) : (
+          <div className="syn-table-wrap">
+            <table className="syn-table">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Cliente</th>
+                  <th>Matriz</th>
+                  <th>Registro</th>
+                  <th>Recibida</th>
+                  <th>Estado</th>
+                  <th style={{ textAlign: 'right' }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((s) => {
+                  const next = nextStatus[s.status]
+                  return (
+                    <tr key={s.id}>
+                      <td data-label="Código" data-role="identifier">
                         <Link
                           href={`/samples/${s.id}`}
-                          className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
-                          style={{ color: 'var(--primary-hex)' }}
+                          style={{ color: 'var(--ink-0)' }}
                         >
-                          Abrir <ArrowRight className="h-3 w-3" />
+                          {s.sampleCode}
                         </Link>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td data-label="Cliente" style={{ color: 'var(--ink-1)' }}>
+                        {s.client ?? <span style={{ color: 'var(--ink-4)' }}>—</span>}
+                      </td>
+                      <td data-label="Matriz" style={{ color: 'var(--ink-1)' }}>
+                        {s.matrix?.name ?? <span style={{ color: 'var(--ink-4)' }}>—</span>}
+                      </td>
+                      <td data-label="Registro" style={{ color: 'var(--ink-1)' }}>
+                        {s.record.name}
+                      </td>
+                      <td
+                        data-label="Recibida"
+                        className="font-mono text-[12px]"
+                        style={{ color: 'var(--ink-2)' }}
+                      >
+                        {new Date(s.receivedAt).toLocaleDateString('es-AR')}
+                      </td>
+                      <td data-label="Estado" data-role="status">
+                        <span className={`syn-chip ${statusChipCls[s.status]}`}>
+                          {statusLabel[s.status]}
+                        </span>
+                      </td>
+                      <td data-label="" style={{ textAlign: 'right' }}>
+                        {next ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              changeStatusMutation.mutate({ id: s.id, status: next.status })
+                            }
+                            disabled={changeStatusMutation.isPending}
+                            className="syn-btn syn-btn-ghost"
+                          >
+                            {next.label}
+                          </button>
+                        ) : (
+                          <Link
+                            href={`/samples/${s.id}`}
+                            className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
+                            style={{ color: 'var(--primary-hex)' }}
+                          >
+                            Abrir <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

@@ -163,110 +163,112 @@ export default function RecordsPage() {
         ) : filtered.length === 0 ? (
           <EmptyState tab={tab} onCreate="/records/new" />
         ) : (
-          <table className="syn-table">
-            <thead>
-              <tr>
-                <th>Nombre</th>
-                <th>Tipo</th>
-                <th>Área</th>
-                <th style={{ textAlign: 'right' }}>Campos</th>
-                <th style={{ textAlign: 'right' }}>Entradas</th>
-                <th>Actualizado</th>
-                <th style={{ textAlign: 'right' }}>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((r) => {
-                const chipCls = typeChipClass[r.type] ?? 'syn-chip-draft'
-                return (
-                  <tr
-                    key={r.id}
-                    style={tab === 'archived' ? { opacity: 0.7 } : undefined}
-                  >
-                    <td data-label="Nombre" data-role="identifier">
-                      <Link
-                        href={`/records/${r.id}`}
-                        className="group flex items-center gap-2"
-                        style={{ color: 'var(--ink-0)', fontWeight: 500 }}
-                      >
-                        <span className="group-hover:underline">{r.name}</span>
-                      </Link>
-                      {r.document && (
-                        <div
-                          className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.1em]"
-                          style={{ color: 'var(--ink-3)' }}
-                        >
-                          Doc: {r.document.code || r.document.title}
-                        </div>
-                      )}
-                    </td>
-                    <td data-label="Tipo">
-                      <span className={`syn-chip ${chipCls}`}>
-                        {typeLabel[r.type] ?? r.type}
-                      </span>
-                      {r.type === 'PERIODIC' && r.periodicity && (
-                        <span
-                          className="ml-2 font-mono text-[10px] uppercase tracking-[0.1em]"
-                          style={{ color: 'var(--ink-3)' }}
-                        >
-                          c/{r.periodicity}d
-                        </span>
-                      )}
-                    </td>
-                    <td data-label="Áreas" style={{ color: 'var(--ink-1)' }}>
-                      {r.areas && r.areas.length > 0 ? (
-                        r.areas.map((ra) => ra.area.name).join(', ')
-                      ) : (
-                        <span style={{ color: 'var(--ink-4)' }}>—</span>
-                      )}
-                    </td>
-                    <td
-                      data-label="Campos"
-                      className="col-mono"
-                      style={{ textAlign: 'right' }}
+          <div className="syn-table-wrap">
+            <table className="syn-table">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Tipo</th>
+                  <th>Área</th>
+                  <th style={{ textAlign: 'right' }}>Campos</th>
+                  <th style={{ textAlign: 'right' }}>Entradas</th>
+                  <th>Actualizado</th>
+                  <th style={{ textAlign: 'right' }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => {
+                  const chipCls = typeChipClass[r.type] ?? 'syn-chip-draft'
+                  return (
+                    <tr
+                      key={r.id}
+                      style={tab === 'archived' ? { opacity: 0.7 } : undefined}
                     >
-                      {r.fields.length}
-                    </td>
-                    <td
-                      data-label="Entradas"
-                      className="col-mono"
-                      style={{ textAlign: 'right' }}
-                    >
-                      {r._count.entries}
-                    </td>
-                    <td
-                      data-label="Actualizado"
-                      className="font-mono text-[12px]"
-                      style={{ color: 'var(--ink-2)' }}
-                    >
-                      {formatRelative(r.updatedAt)}
-                    </td>
-                    <td data-label="" style={{ textAlign: 'right' }}>
-                      {tab === 'archived' ? (
-                        <button
-                          type="button"
-                          className="syn-btn syn-btn-ghost"
-                          onClick={() => restoreMutation.mutate(r.id)}
-                          disabled={restoreMutation.isPending}
-                        >
-                          <ArchiveRestore className="h-3.5 w-3.5" />
-                          Restaurar
-                        </button>
-                      ) : (
+                      <td data-label="Nombre" data-role="identifier">
                         <Link
                           href={`/records/${r.id}`}
-                          className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
-                          style={{ color: 'var(--primary-hex)' }}
+                          className="group flex items-center gap-2"
+                          style={{ color: 'var(--ink-0)', fontWeight: 500 }}
                         >
-                          Abrir <ArrowRight className="h-3 w-3" />
+                          <span className="group-hover:underline">{r.name}</span>
                         </Link>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                        {r.document && (
+                          <div
+                            className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.1em]"
+                            style={{ color: 'var(--ink-3)' }}
+                          >
+                            Doc: {r.document.code || r.document.title}
+                          </div>
+                        )}
+                      </td>
+                      <td data-label="Tipo">
+                        <span className={`syn-chip ${chipCls}`}>
+                          {typeLabel[r.type] ?? r.type}
+                        </span>
+                        {r.type === 'PERIODIC' && r.periodicity && (
+                          <span
+                            className="ml-2 font-mono text-[10px] uppercase tracking-[0.1em]"
+                            style={{ color: 'var(--ink-3)' }}
+                          >
+                            c/{r.periodicity}d
+                          </span>
+                        )}
+                      </td>
+                      <td data-label="Áreas" style={{ color: 'var(--ink-1)' }}>
+                        {r.areas && r.areas.length > 0 ? (
+                          r.areas.map((ra) => ra.area.name).join(', ')
+                        ) : (
+                          <span style={{ color: 'var(--ink-4)' }}>—</span>
+                        )}
+                      </td>
+                      <td
+                        data-label="Campos"
+                        className="col-mono"
+                        style={{ textAlign: 'right' }}
+                      >
+                        {r.fields.length}
+                      </td>
+                      <td
+                        data-label="Entradas"
+                        className="col-mono"
+                        style={{ textAlign: 'right' }}
+                      >
+                        {r._count.entries}
+                      </td>
+                      <td
+                        data-label="Actualizado"
+                        className="font-mono text-[12px]"
+                        style={{ color: 'var(--ink-2)' }}
+                      >
+                        {formatRelative(r.updatedAt)}
+                      </td>
+                      <td data-label="" style={{ textAlign: 'right' }}>
+                        {tab === 'archived' ? (
+                          <button
+                            type="button"
+                            className="syn-btn syn-btn-ghost"
+                            onClick={() => restoreMutation.mutate(r.id)}
+                            disabled={restoreMutation.isPending}
+                          >
+                            <ArchiveRestore className="h-3.5 w-3.5" />
+                            Restaurar
+                          </button>
+                        ) : (
+                          <Link
+                            href={`/records/${r.id}`}
+                            className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
+                            style={{ color: 'var(--primary-hex)' }}
+                          >
+                            Abrir <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

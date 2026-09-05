@@ -105,6 +105,15 @@ apps/web/src/
 
 1. **Mantener shadcn/ui como base**. Para componentes nuevos: extender, no reemplazar.
 2. **Mobile-first real**: la app se usa con guantes en planta. Inputs grandes, áreas táctiles ≥ 44px, botones de acción fijos en bottom en mobile.
+   Tres reglas que salieron de romperlo en el primer deploy:
+   - **Toda tabla va dentro de `.syn-table-wrap`.** Una tabla de seis columnas
+     sin contenedor propio empuja la página entera más ancha que la pantalla, y
+     el usuario termina con *todo* cortado, no solo la tabla.
+   - **Ninguna grilla con número fijo de columnas sin override mobile.** Ojo con
+     los `gridTemplateColumns` inline: no los alcanza una media query, así que
+     van como clase.
+   - **Un layout de dos columnas al lado del contenido se apila abajo de `lg`.**
+     Una columna fija de 224px se come dos tercios de un teléfono.
 3. **UI siempre en español**, código en inglés.
 4. **Validación con Zod compartida**: importar schemas desde `@synapse/validators`. No duplicar reglas en frontend y backend.
 5. **Texto se muestra en MAYÚSCULAS**: el backend ya guarda así campos `TEXT` y `DROPDOWN`. El frontend no necesita transformar al renderizar (ya viene upper).

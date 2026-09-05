@@ -306,13 +306,7 @@ export default function NewRecordPage() {
                 </div>
               )}
 
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: 12,
-                }}
-              >
+              <div className="syn-field-row">
                 {(type === 'PERIODIC' || type === 'INSTRUMENTAL') && (
                   <>
                     <div className="syn-field">

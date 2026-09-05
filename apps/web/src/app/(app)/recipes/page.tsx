@@ -378,58 +378,60 @@ function RecipeDetailDialog({
                 className="rounded-[8px] border"
                 style={{ borderColor: 'var(--line)' }}
               >
-                <table className="syn-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: 40 }}>#</th>
-                      <th>Ingrediente</th>
-                      <th style={{ textAlign: 'right' }}>Cantidad</th>
-                      <th>Unidad</th>
-                      <th>Stock</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recipe.ingredients.map((ing, i) => (
-                      <tr key={i}>
-                        <td
-                          data-label="#"
-                          className="font-mono"
-                          style={{ color: 'var(--ink-3)' }}
-                        >
-                          {ing.order}
-                        </td>
-                        <td data-label="Ingrediente" data-role="identifier">
-                          <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
-                            {ing.name}
-                          </span>
-                        </td>
-                        <td
-                          data-label="Cantidad"
-                          className="font-mono"
-                          style={{ textAlign: 'right', color: 'var(--ink-1)' }}
-                        >
-                          {ing.quantity}
-                        </td>
-                        <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
-                          {ing.unit}
-                        </td>
-                        <td data-label="Stock">
-                          {ing.fromStock ? (
-                            <span
-                              className="inline-flex items-center gap-1 font-mono text-[11px]"
-                              style={{ color: 'var(--ok)' }}
-                            >
-                              <Warehouse className="h-3 w-3" />
-                              {ing.stockRecipe?.code || 'Sí'}
-                            </span>
-                          ) : (
-                            <span style={{ color: 'var(--ink-4)' }}>—</span>
-                          )}
-                        </td>
+                <div className="syn-table-wrap">
+                  <table className="syn-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 40 }}>#</th>
+                        <th>Ingrediente</th>
+                        <th style={{ textAlign: 'right' }}>Cantidad</th>
+                        <th>Unidad</th>
+                        <th>Stock</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {recipe.ingredients.map((ing, i) => (
+                        <tr key={i}>
+                          <td
+                            data-label="#"
+                            className="font-mono"
+                            style={{ color: 'var(--ink-3)' }}
+                          >
+                            {ing.order}
+                          </td>
+                          <td data-label="Ingrediente" data-role="identifier">
+                            <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
+                              {ing.name}
+                            </span>
+                          </td>
+                          <td
+                            data-label="Cantidad"
+                            className="font-mono"
+                            style={{ textAlign: 'right', color: 'var(--ink-1)' }}
+                          >
+                            {ing.quantity}
+                          </td>
+                          <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
+                            {ing.unit}
+                          </td>
+                          <td data-label="Stock">
+                            {ing.fromStock ? (
+                              <span
+                                className="inline-flex items-center gap-1 font-mono text-[11px]"
+                                style={{ color: 'var(--ok)' }}
+                              >
+                                <Warehouse className="h-3 w-3" />
+                                {ing.stockRecipe?.code || 'Sí'}
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--ink-4)' }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}

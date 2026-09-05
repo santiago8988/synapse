@@ -382,62 +382,64 @@ function MatrixDetailModal({
                 className="rounded-[8px] border overflow-x-auto"
                 style={{ borderColor: 'var(--line)' }}
               >
-                <table className="syn-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: 40 }}>#</th>
-                      <th>Parámetro</th>
-                      <th>Método</th>
-                      <th>Unidad</th>
-                      <th style={{ textAlign: 'right' }}>Min</th>
-                      <th style={{ textAlign: 'right' }}>Max</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {matrix.parameters.map((p, i) => (
-                      <tr key={i}>
-                        <td
-                          data-label="#"
-                          className="font-mono"
-                          style={{ color: 'var(--ink-3)' }}
-                        >
-                          {p.order}
-                        </td>
-                        <td data-label="Parámetro" data-role="identifier">
-                          <span
-                            style={{ color: 'var(--ink-0)', fontWeight: 500 }}
-                          >
-                            {p.name}
-                          </span>
-                        </td>
-                        <td
-                          data-label="Método"
-                          className="font-mono"
-                          style={{ color: 'var(--ink-2)', fontSize: 12 }}
-                        >
-                          {p.method || '—'}
-                        </td>
-                        <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
-                          {p.unit || '—'}
-                        </td>
-                        <td
-                          data-label="Min"
-                          className="font-mono"
-                          style={{ textAlign: 'right', color: 'var(--ink-2)' }}
-                        >
-                          {p.minValue != null ? p.minValue : '—'}
-                        </td>
-                        <td
-                          data-label="Max"
-                          className="font-mono"
-                          style={{ textAlign: 'right', color: 'var(--ink-2)' }}
-                        >
-                          {p.maxValue != null ? p.maxValue : '—'}
-                        </td>
+                <div className="syn-table-wrap">
+                  <table className="syn-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 40 }}>#</th>
+                        <th>Parámetro</th>
+                        <th>Método</th>
+                        <th>Unidad</th>
+                        <th style={{ textAlign: 'right' }}>Min</th>
+                        <th style={{ textAlign: 'right' }}>Max</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {matrix.parameters.map((p, i) => (
+                        <tr key={i}>
+                          <td
+                            data-label="#"
+                            className="font-mono"
+                            style={{ color: 'var(--ink-3)' }}
+                          >
+                            {p.order}
+                          </td>
+                          <td data-label="Parámetro" data-role="identifier">
+                            <span
+                              style={{ color: 'var(--ink-0)', fontWeight: 500 }}
+                            >
+                              {p.name}
+                            </span>
+                          </td>
+                          <td
+                            data-label="Método"
+                            className="font-mono"
+                            style={{ color: 'var(--ink-2)', fontSize: 12 }}
+                          >
+                            {p.method || '—'}
+                          </td>
+                          <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
+                            {p.unit || '—'}
+                          </td>
+                          <td
+                            data-label="Min"
+                            className="font-mono"
+                            style={{ textAlign: 'right', color: 'var(--ink-2)' }}
+                          >
+                            {p.minValue != null ? p.minValue : '—'}
+                          </td>
+                          <td
+                            data-label="Max"
+                            className="font-mono"
+                            style={{ textAlign: 'right', color: 'var(--ink-2)' }}
+                          >
+                            {p.maxValue != null ? p.maxValue : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}

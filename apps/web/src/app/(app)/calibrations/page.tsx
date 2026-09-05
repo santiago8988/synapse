@@ -124,101 +124,103 @@ export default function CalibrationsPage() {
         ) : filtered.length === 0 ? (
           <EmptyState hasFilter={!!search || !!statusFilter} />
         ) : (
-          <table className="syn-table">
-            <thead>
-              <tr>
-                <th>Código</th>
-                <th>Registro</th>
-                <th>Plantilla</th>
-                <th>Vence</th>
-                <th>Estado</th>
-                <th style={{ textAlign: 'right' }}>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => {
-                const codigo =
-                  Object.values(c.entry?.data || {}).find((v) => typeof v === 'string') || '—'
-                const hasResults = c.results && Object.keys(c.results).length > 0
-                const effectiveKey: CalibrationStatus | 'PENDING' =
-                  c.status === 'IN_PROGRESS' && !hasResults ? 'PENDING' : c.status
-
-                const dueDate = c.dueDate ? new Date(c.dueDate) : null
-                const isOverdue =
-                  !!dueDate &&
-                  dueDate.getTime() < Date.now() &&
-                  c.status !== 'APPROVED' &&
-                  c.status !== 'REJECTED'
-                const daysUntilDue = dueDate
-                  ? Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-                  : null
-
-                return (
-                  <tr key={c.id}>
-                    <td data-label="Código" data-role="identifier">
-                      <Link
-                        href={`/calibrations/${c.id}`}
-                        style={{ color: 'var(--ink-0)' }}
-                      >
-                        {String(codigo)}
-                      </Link>
-                    </td>
-                    <td data-label="Registro" style={{ color: 'var(--ink-1)' }}>
-                      {c.entry.record.name}
-                    </td>
-                    <td data-label="Plantilla" style={{ color: 'var(--ink-1)' }}>
-                      {c.template?.name ?? <span style={{ color: 'var(--ink-4)' }}>—</span>}
-                    </td>
-                    <td data-label="Vence">
-                      {dueDate ? (
-                        <span
-                          className="inline-flex items-center gap-1.5 font-mono text-[12px]"
-                          style={{
-                            color: isOverdue
-                              ? 'var(--danger)'
-                              : daysUntilDue !== null && daysUntilDue <= 7
-                                ? 'var(--warn)'
-                                : 'var(--ink-2)',
-                            fontWeight: isOverdue ? 500 : 400,
-                          }}
+          <div className="syn-table-wrap">
+            <table className="syn-table">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Registro</th>
+                  <th>Plantilla</th>
+                  <th>Vence</th>
+                  <th>Estado</th>
+                  <th style={{ textAlign: 'right' }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((c) => {
+                  const codigo =
+                    Object.values(c.entry?.data || {}).find((v) => typeof v === 'string') || '—'
+                  const hasResults = c.results && Object.keys(c.results).length > 0
+                  const effectiveKey: CalibrationStatus | 'PENDING' =
+                    c.status === 'IN_PROGRESS' && !hasResults ? 'PENDING' : c.status
+  
+                  const dueDate = c.dueDate ? new Date(c.dueDate) : null
+                  const isOverdue =
+                    !!dueDate &&
+                    dueDate.getTime() < Date.now() &&
+                    c.status !== 'APPROVED' &&
+                    c.status !== 'REJECTED'
+                  const daysUntilDue = dueDate
+                    ? Math.ceil((dueDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                    : null
+  
+                  return (
+                    <tr key={c.id}>
+                      <td data-label="Código" data-role="identifier">
+                        <Link
+                          href={`/calibrations/${c.id}`}
+                          style={{ color: 'var(--ink-0)' }}
                         >
-                          {isOverdue ? (
-                            <AlertTriangle className="h-3.5 w-3.5" />
-                          ) : (
-                            <CalendarClock className="h-3.5 w-3.5" />
-                          )}
-                          {dueDate.toLocaleDateString('es-AR')}
-                          {daysUntilDue !== null && (
-                            <span style={{ opacity: 0.75 }}>
-                              (
-                              {isOverdue ? `${Math.abs(daysUntilDue)}d venc` : `en ${daysUntilDue}d`}
-                              )
-                            </span>
-                          )}
+                          {String(codigo)}
+                        </Link>
+                      </td>
+                      <td data-label="Registro" style={{ color: 'var(--ink-1)' }}>
+                        {c.entry.record.name}
+                      </td>
+                      <td data-label="Plantilla" style={{ color: 'var(--ink-1)' }}>
+                        {c.template?.name ?? <span style={{ color: 'var(--ink-4)' }}>—</span>}
+                      </td>
+                      <td data-label="Vence">
+                        {dueDate ? (
+                          <span
+                            className="inline-flex items-center gap-1.5 font-mono text-[12px]"
+                            style={{
+                              color: isOverdue
+                                ? 'var(--danger)'
+                                : daysUntilDue !== null && daysUntilDue <= 7
+                                  ? 'var(--warn)'
+                                  : 'var(--ink-2)',
+                              fontWeight: isOverdue ? 500 : 400,
+                            }}
+                          >
+                            {isOverdue ? (
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                            ) : (
+                              <CalendarClock className="h-3.5 w-3.5" />
+                            )}
+                            {dueDate.toLocaleDateString('es-AR')}
+                            {daysUntilDue !== null && (
+                              <span style={{ opacity: 0.75 }}>
+                                (
+                                {isOverdue ? `${Math.abs(daysUntilDue)}d venc` : `en ${daysUntilDue}d`}
+                                )
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--ink-4)' }}>—</span>
+                        )}
+                      </td>
+                      <td data-label="Estado" data-role="status">
+                        <span className={`syn-chip ${statusChipCls[effectiveKey]}`}>
+                          {statusLabel[effectiveKey]}
                         </span>
-                      ) : (
-                        <span style={{ color: 'var(--ink-4)' }}>—</span>
-                      )}
-                    </td>
-                    <td data-label="Estado" data-role="status">
-                      <span className={`syn-chip ${statusChipCls[effectiveKey]}`}>
-                        {statusLabel[effectiveKey]}
-                      </span>
-                    </td>
-                    <td data-label="" style={{ textAlign: 'right' }}>
-                      <Link
-                        href={`/calibrations/${c.id}`}
-                        className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
-                        style={{ color: 'var(--primary-hex)' }}
-                      >
-                        Abrir <ArrowRight className="h-3 w-3" />
-                      </Link>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                      </td>
+                      <td data-label="" style={{ textAlign: 'right' }}>
+                        <Link
+                          href={`/calibrations/${c.id}`}
+                          className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
+                          style={{ color: 'var(--primary-hex)' }}
+                        >
+                          Abrir <ArrowRight className="h-3 w-3" />
+                        </Link>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

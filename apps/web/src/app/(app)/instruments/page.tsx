@@ -257,74 +257,76 @@ export default function InstrumentsPage() {
                   <h3 style={{ marginTop: 6 }}>{recordName}</h3>
                 </div>
               </div>
-              <table className="syn-table">
-                <thead>
-                  <tr>
-                    <th>Identificador</th>
-                    <th>Próxima calibración</th>
-                    <th>Estado</th>
-                    <th style={{ textAlign: 'right' }}>Acción</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((inst) => {
-                    const identifier = getIdentifier(inst)
-                    const isDecommissioned = inst.status === 'DECOMMISSIONED'
-                    const calInd = getCalibrationIndicator(
-                      inst.nextCalibrationAt,
-                      inst.record.notifyDaysBefore,
-                    )
-                    return (
-                      <tr
-                        key={inst.id}
-                        style={isDecommissioned ? { opacity: 0.65 } : undefined}
-                      >
-                        <td data-label="Identificador" data-role="identifier">
-                          <Link
-                            href={`/instruments/${inst.id}`}
-                            style={{ color: 'var(--ink-0)' }}
-                          >
-                            {identifier}
-                          </Link>
-                        </td>
-                        <td data-label="Próxima calibración">
-                          {inst.nextCalibrationAt && calInd ? (
-                            <span
-                              className="inline-flex items-center gap-1 font-mono text-[12px]"
-                              style={{ color: calibrationColorVar[calInd] }}
-                              title={new Date(
-                                inst.nextCalibrationAt,
-                              ).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
+              <div className="syn-table-wrap">
+                <table className="syn-table">
+                  <thead>
+                    <tr>
+                      <th>Identificador</th>
+                      <th>Próxima calibración</th>
+                      <th>Estado</th>
+                      <th style={{ textAlign: 'right' }}>Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((inst) => {
+                      const identifier = getIdentifier(inst)
+                      const isDecommissioned = inst.status === 'DECOMMISSIONED'
+                      const calInd = getCalibrationIndicator(
+                        inst.nextCalibrationAt,
+                        inst.record.notifyDaysBefore,
+                      )
+                      return (
+                        <tr
+                          key={inst.id}
+                          style={isDecommissioned ? { opacity: 0.65 } : undefined}
+                        >
+                          <td data-label="Identificador" data-role="identifier">
+                            <Link
+                              href={`/instruments/${inst.id}`}
+                              style={{ color: 'var(--ink-0)' }}
                             >
-                              <CalendarClock className="h-3 w-3" />
-                              {new Date(inst.nextCalibrationAt).toLocaleDateString(
-                                'es-AR',
-                                { timeZone: 'UTC' },
-                              )}
+                              {identifier}
+                            </Link>
+                          </td>
+                          <td data-label="Próxima calibración">
+                            {inst.nextCalibrationAt && calInd ? (
+                              <span
+                                className="inline-flex items-center gap-1 font-mono text-[12px]"
+                                style={{ color: calibrationColorVar[calInd] }}
+                                title={new Date(
+                                  inst.nextCalibrationAt,
+                                ).toLocaleDateString('es-AR', { timeZone: 'UTC' })}
+                              >
+                                <CalendarClock className="h-3 w-3" />
+                                {new Date(inst.nextCalibrationAt).toLocaleDateString(
+                                  'es-AR',
+                                  { timeZone: 'UTC' },
+                                )}
+                              </span>
+                            ) : (
+                              <span style={{ color: 'var(--ink-4)' }}>—</span>
+                            )}
+                          </td>
+                          <td data-label="Estado" data-role="status">
+                            <span className={`syn-chip ${statusChipCls[inst.status]}`}>
+                              {statusLabel[inst.status]}
                             </span>
-                          ) : (
-                            <span style={{ color: 'var(--ink-4)' }}>—</span>
-                          )}
-                        </td>
-                        <td data-label="Estado" data-role="status">
-                          <span className={`syn-chip ${statusChipCls[inst.status]}`}>
-                            {statusLabel[inst.status]}
-                          </span>
-                        </td>
-                        <td data-label="" style={{ textAlign: 'right' }}>
-                          <Link
-                            href={`/instruments/${inst.id}`}
-                            className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
-                            style={{ color: 'var(--primary-hex)' }}
-                          >
-                            Abrir <ArrowRight className="h-3 w-3" />
-                          </Link>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td data-label="" style={{ textAlign: 'right' }}>
+                            <Link
+                              href={`/instruments/${inst.id}`}
+                              className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
+                              style={{ color: 'var(--primary-hex)' }}
+                            >
+                              Abrir <ArrowRight className="h-3 w-3" />
+                            </Link>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ))}
         </div>

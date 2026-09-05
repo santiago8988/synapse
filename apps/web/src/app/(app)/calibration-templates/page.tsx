@@ -456,49 +456,51 @@ function CalibrationTemplateDetailDialog({
                     className="rounded-[8px] border"
                     style={{ borderColor: 'var(--line)' }}
                   >
-                    <table className="syn-table">
-                      <thead>
-                        <tr>
-                          <th style={{ width: 40 }}>#</th>
-                          <th>Punto</th>
-                          <th style={{ textAlign: 'right' }}>Carga</th>
-                          <th>Unidad</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {test.points.map((p, pi) => (
-                          <tr key={pi}>
-                            <td
-                              data-label="#"
-                              className="font-mono"
-                              style={{ color: 'var(--ink-3)' }}
-                            >
-                              {p.order}
-                            </td>
-                            <td data-label="Punto" data-role="identifier">
-                              <span
-                                style={{
-                                  color: 'var(--ink-0)',
-                                  fontWeight: 500,
-                                }}
-                              >
-                                {p.name}
-                              </span>
-                            </td>
-                            <td
-                              data-label="Carga"
-                              className="font-mono"
-                              style={{ textAlign: 'right', color: 'var(--ink-1)' }}
-                            >
-                              {p.load}
-                            </td>
-                            <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
-                              {p.unit}
-                            </td>
+                    <div className="syn-table-wrap">
+                      <table className="syn-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: 40 }}>#</th>
+                            <th>Punto</th>
+                            <th style={{ textAlign: 'right' }}>Carga</th>
+                            <th>Unidad</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {test.points.map((p, pi) => (
+                            <tr key={pi}>
+                              <td
+                                data-label="#"
+                                className="font-mono"
+                                style={{ color: 'var(--ink-3)' }}
+                              >
+                                {p.order}
+                              </td>
+                              <td data-label="Punto" data-role="identifier">
+                                <span
+                                  style={{
+                                    color: 'var(--ink-0)',
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  {p.name}
+                                </span>
+                              </td>
+                              <td
+                                data-label="Carga"
+                                className="font-mono"
+                                style={{ textAlign: 'right', color: 'var(--ink-1)' }}
+                              >
+                                {p.load}
+                              </td>
+                              <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
+                                {p.unit}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>

@@ -134,104 +134,106 @@ export default function BatchesPage() {
         ) : filtered.length === 0 ? (
           <EmptyState hasFilter={!!search || !!statusFilter} />
         ) : (
-          <table className="syn-table">
-            <thead>
-              <tr>
-                <th>Lote</th>
-                <th>Registro</th>
-                <th>Fórmula</th>
-                <th>Inicio</th>
-                <th>Estado</th>
-                <th style={{ textAlign: 'right' }}>Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((b) => {
-                const next = nextStatus[b.status]
-                const isReviewable = b.status === 'COMPLETED'
-                return (
-                  <tr key={b.id}>
-                    <td data-label="Lote" data-role="identifier">
-                      <Link
-                        href={`/batches/${b.id}`}
-                        style={{ color: 'var(--ink-0)' }}
+          <div className="syn-table-wrap">
+            <table className="syn-table">
+              <thead>
+                <tr>
+                  <th>Lote</th>
+                  <th>Registro</th>
+                  <th>Fórmula</th>
+                  <th>Inicio</th>
+                  <th>Estado</th>
+                  <th style={{ textAlign: 'right' }}>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((b) => {
+                  const next = nextStatus[b.status]
+                  const isReviewable = b.status === 'COMPLETED'
+                  return (
+                    <tr key={b.id}>
+                      <td data-label="Lote" data-role="identifier">
+                        <Link
+                          href={`/batches/${b.id}`}
+                          style={{ color: 'var(--ink-0)' }}
+                        >
+                          {b.lotNumber}
+                        </Link>
+                      </td>
+                      <td data-label="Registro" style={{ color: 'var(--ink-1)' }}>
+                        {b.record.name}
+                      </td>
+                      <td data-label="Fórmula" style={{ color: 'var(--ink-1)' }}>
+                        {b.recipe?.name ?? <span style={{ color: 'var(--ink-4)' }}>—</span>}
+                      </td>
+                      <td
+                        data-label="Inicio"
+                        className="font-mono text-[12px]"
+                        style={{ color: 'var(--ink-2)' }}
                       >
-                        {b.lotNumber}
-                      </Link>
-                    </td>
-                    <td data-label="Registro" style={{ color: 'var(--ink-1)' }}>
-                      {b.record.name}
-                    </td>
-                    <td data-label="Fórmula" style={{ color: 'var(--ink-1)' }}>
-                      {b.recipe?.name ?? <span style={{ color: 'var(--ink-4)' }}>—</span>}
-                    </td>
-                    <td
-                      data-label="Inicio"
-                      className="font-mono text-[12px]"
-                      style={{ color: 'var(--ink-2)' }}
-                    >
-                      {b.startedAt ? (
-                        new Date(b.startedAt).toLocaleDateString('es-AR')
-                      ) : (
-                        <span style={{ color: 'var(--ink-4)' }}>—</span>
-                      )}
-                    </td>
-                    <td data-label="Estado" data-role="status">
-                      <span className={`syn-chip ${statusChipCls[b.status]}`}>
-                        {statusLabel[b.status]}
-                      </span>
-                    </td>
-                    <td data-label="" style={{ textAlign: 'right' }}>
-                      {isReviewable ? (
-                        <div className="flex justify-end gap-1.5">
+                        {b.startedAt ? (
+                          new Date(b.startedAt).toLocaleDateString('es-AR')
+                        ) : (
+                          <span style={{ color: 'var(--ink-4)' }}>—</span>
+                        )}
+                      </td>
+                      <td data-label="Estado" data-role="status">
+                        <span className={`syn-chip ${statusChipCls[b.status]}`}>
+                          {statusLabel[b.status]}
+                        </span>
+                      </td>
+                      <td data-label="" style={{ textAlign: 'right' }}>
+                        {isReviewable ? (
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                changeStatusMutation.mutate({ id: b.id, status: 'REJECTED' })
+                              }
+                              disabled={changeStatusMutation.isPending}
+                              className="syn-btn syn-btn-ghost"
+                              style={{ color: 'var(--danger)' }}
+                            >
+                              Rechazar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                changeStatusMutation.mutate({ id: b.id, status: 'APPROVED' })
+                              }
+                              disabled={changeStatusMutation.isPending}
+                              className="syn-btn syn-btn-primary"
+                            >
+                              Aprobar
+                            </button>
+                          </div>
+                        ) : next ? (
                           <button
                             type="button"
                             onClick={() =>
-                              changeStatusMutation.mutate({ id: b.id, status: 'REJECTED' })
+                              changeStatusMutation.mutate({ id: b.id, status: next.status })
                             }
                             disabled={changeStatusMutation.isPending}
                             className="syn-btn syn-btn-ghost"
-                            style={{ color: 'var(--danger)' }}
                           >
-                            Rechazar
+                            {next.label}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              changeStatusMutation.mutate({ id: b.id, status: 'APPROVED' })
-                            }
-                            disabled={changeStatusMutation.isPending}
-                            className="syn-btn syn-btn-primary"
+                        ) : (
+                          <Link
+                            href={`/batches/${b.id}`}
+                            className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
+                            style={{ color: 'var(--primary-hex)' }}
                           >
-                            Aprobar
-                          </button>
-                        </div>
-                      ) : next ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            changeStatusMutation.mutate({ id: b.id, status: next.status })
-                          }
-                          disabled={changeStatusMutation.isPending}
-                          className="syn-btn syn-btn-ghost"
-                        >
-                          {next.label}
-                        </button>
-                      ) : (
-                        <Link
-                          href={`/batches/${b.id}`}
-                          className="inline-flex items-center gap-1 font-mono text-[11px] uppercase tracking-[0.14em]"
-                          style={{ color: 'var(--primary-hex)' }}
-                        >
-                          Abrir <ArrowRight className="h-3 w-3" />
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                            Abrir <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

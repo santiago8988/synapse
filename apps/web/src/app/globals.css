@@ -365,6 +365,12 @@ textarea::placeholder {
 @media (max-width: 1100px) {
   .syn-kpi-grid { grid-template-columns: repeat(2, 1fr); }
 }
+@media (max-width: 520px) {
+  /* Dos columnas en un telefono dejan cada tarjeta en ~160px, y la etiqueta
+     ("Aprobaciones que te tocan") sale en cuatro renglones. */
+  .syn-kpi-grid { grid-template-columns: 1fr; }
+  .syn-kpi { padding: 16px 18px; }
+}
 .syn-kpi {
   background: var(--bg-1);
   border: 1px solid var(--line);
@@ -460,10 +466,29 @@ textarea::placeholder {
 @keyframes syn-pulse-dot { 50% { opacity: 0.4; } }
 
 /* Table */
+/* Toda tabla va adentro de esto.
+   Una tabla de seis columnas no entra en un telefono, y sin un contenedor
+   propio empuja la pagina entera a ser mas ancha que la pantalla: el usuario
+   termina con todo cortado contra el borde derecho, no solo la tabla.
+   El scroll se queda adentro de la caja. */
+.syn-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  /* Impide que el contenido de la tabla fije el ancho minimo del contenedor,
+     que es lo que hacia que el truco no sirviera de nada. */
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
 .syn-table {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--control-font);
+}
+@media (max-width: 900px) {
+  /* En pantallas chicas la tabla puede pasarse del ancho del contenedor: para
+     eso el contenedor scrollea. Sin esto se comprimiria hasta ser ilegible. */
+  .syn-table { width: auto; min-width: 100%; white-space: nowrap; }
 }
 .syn-table thead th {
   text-align: left;
@@ -674,6 +699,10 @@ textarea::placeholder {
   padding: 24px 32px;
   min-width: 0;
 }
+@media (max-width: 640px) {
+  /* 32px de cada lado se comen el 18% de un telefono. */
+  .syn-builder-col { padding: 20px 16px; }
+}
 .syn-builder-col.right {
   background:
     radial-gradient(600px 400px at 50% 0%, var(--bg-3), transparent 60%),
@@ -745,6 +774,17 @@ textarea::placeholder {
   grid-template-columns: auto 1fr auto auto auto;
   gap: 10px;
   align-items: center;
+}
+/* Cinco columnas no entran en un telefono: el nombre del campo pasa a ocupar
+   su propia fila y los controles quedan abajo. Sin esto la fila obliga a la
+   pagina entera a ser mas ancha que la pantalla. */
+@media (max-width: 640px) {
+  .syn-fc-head {
+    grid-template-columns: auto 1fr;
+    row-gap: 8px;
+  }
+  .syn-fc-name { grid-column: 2; }
+  .syn-fc-head > *:nth-child(n + 3) { grid-column: 2; }
 }
 .syn-fc-drag {
   color: var(--ink-4);
@@ -925,6 +965,18 @@ textarea::placeholder {
 }
 
 /* Radio group (type cards) */
+/* Fila de campos cortos del builder. Nacio como un estilo inline de tres
+   columnas fijas, que en un telefono metia tres inputs en 360px y empujaba
+   toda la seccion fuera de la pantalla. */
+.syn-field-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .syn-field-row { grid-template-columns: 1fr; }
+}
+
 .syn-radio-group {
   display: flex;
   flex-wrap: wrap;

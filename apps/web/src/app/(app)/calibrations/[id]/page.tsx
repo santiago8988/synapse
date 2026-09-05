@@ -550,129 +550,131 @@ export default function CalibrationDetailPage() {
                   )}
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="syn-table">
-                    <thead>
-                      <tr>
-                        <th>Punto</th>
-                        <th style={{ textAlign: 'right' }}>Carga</th>
-                        {Array.from({ length: test.readingsPerPoint }, (_, i) => (
-                          <th key={i} style={{ textAlign: 'center' }}>
-                            L{i + 1}
-                          </th>
-                        ))}
-                        <th style={{ textAlign: 'right' }}>Promedio</th>
-                        <th style={{ textAlign: 'right' }}>Error</th>
-                        <th style={{ textAlign: 'center' }}>Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {test.points.map((point) => {
-                        const pointResult = testResults[point.id] || {
-                          readings: Array(test.readingsPerPoint).fill(0),
-                          average: 0,
-                          error: 0,
-                          passed: false,
-                        }
-                        const readings =
-                          pointResult.readings.length >= test.readingsPerPoint
-                            ? pointResult.readings
-                            : [
-                                ...pointResult.readings,
-                                ...Array(
-                                  test.readingsPerPoint - pointResult.readings.length,
-                                ).fill(0),
-                              ]
-                        const hasValues = readings.some((r) => r !== 0 && !isNaN(r))
-
-                        return (
-                          <tr key={point.id}>
-                            <td data-label="Punto" data-role="identifier">
-                              <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
-                                {point.name}
-                              </span>
-                            </td>
-                            <td
-                              data-label="Carga"
-                              className="font-mono"
-                              style={{ textAlign: 'right', color: 'var(--ink-1)' }}
-                            >
-                              {point.load} {point.unit}
-                            </td>
-                            {readings.map((reading, ri) => (
+                  <div className="syn-table-wrap">
+                    <table className="syn-table">
+                      <thead>
+                        <tr>
+                          <th>Punto</th>
+                          <th style={{ textAlign: 'right' }}>Carga</th>
+                          {Array.from({ length: test.readingsPerPoint }, (_, i) => (
+                            <th key={i} style={{ textAlign: 'center' }}>
+                              L{i + 1}
+                            </th>
+                          ))}
+                          <th style={{ textAlign: 'right' }}>Promedio</th>
+                          <th style={{ textAlign: 'right' }}>Error</th>
+                          <th style={{ textAlign: 'center' }}>Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {test.points.map((point) => {
+                          const pointResult = testResults[point.id] || {
+                            readings: Array(test.readingsPerPoint).fill(0),
+                            average: 0,
+                            error: 0,
+                            passed: false,
+                          }
+                          const readings =
+                            pointResult.readings.length >= test.readingsPerPoint
+                              ? pointResult.readings
+                              : [
+                                  ...pointResult.readings,
+                                  ...Array(
+                                    test.readingsPerPoint - pointResult.readings.length,
+                                  ).fill(0),
+                                ]
+                          const hasValues = readings.some((r) => r !== 0 && !isNaN(r))
+  
+                          return (
+                            <tr key={point.id}>
+                              <td data-label="Punto" data-role="identifier">
+                                <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
+                                  {point.name}
+                                </span>
+                              </td>
                               <td
-                                key={ri}
-                                data-label={`L${ri + 1}`}
+                                data-label="Carga"
+                                className="font-mono"
+                                style={{ textAlign: 'right', color: 'var(--ink-1)' }}
+                              >
+                                {point.load} {point.unit}
+                              </td>
+                              {readings.map((reading, ri) => (
+                                <td
+                                  key={ri}
+                                  data-label={`L${ri + 1}`}
+                                  style={{ textAlign: 'center' }}
+                                >
+                                  {isEditable ? (
+                                    <input
+                                      type="number"
+                                      inputMode="decimal"
+                                      step="any"
+                                      value={reading ?? ''}
+                                      onChange={(e) => {
+                                        const newReadings = [...readings]
+                                        newReadings[ri] =
+                                          e.target.value !== ''
+                                            ? parseFloat(e.target.value)
+                                            : 0
+                                        recalculate(test.id, point.id, newReadings, test, point)
+                                      }}
+                                      className="syn-input font-mono"
+                                      style={{
+                                        width: 78,
+                                        minHeight: 32,
+                                        padding: '4px 8px',
+                                        textAlign: 'center',
+                                        fontSize: 12,
+                                      }}
+                                    />
+                                  ) : (
+                                    <span className="font-mono">{reading || '—'}</span>
+                                  )}
+                                </td>
+                              ))}
+                              <td
+                                data-label="Promedio"
+                                className="font-mono"
+                                style={{ textAlign: 'right', color: 'var(--ink-1)' }}
+                              >
+                                {hasValues ? pointResult.average.toFixed(4) : '—'}
+                              </td>
+                              <td
+                                data-label="Error"
+                                className="font-mono"
+                                style={{
+                                  textAlign: 'right',
+                                  color: hasValues && !pointResult.passed
+                                    ? 'var(--danger)'
+                                    : 'var(--ink-1)',
+                                }}
+                              >
+                                {hasValues
+                                  ? `${pointResult.error.toFixed(4)} ${test.toleranceUnit}`
+                                  : '—'}
+                              </td>
+                              <td
+                                data-label="Estado"
+                                data-role="status"
                                 style={{ textAlign: 'center' }}
                               >
-                                {isEditable ? (
-                                  <input
-                                    type="number"
-                                    inputMode="decimal"
-                                    step="any"
-                                    value={reading ?? ''}
-                                    onChange={(e) => {
-                                      const newReadings = [...readings]
-                                      newReadings[ri] =
-                                        e.target.value !== ''
-                                          ? parseFloat(e.target.value)
-                                          : 0
-                                      recalculate(test.id, point.id, newReadings, test, point)
-                                    }}
-                                    className="syn-input font-mono"
-                                    style={{
-                                      width: 78,
-                                      minHeight: 32,
-                                      padding: '4px 8px',
-                                      textAlign: 'center',
-                                      fontSize: 12,
-                                    }}
-                                  />
+                                {hasValues ? (
+                                  pointResult.passed ? (
+                                    <span className="syn-chip syn-chip-ok">OK</span>
+                                  ) : (
+                                    <span className="syn-chip syn-chip-fail">FALLO</span>
+                                  )
                                 ) : (
-                                  <span className="font-mono">{reading || '—'}</span>
+                                  <span style={{ color: 'var(--ink-4)' }}>—</span>
                                 )}
                               </td>
-                            ))}
-                            <td
-                              data-label="Promedio"
-                              className="font-mono"
-                              style={{ textAlign: 'right', color: 'var(--ink-1)' }}
-                            >
-                              {hasValues ? pointResult.average.toFixed(4) : '—'}
-                            </td>
-                            <td
-                              data-label="Error"
-                              className="font-mono"
-                              style={{
-                                textAlign: 'right',
-                                color: hasValues && !pointResult.passed
-                                  ? 'var(--danger)'
-                                  : 'var(--ink-1)',
-                              }}
-                            >
-                              {hasValues
-                                ? `${pointResult.error.toFixed(4)} ${test.toleranceUnit}`
-                                : '—'}
-                            </td>
-                            <td
-                              data-label="Estado"
-                              data-role="status"
-                              style={{ textAlign: 'center' }}
-                            >
-                              {hasValues ? (
-                                pointResult.passed ? (
-                                  <span className="syn-chip syn-chip-ok">OK</span>
-                                ) : (
-                                  <span className="syn-chip syn-chip-fail">FALLO</span>
-                                )
-                              ) : (
-                                <span style={{ color: 'var(--ink-4)' }}>—</span>
-                              )}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
                 {test.notes && (
                   <p

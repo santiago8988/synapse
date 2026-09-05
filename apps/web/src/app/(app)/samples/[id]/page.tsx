@@ -668,132 +668,134 @@ export default function SampleDetailPage() {
               )}
             </div>
             <div className="overflow-x-auto">
-              <table className="syn-table">
-                <thead>
-                  <tr>
-                    <th>Parámetro</th>
-                    <th>Resultado</th>
-                    <th>Unidad</th>
-                    <th style={{ textAlign: 'right' }}>Min</th>
-                    <th style={{ textAlign: 'right' }}>Max</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {parameters.map((param) => {
-                    const result = results[param.id]
-                    const value = result?.value ?? null
-                    const resultStatus = getResultStatus(param, value)
-                    return (
-                      <tr key={param.id}>
-                        <td data-label="Parámetro" data-role="identifier">
-                          <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
-                            {param.name}
-                          </span>
-                          {param.method && (
-                            <div
-                              className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.1em]"
-                              style={{ color: 'var(--ink-3)' }}
-                            >
-                              {param.method}
-                            </div>
-                          )}
-                          {(isEditable || result?.observations) && (
-                            <div className="mt-2">
-                              {isEditable ? (
-                                <input
-                                  value={result?.observations || ''}
-                                  onChange={(e) => {
-                                    setResults({
-                                      ...results,
-                                      [param.id]: {
-                                        ...results[param.id],
-                                        value: result?.value ?? null,
-                                        observations: e.target.value,
-                                      },
-                                    })
-                                    setDirtyResults(true)
-                                  }}
-                                  placeholder="Observaciones…"
-                                  className="syn-input"
-                                  style={{ fontSize: 12, minHeight: 32, padding: '6px 10px' }}
-                                />
-                              ) : (
-                                <p
-                                  className="text-[11.5px]"
-                                  style={{ color: 'var(--ink-3)' }}
-                                >
-                                  Obs: {result?.observations}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                        <td data-label="Resultado">
-                          {isEditable ? (
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              step="any"
-                              value={value ?? ''}
-                              onChange={(e) => {
-                                const v = e.target.value ? parseFloat(e.target.value) : null
-                                setResults({
-                                  ...results,
-                                  [param.id]: { ...results[param.id], value: v },
-                                })
-                                setDirtyResults(true)
-                              }}
-                              className="syn-input font-mono"
-                              style={{ maxWidth: 140, minHeight: 32, padding: '6px 10px' }}
-                            />
-                          ) : (
-                            <span
-                              className="font-mono"
-                              style={{
-                                color:
-                                  resultStatus === 'fail'
-                                    ? 'var(--danger)'
-                                    : 'var(--ink-0)',
-                              }}
-                            >
-                              {value !== null ? value : '—'}
+              <div className="syn-table-wrap">
+                <table className="syn-table">
+                  <thead>
+                    <tr>
+                      <th>Parámetro</th>
+                      <th>Resultado</th>
+                      <th>Unidad</th>
+                      <th style={{ textAlign: 'right' }}>Min</th>
+                      <th style={{ textAlign: 'right' }}>Max</th>
+                      <th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parameters.map((param) => {
+                      const result = results[param.id]
+                      const value = result?.value ?? null
+                      const resultStatus = getResultStatus(param, value)
+                      return (
+                        <tr key={param.id}>
+                          <td data-label="Parámetro" data-role="identifier">
+                            <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
+                              {param.name}
                             </span>
-                          )}
-                        </td>
-                        <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
-                          {param.unit || '—'}
-                        </td>
-                        <td
-                          data-label="Min"
-                          className="font-mono"
-                          style={{ textAlign: 'right', color: 'var(--ink-2)' }}
-                        >
-                          {param.minValue != null ? param.minValue : '—'}
-                        </td>
-                        <td
-                          data-label="Max"
-                          className="font-mono"
-                          style={{ textAlign: 'right', color: 'var(--ink-2)' }}
-                        >
-                          {param.maxValue != null ? param.maxValue : '—'}
-                        </td>
-                        <td data-label="Estado" data-role="status">
-                          {resultStatus === 'pass' ? (
-                            <span className="syn-chip syn-chip-ok">Conforme</span>
-                          ) : resultStatus === 'fail' ? (
-                            <span className="syn-chip syn-chip-fail">No conforme</span>
-                          ) : value !== null ? (
-                            <span className="syn-chip syn-chip-draft">Sin límite</span>
-                          ) : (
-                            <span style={{ color: 'var(--ink-4)' }}>—</span>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                            {param.method && (
+                              <div
+                                className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.1em]"
+                                style={{ color: 'var(--ink-3)' }}
+                              >
+                                {param.method}
+                              </div>
+                            )}
+                            {(isEditable || result?.observations) && (
+                              <div className="mt-2">
+                                {isEditable ? (
+                                  <input
+                                    value={result?.observations || ''}
+                                    onChange={(e) => {
+                                      setResults({
+                                        ...results,
+                                        [param.id]: {
+                                          ...results[param.id],
+                                          value: result?.value ?? null,
+                                          observations: e.target.value,
+                                        },
+                                      })
+                                      setDirtyResults(true)
+                                    }}
+                                    placeholder="Observaciones…"
+                                    className="syn-input"
+                                    style={{ fontSize: 12, minHeight: 32, padding: '6px 10px' }}
+                                  />
+                                ) : (
+                                  <p
+                                    className="text-[11.5px]"
+                                    style={{ color: 'var(--ink-3)' }}
+                                  >
+                                    Obs: {result?.observations}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td data-label="Resultado">
+                            {isEditable ? (
+                              <input
+                                type="number"
+                                inputMode="decimal"
+                                step="any"
+                                value={value ?? ''}
+                                onChange={(e) => {
+                                  const v = e.target.value ? parseFloat(e.target.value) : null
+                                  setResults({
+                                    ...results,
+                                    [param.id]: { ...results[param.id], value: v },
+                                  })
+                                  setDirtyResults(true)
+                                }}
+                                className="syn-input font-mono"
+                                style={{ maxWidth: 140, minHeight: 32, padding: '6px 10px' }}
+                              />
+                            ) : (
+                              <span
+                                className="font-mono"
+                                style={{
+                                  color:
+                                    resultStatus === 'fail'
+                                      ? 'var(--danger)'
+                                      : 'var(--ink-0)',
+                                }}
+                              >
+                                {value !== null ? value : '—'}
+                              </span>
+                            )}
+                          </td>
+                          <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
+                            {param.unit || '—'}
+                          </td>
+                          <td
+                            data-label="Min"
+                            className="font-mono"
+                            style={{ textAlign: 'right', color: 'var(--ink-2)' }}
+                          >
+                            {param.minValue != null ? param.minValue : '—'}
+                          </td>
+                          <td
+                            data-label="Max"
+                            className="font-mono"
+                            style={{ textAlign: 'right', color: 'var(--ink-2)' }}
+                          >
+                            {param.maxValue != null ? param.maxValue : '—'}
+                          </td>
+                          <td data-label="Estado" data-role="status">
+                            {resultStatus === 'pass' ? (
+                              <span className="syn-chip syn-chip-ok">Conforme</span>
+                            ) : resultStatus === 'fail' ? (
+                              <span className="syn-chip syn-chip-fail">No conforme</span>
+                            ) : value !== null ? (
+                              <span className="syn-chip syn-chip-draft">Sin límite</span>
+                            ) : (
+                              <span style={{ color: 'var(--ink-4)' }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         ) : (

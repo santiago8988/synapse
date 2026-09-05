@@ -234,53 +234,55 @@ export default function AuditPage() {
       {/* Tabla */}
       <div className="syn-card">
         {isLoading ? (
-          <table className="syn-table">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Usuario</th>
-                <th>Acción</th>
-                <th>Tipo</th>
-                <th>ID entidad</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: 8 }).map((_, i) => (
-                <tr key={i}>
-                  <td>
-                    <div
-                      className="h-4 w-32 animate-pulse rounded"
-                      style={{ background: 'var(--bg-3)' }}
-                    />
-                  </td>
-                  <td>
-                    <div
-                      className="h-4 w-24 animate-pulse rounded"
-                      style={{ background: 'var(--bg-3)' }}
-                    />
-                  </td>
-                  <td>
-                    <div
-                      className="h-5 w-20 animate-pulse rounded-full"
-                      style={{ background: 'var(--bg-3)' }}
-                    />
-                  </td>
-                  <td>
-                    <div
-                      className="h-4 w-20 animate-pulse rounded"
-                      style={{ background: 'var(--bg-3)' }}
-                    />
-                  </td>
-                  <td>
-                    <div
-                      className="h-4 w-16 animate-pulse rounded"
-                      style={{ background: 'var(--bg-3)' }}
-                    />
-                  </td>
+          <div className="syn-table-wrap">
+            <table className="syn-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Usuario</th>
+                  <th>Acción</th>
+                  <th>Tipo</th>
+                  <th>ID entidad</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i}>
+                    <td>
+                      <div
+                        className="h-4 w-32 animate-pulse rounded"
+                        style={{ background: 'var(--bg-3)' }}
+                      />
+                    </td>
+                    <td>
+                      <div
+                        className="h-4 w-24 animate-pulse rounded"
+                        style={{ background: 'var(--bg-3)' }}
+                      />
+                    </td>
+                    <td>
+                      <div
+                        className="h-5 w-20 animate-pulse rounded-full"
+                        style={{ background: 'var(--bg-3)' }}
+                      />
+                    </td>
+                    <td>
+                      <div
+                        className="h-4 w-20 animate-pulse rounded"
+                        style={{ background: 'var(--bg-3)' }}
+                      />
+                    </td>
+                    <td>
+                      <div
+                        className="h-4 w-16 animate-pulse rounded"
+                        style={{ background: 'var(--bg-3)' }}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : isError ? (
           <div
             className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center"
@@ -309,86 +311,88 @@ export default function AuditPage() {
           </div>
         ) : (
           <>
-            <table className="syn-table">
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Usuario</th>
-                  <th>Acción</th>
-                  <th>Tipo</th>
-                  <th>ID entidad</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((log) => {
-                  const verb = actionVerb(log.action)
-                  const chipCls = actionChipCls[verb] ?? 'syn-chip-draft'
-                  const label = actionLabel[verb] ?? log.action
-                  const entityLabel =
-                    entityTypeLabels[log.entityType] ?? log.entityType
-                  const href = entityHref(log.entityType, log.entityId)
-                  return (
-                    <tr key={log.id}>
-                      <td
-                        data-label="Fecha"
-                        data-role="identifier"
-                        className="font-mono"
-                        style={{ color: 'var(--ink-0)', whiteSpace: 'nowrap' }}
-                      >
-                        {formatDate(log.createdAt)}
-                      </td>
-                      <td data-label="Usuario" style={{ color: 'var(--ink-1)' }}>
-                        {log.user ? (
-                          <span title={log.user.email}>
-                            {log.user.name || log.user.email}
-                          </span>
-                        ) : (
-                          // Usuario eliminado: queda el id, que es lo unico que
-                          // guarda el log.
-                          <span
-                            className="font-mono text-[11px]"
-                            style={{ color: 'var(--ink-3)' }}
-                            title={log.userId}
-                          >
-                            {log.userId.slice(0, 8)}…
-                          </span>
-                        )}
-                      </td>
-                      <td data-label="Acción" data-role="status">
-                        <span className={`syn-chip ${chipCls}`}>{label}</span>
-                      </td>
-                      <td data-label="Tipo" style={{ color: 'var(--ink-2)' }}>
-                        {entityLabel}
-                      </td>
-                      <td data-label="ID entidad">
-                        {href ? (
-                          <Link
-                            href={href}
-                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] hover:underline"
-                            style={{
-                              background: 'var(--bg-3)',
-                              color: 'var(--primary-hex)',
-                            }}
-                            title={`Abrir ${entityLabel} ${log.entityId}`}
-                          >
-                            {log.entityId.slice(0, 8)}…
-                            <ArrowUpRight className="h-3 w-3" />
-                          </Link>
-                        ) : (
-                          <code
-                            className="rounded px-1.5 py-0.5 font-mono text-[11px]"
-                            style={{ background: 'var(--bg-3)', color: 'var(--ink-2)' }}
-                            title={log.entityId}
-                          >
-                            {log.entityId.slice(0, 8)}…
-                          </code>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <div className="syn-table-wrap">
+              <table className="syn-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Usuario</th>
+                    <th>Acción</th>
+                    <th>Tipo</th>
+                    <th>ID entidad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map((log) => {
+                    const verb = actionVerb(log.action)
+                    const chipCls = actionChipCls[verb] ?? 'syn-chip-draft'
+                    const label = actionLabel[verb] ?? log.action
+                    const entityLabel =
+                      entityTypeLabels[log.entityType] ?? log.entityType
+                    const href = entityHref(log.entityType, log.entityId)
+                    return (
+                      <tr key={log.id}>
+                        <td
+                          data-label="Fecha"
+                          data-role="identifier"
+                          className="font-mono"
+                          style={{ color: 'var(--ink-0)', whiteSpace: 'nowrap' }}
+                        >
+                          {formatDate(log.createdAt)}
+                        </td>
+                        <td data-label="Usuario" style={{ color: 'var(--ink-1)' }}>
+                          {log.user ? (
+                            <span title={log.user.email}>
+                              {log.user.name || log.user.email}
+                            </span>
+                          ) : (
+                            // Usuario eliminado: queda el id, que es lo unico que
+                            // guarda el log.
+                            <span
+                              className="font-mono text-[11px]"
+                              style={{ color: 'var(--ink-3)' }}
+                              title={log.userId}
+                            >
+                              {log.userId.slice(0, 8)}…
+                            </span>
+                          )}
+                        </td>
+                        <td data-label="Acción" data-role="status">
+                          <span className={`syn-chip ${chipCls}`}>{label}</span>
+                        </td>
+                        <td data-label="Tipo" style={{ color: 'var(--ink-2)' }}>
+                          {entityLabel}
+                        </td>
+                        <td data-label="ID entidad">
+                          {href ? (
+                            <Link
+                              href={href}
+                              className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[11px] hover:underline"
+                              style={{
+                                background: 'var(--bg-3)',
+                                color: 'var(--primary-hex)',
+                              }}
+                              title={`Abrir ${entityLabel} ${log.entityId}`}
+                            >
+                              {log.entityId.slice(0, 8)}…
+                              <ArrowUpRight className="h-3 w-3" />
+                            </Link>
+                          ) : (
+                            <code
+                              className="rounded px-1.5 py-0.5 font-mono text-[11px]"
+                              style={{ background: 'var(--bg-3)', color: 'var(--ink-2)' }}
+                              title={log.entityId}
+                            >
+                              {log.entityId.slice(0, 8)}…
+                            </code>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
             {pagination && pagination.totalPages > 0 && (
               <div
                 className="flex flex-wrap items-center justify-between gap-2 border-t px-5 py-3"

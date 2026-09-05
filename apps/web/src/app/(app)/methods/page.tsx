@@ -206,76 +206,78 @@ export default function MethodsPage() {
                   </h3>
                 </div>
               </div>
-              <table className="syn-table">
-                <thead>
-                  <tr>
-                    <th>Código · Nombre</th>
-                    <th>Parámetro</th>
-                    <th>Unidad</th>
-                    <th>Referencia</th>
-                    <th style={{ textAlign: 'right' }}>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {own.map((m) => (
-                    <tr key={m.id}>
-                      <td data-label="Código · Nombre" data-role="identifier">
-                        <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
-                          {m.code}
-                        </span>
-                        <div
-                          className="mt-0.5 text-[11.5px]"
-                          style={{ color: 'var(--ink-3)' }}
-                        >
-                          {m.name}
-                        </div>
-                      </td>
-                      <td data-label="Parámetro" style={{ color: 'var(--ink-1)' }}>
-                        {m.parameter}
-                      </td>
-                      <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
-                        {m.unit || <span style={{ color: 'var(--ink-4)' }}>—</span>}
-                      </td>
-                      <td data-label="Referencia">
-                        {m.sourceRef ? (
-                          <span className="syn-chip syn-chip-draft">{m.sourceRef}</span>
-                        ) : (
-                          <span style={{ color: 'var(--ink-4)' }}>—</span>
-                        )}
-                      </td>
-                      <td data-label="" style={{ textAlign: 'right' }}>
-                        <div className="flex justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditing(m)
-                              setShowForm(false)
-                            }}
-                            className="syn-btn syn-btn-subtle"
-                            style={{ padding: '6px 8px' }}
-                            title="Editar"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (confirm(`¿Eliminar el método "${m.code}"?`)) {
-                                deleteMutation.mutate(m.id)
-                              }
-                            }}
-                            className="syn-btn syn-btn-subtle"
-                            style={{ padding: '6px 8px', color: 'var(--danger)' }}
-                            title="Eliminar"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        </div>
-                      </td>
+              <div className="syn-table-wrap">
+                <table className="syn-table">
+                  <thead>
+                    <tr>
+                      <th>Código · Nombre</th>
+                      <th>Parámetro</th>
+                      <th>Unidad</th>
+                      <th>Referencia</th>
+                      <th style={{ textAlign: 'right' }}>Acciones</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {own.map((m) => (
+                      <tr key={m.id}>
+                        <td data-label="Código · Nombre" data-role="identifier">
+                          <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
+                            {m.code}
+                          </span>
+                          <div
+                            className="mt-0.5 text-[11.5px]"
+                            style={{ color: 'var(--ink-3)' }}
+                          >
+                            {m.name}
+                          </div>
+                        </td>
+                        <td data-label="Parámetro" style={{ color: 'var(--ink-1)' }}>
+                          {m.parameter}
+                        </td>
+                        <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
+                          {m.unit || <span style={{ color: 'var(--ink-4)' }}>—</span>}
+                        </td>
+                        <td data-label="Referencia">
+                          {m.sourceRef ? (
+                            <span className="syn-chip syn-chip-draft">{m.sourceRef}</span>
+                          ) : (
+                            <span style={{ color: 'var(--ink-4)' }}>—</span>
+                          )}
+                        </td>
+                        <td data-label="" style={{ textAlign: 'right' }}>
+                          <div className="flex justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditing(m)
+                                setShowForm(false)
+                              }}
+                              className="syn-btn syn-btn-subtle"
+                              style={{ padding: '6px 8px' }}
+                              title="Editar"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`¿Eliminar el método "${m.code}"?`)) {
+                                  deleteMutation.mutate(m.id)
+                                }
+                              }}
+                              className="syn-btn syn-btn-subtle"
+                              style={{ padding: '6px 8px', color: 'var(--danger)' }}
+                              title="Eliminar"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -291,46 +293,48 @@ export default function MethodsPage() {
                   </h3>
                 </div>
               </div>
-              <table className="syn-table">
-                <thead>
-                  <tr>
-                    <th>Código · Nombre</th>
-                    <th>Parámetro</th>
-                    <th>Unidad</th>
-                    <th style={{ textAlign: 'right' }}>Referencia</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {globals.map((m) => (
-                    <tr key={m.id}>
-                      <td data-label="Código · Nombre" data-role="identifier">
-                        <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
-                          {m.code}
-                        </span>
-                        <div
-                          className="mt-0.5 text-[11.5px]"
-                          style={{ color: 'var(--ink-3)' }}
-                        >
-                          {m.name}
-                        </div>
-                      </td>
-                      <td data-label="Parámetro" style={{ color: 'var(--ink-1)' }}>
-                        {m.parameter}
-                      </td>
-                      <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
-                        {m.unit || <span style={{ color: 'var(--ink-4)' }}>—</span>}
-                      </td>
-                      <td data-label="Referencia" style={{ textAlign: 'right' }}>
-                        {m.sourceRef ? (
-                          <span className="syn-chip syn-chip-draft">{m.sourceRef}</span>
-                        ) : (
-                          <span style={{ color: 'var(--ink-4)' }}>—</span>
-                        )}
-                      </td>
+              <div className="syn-table-wrap">
+                <table className="syn-table">
+                  <thead>
+                    <tr>
+                      <th>Código · Nombre</th>
+                      <th>Parámetro</th>
+                      <th>Unidad</th>
+                      <th style={{ textAlign: 'right' }}>Referencia</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {globals.map((m) => (
+                      <tr key={m.id}>
+                        <td data-label="Código · Nombre" data-role="identifier">
+                          <span style={{ color: 'var(--ink-0)', fontWeight: 500 }}>
+                            {m.code}
+                          </span>
+                          <div
+                            className="mt-0.5 text-[11.5px]"
+                            style={{ color: 'var(--ink-3)' }}
+                          >
+                            {m.name}
+                          </div>
+                        </td>
+                        <td data-label="Parámetro" style={{ color: 'var(--ink-1)' }}>
+                          {m.parameter}
+                        </td>
+                        <td data-label="Unidad" style={{ color: 'var(--ink-2)' }}>
+                          {m.unit || <span style={{ color: 'var(--ink-4)' }}>—</span>}
+                        </td>
+                        <td data-label="Referencia" style={{ textAlign: 'right' }}>
+                          {m.sourceRef ? (
+                            <span className="syn-chip syn-chip-draft">{m.sourceRef}</span>
+                          ) : (
+                            <span style={{ color: 'var(--ink-4)' }}>—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

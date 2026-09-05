@@ -7,7 +7,16 @@ import { Header } from '@/components/layout/header'
 import { OfflineBanner } from '@/components/layout/offline-banner'
 import { cn } from '@/lib/utils'
 
-// Rutas que renderizan edge-to-edge (el componente maneja su propio layout/scroll).
+/**
+ * Rutas que renderizan edge-to-edge: el componente maneja su propio layout y
+ * su propio scroll, en dos columnas que ocupan el alto de la ventana.
+ *
+ * **Eso vale solo en pantallas grandes.** En mobile esas páginas se apilan en
+ * una sola columna larga, y si el `main` sigue con `overflow-hidden` la parte
+ * de abajo queda inalcanzable: se puede bajar hasta donde llega el alto de la
+ * ventana y nada más. Pasó con el Record Builder, que quedaba cortado en la
+ * sección Campos.
+ */
 const edgeToEdgePatterns = [/^\/records\/new$/, /^\/records\/[^/]+\/edit$/]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -47,7 +56,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           id="main-content"
           className={
             'fade-in relative flex-1 min-h-0' +
-            (isEdgeToEdge ? ' overflow-hidden' : ' overflow-y-auto px-4 sm:px-8 pb-20 pt-6 sm:pt-7')
+            // El edge-to-edge recién a partir de lg: abajo de eso el contenido
+            // se apila y necesita el scroll del main.
+            (isEdgeToEdge
+              ? ' overflow-y-auto lg:overflow-hidden'
+              : ' overflow-y-auto px-4 sm:px-8 pb-20 pt-6 sm:pt-7')
           }
         >
           {children}

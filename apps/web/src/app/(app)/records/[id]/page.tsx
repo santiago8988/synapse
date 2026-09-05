@@ -1091,155 +1091,177 @@ function SynEntriesTabbedCard({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="syn-table">
-              <thead>
-                {(() => {
-                  // Configuración del grupo de columnas companion (BATCH/SAMPLE).
-                  // Si existe, se renderiza un super-header con colSpan que
-                  // abarca las columnas del companion, y el resto de
-                  // columnas usan rowSpan={2} para alinearse con la fila 2.
-                  const companionGroup =
-                    record.type === 'BATCH'
-                      ? { label: 'Lote', subCols: ['Cantidad Producida', 'Estado'] }
-                      : record.type === 'SAMPLE'
-                        ? { label: 'Muestra', subCols: ['Estado'] }
-                        : null
-                  const showEntryStatusCol =
-                    record.type === 'BATCH' || record.type === 'SAMPLE'
-                  return (
-                    <>
-                      <tr>
-                        {visibleFields.map((f) => (
-                          <th key={f.id} rowSpan={companionGroup ? 2 : 1}>
-                            {f.label}
-                          </th>
-                        ))}
-                        <th rowSpan={companionGroup ? 2 : 1}>Fecha</th>
-                        {companionGroup ? (
-                          <th
-                            colSpan={companionGroup.subCols.length}
-                            style={{
-                              textAlign: 'center',
-                              background: 'var(--info-soft)',
-                              color: 'var(--info)',
-                              borderBottom: '1px solid var(--line-2)',
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: 10,
-                              letterSpacing: '0.14em',
-                              textTransform: 'uppercase',
-                            }}
-                          >
-                            · {companionGroup.label}
-                          </th>
-                        ) : (
-                          <th style={{ textAlign: 'right' }}>Resultado</th>
-                        )}
-                        {showEntryStatusCol && (
-                          <th rowSpan={2} style={{ textAlign: 'right' }}>
-                            Estado
-                          </th>
-                        )}
-                      </tr>
-                      {companionGroup && (
+            <div className="syn-table-wrap">
+              <table className="syn-table">
+                <thead>
+                  {(() => {
+                    // Configuración del grupo de columnas companion (BATCH/SAMPLE).
+                    // Si existe, se renderiza un super-header con colSpan que
+                    // abarca las columnas del companion, y el resto de
+                    // columnas usan rowSpan={2} para alinearse con la fila 2.
+                    const companionGroup =
+                      record.type === 'BATCH'
+                        ? { label: 'Lote', subCols: ['Cantidad Producida', 'Estado'] }
+                        : record.type === 'SAMPLE'
+                          ? { label: 'Muestra', subCols: ['Estado'] }
+                          : null
+                    const showEntryStatusCol =
+                      record.type === 'BATCH' || record.type === 'SAMPLE'
+                    return (
+                      <>
                         <tr>
-                          {companionGroup.subCols.map((c, i) => (
-                            <th
-                              key={c}
-                              style={{
-                                textAlign:
-                                  i === companionGroup.subCols.length - 1
-                                    ? 'right'
-                                    : 'left',
-                              }}
-                            >
-                              {c}
+                          {visibleFields.map((f) => (
+                            <th key={f.id} rowSpan={companionGroup ? 2 : 1}>
+                              {f.label}
                             </th>
                           ))}
+                          <th rowSpan={companionGroup ? 2 : 1}>Fecha</th>
+                          {companionGroup ? (
+                            <th
+                              colSpan={companionGroup.subCols.length}
+                              style={{
+                                textAlign: 'center',
+                                background: 'var(--info-soft)',
+                                color: 'var(--info)',
+                                borderBottom: '1px solid var(--line-2)',
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: 10,
+                                letterSpacing: '0.14em',
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              · {companionGroup.label}
+                            </th>
+                          ) : (
+                            <th style={{ textAlign: 'right' }}>Resultado</th>
+                          )}
+                          {showEntryStatusCol && (
+                            <th rowSpan={2} style={{ textAlign: 'right' }}>
+                              Estado
+                            </th>
+                          )}
                         </tr>
-                      )}
-                    </>
-                  )
-                })()}
-              </thead>
-              <tbody>
-                {entries.map((e) => {
-                  const data = e.data ?? {}
-                  const hasFailed = e.comparisonResults
-                    ? Object.values(e.comparisonResults).some((r) => !r.passed)
-                    : false
-                  return (
-                    <tr
-                      key={e.id}
-                      onClick={() => onOpenEntry(e.id)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      {visibleFields.map((f, i) => {
-                        const cls = i === 0 ? 'col-mono' : ''
-                        const isNum = f.fieldType === 'NUMBER' || f.fieldType === 'QUANTITY'
-                        const style: React.CSSProperties =
-                          hasFailed && isNum
-                            ? { color: 'var(--danger)', fontFamily: 'var(--font-mono)', fontSize: 12 }
-                            : isNum
-                              ? { fontFamily: 'var(--font-mono)', fontSize: 12 }
-                              : {}
-                        // Workflow engine v2: si el field es DROPDOWN con
-                        // options ricas (incluyendo isStatus), render como
-                        // badge con color del option en lugar de texto plano.
-                        const richBadge = renderRichDropdownBadge(f, data[f.id])
-                        return (
-                          <td
-                            key={f.id}
-                            className={cls}
-                            style={style}
-                            data-label={f.label}
-                            data-role={i === 0 || f.isIdentifier ? 'identifier' : undefined}
-                          >
-                            {richBadge ?? formatCell(data[f.id], f.fieldType)}
-                          </td>
-                        )
-                      })}
-                      <td data-label="Fecha" style={{ color: 'var(--ink-2)', fontSize: 12 }}>
-                        {new Date(e.createdAt)
-                          .toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
-                          .toLowerCase()}{' '}
-                        ·{' '}
-                        {new Date(e.createdAt).toLocaleTimeString('es-AR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
+                        {companionGroup && (
+                          <tr>
+                            {companionGroup.subCols.map((c, i) => (
+                              <th
+                                key={c}
+                                style={{
+                                  textAlign:
+                                    i === companionGroup.subCols.length - 1
+                                      ? 'right'
+                                      : 'left',
+                                }}
+                              >
+                                {c}
+                              </th>
+                            ))}
+                          </tr>
+                        )}
+                      </>
+                    )
+                  })()}
+                </thead>
+                <tbody>
+                  {entries.map((e) => {
+                    const data = e.data ?? {}
+                    const hasFailed = e.comparisonResults
+                      ? Object.values(e.comparisonResults).some((r) => !r.passed)
+                      : false
+                    return (
+                      <tr
+                        key={e.id}
+                        onClick={() => onOpenEntry(e.id)}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        {visibleFields.map((f, i) => {
+                          const cls = i === 0 ? 'col-mono' : ''
+                          const isNum = f.fieldType === 'NUMBER' || f.fieldType === 'QUANTITY'
+                          const style: React.CSSProperties =
+                            hasFailed && isNum
+                              ? { color: 'var(--danger)', fontFamily: 'var(--font-mono)', fontSize: 12 }
+                              : isNum
+                                ? { fontFamily: 'var(--font-mono)', fontSize: 12 }
+                                : {}
+                          // Workflow engine v2: si el field es DROPDOWN con
+                          // options ricas (incluyendo isStatus), render como
+                          // badge con color del option en lugar de texto plano.
+                          const richBadge = renderRichDropdownBadge(f, data[f.id])
+                          return (
+                            <td
+                              key={f.id}
+                              className={cls}
+                              style={style}
+                              data-label={f.label}
+                              data-role={i === 0 || f.isIdentifier ? 'identifier' : undefined}
+                            >
+                              {richBadge ?? formatCell(data[f.id], f.fieldType)}
+                            </td>
+                          )
                         })}
-                      </td>
-                      {/* Companion group: BATCH = [cantidad producida, estado batch].
-                          SAMPLE = [estado muestra]. Otros = [resultado de la entry]. */}
-                      {record.type === 'BATCH' ? (
-                        <>
+                        <td data-label="Fecha" style={{ color: 'var(--ink-2)', fontSize: 12 }}>
+                          {new Date(e.createdAt)
+                            .toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })
+                            .toLowerCase()}{' '}
+                          ·{' '}
+                          {new Date(e.createdAt).toLocaleTimeString('es-AR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                        {/* Companion group: BATCH = [cantidad producida, estado batch].
+                            SAMPLE = [estado muestra]. Otros = [resultado de la entry]. */}
+                        {record.type === 'BATCH' ? (
+                          <>
+                            <td
+                              data-label="Cantidad Producida"
+                              style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: 12,
+                                background: 'var(--info-soft)',
+                              }}
+                            >
+                              {e.batch && e.batch.producedQuantity != null ? (
+                                <CompanionLink href={`/batches/${e.batch.id}`}>
+                                  {`${e.batch.producedQuantity}${e.batch.unit ? ' ' + e.batch.unit : ''}`}
+                                </CompanionLink>
+                              ) : (
+                                '—'
+                              )}
+                            </td>
+                            <td
+                              data-label="Estado lote"
+                              data-role="status"
+                              style={{
+                                textAlign: 'right',
+                                background: 'var(--info-soft)',
+                              }}
+                            >
+                              {e.batch ? (() => {
+                                const c = batchStatusChip(e.batch.status)
+                                return (
+                                  <CompanionLink href={`/batches/${e.batch.id}`}>
+                                    <span className={`syn-chip ${c.cls}`}>{c.label}</span>
+                                  </CompanionLink>
+                                )
+                              })() : (
+                                <span style={{ color: 'var(--ink-4)' }}>—</span>
+                              )}
+                            </td>
+                          </>
+                        ) : record.type === 'SAMPLE' ? (
                           <td
-                            data-label="Cantidad Producida"
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: 12,
-                              background: 'var(--info-soft)',
-                            }}
-                          >
-                            {e.batch && e.batch.producedQuantity != null ? (
-                              <CompanionLink href={`/batches/${e.batch.id}`}>
-                                {`${e.batch.producedQuantity}${e.batch.unit ? ' ' + e.batch.unit : ''}`}
-                              </CompanionLink>
-                            ) : (
-                              '—'
-                            )}
-                          </td>
-                          <td
-                            data-label="Estado lote"
+                            data-label="Estado muestra"
                             data-role="status"
                             style={{
                               textAlign: 'right',
                               background: 'var(--info-soft)',
                             }}
                           >
-                            {e.batch ? (() => {
-                              const c = batchStatusChip(e.batch.status)
+                            {e.sample ? (() => {
+                              const c = sampleStatusChip(e.sample.status)
                               return (
-                                <CompanionLink href={`/batches/${e.batch.id}`}>
+                                <CompanionLink href={`/samples/${e.sample.id}`}>
                                   <span className={`syn-chip ${c.cls}`}>{c.label}</span>
                                 </CompanionLink>
                               )
@@ -1247,62 +1269,42 @@ function SynEntriesTabbedCard({
                               <span style={{ color: 'var(--ink-4)' }}>—</span>
                             )}
                           </td>
-                        </>
-                      ) : record.type === 'SAMPLE' ? (
-                        <td
-                          data-label="Estado muestra"
-                          data-role="status"
-                          style={{
-                            textAlign: 'right',
-                            background: 'var(--info-soft)',
-                          }}
-                        >
-                          {e.sample ? (() => {
-                            const c = sampleStatusChip(e.sample.status)
-                            return (
-                              <CompanionLink href={`/samples/${e.sample.id}`}>
-                                <span className={`syn-chip ${c.cls}`}>{c.label}</span>
-                              </CompanionLink>
-                            )
-                          })() : (
-                            <span style={{ color: 'var(--ink-4)' }}>—</span>
-                          )}
-                        </td>
-                      ) : (
-                        <td
-                          data-label="Resultado"
-                          data-role="status"
-                          style={{ textAlign: 'right' }}
-                        >
-                          {hasFailed ? (
-                            <span className="syn-chip syn-chip-fail">FALLIDA</span>
-                          ) : e.status === 'COMPLETED' ? (
-                            <span className="syn-chip syn-chip-ok">OK</span>
-                          ) : (
-                            <span className="syn-chip syn-chip-draft">DRAFT</span>
-                          )}
-                        </td>
-                      )}
-                      {(record.type === 'BATCH' || record.type === 'SAMPLE') && (
-                        <td
-                          data-label="Estado"
-                          data-role="status"
-                          style={{ textAlign: 'right' }}
-                        >
-                          {hasFailed ? (
-                            <span className="syn-chip syn-chip-fail">FALLIDA</span>
-                          ) : e.status === 'COMPLETED' ? (
-                            <span className="syn-chip syn-chip-ok">COMPLETADA</span>
-                          ) : (
-                            <span className="syn-chip syn-chip-draft">BORRADOR</span>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                        ) : (
+                          <td
+                            data-label="Resultado"
+                            data-role="status"
+                            style={{ textAlign: 'right' }}
+                          >
+                            {hasFailed ? (
+                              <span className="syn-chip syn-chip-fail">FALLIDA</span>
+                            ) : e.status === 'COMPLETED' ? (
+                              <span className="syn-chip syn-chip-ok">OK</span>
+                            ) : (
+                              <span className="syn-chip syn-chip-draft">DRAFT</span>
+                            )}
+                          </td>
+                        )}
+                        {(record.type === 'BATCH' || record.type === 'SAMPLE') && (
+                          <td
+                            data-label="Estado"
+                            data-role="status"
+                            style={{ textAlign: 'right' }}
+                          >
+                            {hasFailed ? (
+                              <span className="syn-chip syn-chip-fail">FALLIDA</span>
+                            ) : e.status === 'COMPLETED' ? (
+                              <span className="syn-chip syn-chip-ok">COMPLETADA</span>
+                            ) : (
+                              <span className="syn-chip syn-chip-draft">BORRADOR</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )
       )}
