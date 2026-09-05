@@ -1,6 +1,6 @@
 'use client'
 
-import { Search, ChevronRight, Home, Menu } from 'lucide-react'
+import { Search, ChevronRight, Home, Menu, HelpCircle } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
@@ -24,6 +24,7 @@ const breadcrumbMap: Record<string, string> = {
   'non-conformities': 'No conformidades',
   approvals: 'Aprobaciones',
   audit: 'Auditoría',
+  docs: 'Guía',
   settings: 'Configuración',
   // Pestañas de configuración: son segmentos propios desde que la pestaña
   // activa vive en la URL.
@@ -181,6 +182,17 @@ export function Header({ onMenuClick }: HeaderProps) {
         <IcoBtn aria-label="Buscar">
           <Search className="h-[18px] w-[18px]" />
         </IcoBtn>
+        {/* La ayuda va en la topbar y no en el menú lateral: se consulta desde
+            cualquier pantalla y no compite por espacio con los módulos de
+            trabajo. */}
+        <Link
+          href="/docs"
+          aria-label="Guía de usuario"
+          title="Guía de usuario"
+          className="relative flex h-[38px] w-[38px] items-center justify-center rounded-[10px] border border-transparent text-ink-2 transition-colors hover:bg-[var(--bg-3)] hover:text-ink-0"
+        >
+          <HelpCircle className="h-[18px] w-[18px]" />
+        </Link>
         <NotificationsPanel />
         <button
           type="button"

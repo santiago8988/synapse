@@ -48,7 +48,7 @@ apps/web/src/app/
     approvals/page.tsx
     audit/page.tsx
     settings/[[...slug]]/page.tsx       ← la pestaña activa es el segmento
-    docs/page.tsx
+    docs/[[...slug]]/page.tsx           ← guía de usuario (server component)
 ```
 
 Rutas previstas y no implementadas: `samples/[id]/custody/` y `records/[id]/entries/new`. Ver `TO_DO.md` §9 y §17.
@@ -86,6 +86,8 @@ apps/web/src/
       FlowEditor.tsx · types.ts · index.ts ← editor visual de flujos (xyflow)
     kanban/
       kanban-board.tsx · types.ts · index.ts ← drag-drop entre columnas
+    docs/
+      doc-nav.tsx · doc-markdown.tsx    ← índice con buscador · render del markdown
     tweaks/
       density-provider.tsx · tweaks-panel.tsx
   
@@ -271,6 +273,37 @@ que no se dan en local, y conviene saberlas antes de perder una tarde:
   URI* registrado en Google Cloud Console — las cuatro tienen que coincidir.
 
 Se difiere al deploy. Ver `TO_DO.md` §13c y §22.
+
+## Guía de usuario (`/docs`)
+
+El contenido vive en `src/content/docs/*.md` y **es la única copia**: es a la
+vez lo que lee un desarrollador y lo que se sirve en la app. Antes había una
+copia en `docs/user-guide/` y otra embebida como template literals dentro de la
+página, y divergieron — entre otras cosas, la de la app seguía diciendo
+"QualitTab".
+
+`src/content/docs/index.ts` define orden, grupos, títulos y resúmenes. Agregar
+una sección es crear el `.md` y sumar una línea ahí.
+
+Tres decisiones:
+
+- **La página es un componente de servidor.** Lee el markdown con `fs` y lo
+  renderiza con `react-markdown`; ni el contenido ni la librería llegan al
+  navegador. Es lo que hace que la guía completa pese menos en el cliente que
+  la versión anterior, que tenía 12 secciones inline.
+- **La sección es un segmento de la URL** (`/docs/flujos`), con
+  `generateStaticParams`: una página estática por sección y enlaces
+  compartibles. Antes era estado local.
+- **El ícono se declara por nombre** en el índice y se mapea a componentes en
+  `doc-nav.tsx`, para que el índice lo pueda importar el servidor sin arrastrar
+  `lucide-react`.
+
+Los enlaces entre secciones se escriben relativos (`[Flujos](flujos)`) y
+`doc-markdown.tsx` los resuelve contra `/docs/`.
+
+La ayuda se abre desde el ícono de interrogación de la topbar, no desde el menú
+lateral: se consulta desde cualquier pantalla y no compite por espacio con los
+módulos de trabajo.
 
 ## Paleta y estados de badges
 

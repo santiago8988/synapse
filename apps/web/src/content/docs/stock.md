@@ -1,32 +1,32 @@
-# 11 -- Stock e Inventario
+# Stock e Inventario
 
-## Que es el modulo de stock
+## Qué es el módulo de stock
 
-El modulo de stock gestiona el **inventario de materias primas, reactivos, insumos y materiales** de la organizacion. Permite registrar ingresos, egresos y ajustes de inventario con trazabilidad por producto y por lote. Se integra con el modulo de recetas para el consumo de materias primas durante la produccion.
+El módulo de stock gestiona el **inventario de materias primas, reactivos, insumos y materiales** de la organización. Permite registrar ingresos, egresos y ajustes de inventario con trazabilidad por producto y por lote. Se integra con el módulo de recetas para el consumo de materias primas durante la producción.
 
 ## Conceptos clave
 
-| Concepto | Descripcion |
+| Concepto | Descripción |
 |----------|-------------|
-| **Producto** | Materia prima o insumo identificado por nombre (ej: NITRATO DE AMONIO, ACIDO CLORHIDRICO) |
-| **Lote** | Partida especifica de un producto, identificada por numero de lote del proveedor |
+| **Producto** | Materia prima o insumo identificado por nombre (ej: NITRATO DE AMONIO, ÁCIDO CLORHÍDRICO) |
+| **Lote** | Partida específica de un producto, identificada por número de lote del proveedor |
 | **Movimiento** | Registro de un cambio en el inventario: ingreso, egreso o ajuste |
-| **StockMovement** | Entidad companera creada automaticamente por cada entrada de tipo STOCK |
+| **StockMovement** | Entidad compañera creada automáticamente por cada entrada de tipo STOCK |
 
 ## Como funciona
 
-El stock se gestiona a traves de un registro de tipo **STOCK**. Cada entrada en este registro crea un **StockMovement** que representa un movimiento de inventario.
+El stock se gestiona a través de un registro de tipo **STOCK**. Cada entrada en este registro crea un **StockMovement** que representa un movimiento de inventario.
 
-### Configuracion del registro de stock
+### Configuración del registro de stock
 
 El registro de tipo STOCK debe incluir los siguientes campos con labels exactos:
 
-| Label requerido | Tipo de campo | Descripcion |
+| Label requerido | Tipo de campo | Descripción |
 |----------------|---------------|-------------|
 | **PRODUCTO** | TEXT | Nombre del producto/materia prima |
-| **LOTE** | TEXT | Numero de lote del proveedor o interno |
+| **LOTE** | TEXT | Número de lote del proveedor o interno |
 | **TIPO MOVIMIENTO** | DROPDOWN | Opciones: INGRESO, EGRESO, AJUSTE |
-| **CANTIDAD** | QUANTITY | Valor numerico + unidad de medida (ej: kg, L, u) |
+| **CANTIDAD** | QUANTITY | Valor numérico + unidad de medida (ej: kg, L, u) |
 
 Campos adicionales opcionales:
 
@@ -34,8 +34,8 @@ Campos adicionales opcionales:
 - FECHA DE VENCIMIENTO (DATE)
 - CERTIFICADO DE CALIDAD (TEXT)
 - OBSERVACIONES (TEXT)
-- UBICACION (DROPDOWN)
-- MOTIVO (TEXT) -- especialmente util para ajustes
+- UBICACIÓN (DROPDOWN)
+- MOTIVO (TEXT) -- especialmente útil para ajustes
 
 ### Crear un movimiento de stock
 
@@ -46,34 +46,34 @@ Campos adicionales opcionales:
    - LOTE: ej: "STCK-2026-001"
    - TIPO MOVIMIENTO: seleccionar INGRESO, EGRESO o AJUSTE
    - CANTIDAD: ej: 500 kg
-   - Campos adicionales segun configuracion
+   - Campos adicionales según configuración
 4. Click en **Crear entrada**
-5. La entrada se completa **automaticamente** (como NOT_PERIODIC) y se crea un StockMovement
+5. La entrada se completa **automáticamente** (como NOT_PERIODIC) y se crea un StockMovement
 
 > **Nota:** Las entradas de stock se auto-completan al crearse. No requieren completitud manual como los lotes o muestras.
 
 ## Tipos de movimiento
 
-| Tipo | Descripcion | Efecto en inventario | Ejemplo |
+| Tipo | Descripción | Efecto en inventario | Ejemplo |
 |------|-------------|---------------------|---------|
-| **INGRESO** | Recepcion de material del proveedor o produccion interna | Suma al stock disponible | Recepcion de 500 kg de NITRATO DE AMONIO |
-| **EGRESO** | Consumo, despacho o baja de material | Resta del stock disponible | Consumo de 150 kg para produccion |
-| **AJUSTE** | Correccion de inventario por conteo fisico, merma o error | Suma o resta segun signo | Ajuste por merma: -5 kg |
+| **INGRESO** | Recepción de material del proveedor o producción interna | Suma al stock disponible | Recepción de 500 kg de NITRATO DE AMONIO |
+| **EGRESO** | Consumo, despacho o baja de material | Resta del stock disponible | Consumo de 150 kg para producción |
+| **AJUSTE** | Corrección de inventario por conteo físico, merma o error | Suma o resta según signo | Ajuste por merma: -5 kg |
 
-## Pagina de stock
+## Página de stock
 
-La pagina **Stock** muestra un resumen consolidado del inventario:
+La página **Stock** muestra un resumen consolidado del inventario:
 
 ### Vista por producto
 
 Agrupa todos los movimientos por **PRODUCTO** y muestra:
 
-| Columna | Descripcion |
+| Columna | Descripción |
 |---------|-------------|
 | **Producto** | Nombre del producto/materia prima |
 | **Stock total** | Suma neta de todos los movimientos (ingresos - egresos +/- ajustes) |
 | **Unidad** | Unidad de medida |
-| **Cantidad de lotes** | Numero de lotes diferentes registrados |
+| **Cantidad de lotes** | Número de lotes diferentes registrados |
 
 ### Detalle por lote
 
@@ -92,11 +92,11 @@ BIFTALATO DE POTASIO (Stock total: 4.85 kg)
 +-- Lote STCK-2026-020: 4.85 kg (Ingreso 5 kg, Egreso 0.15 kg)
 ```
 
-## Consumo de stock desde lotes de produccion
+## Consumo de stock desde lotes de producción
 
-Cuando una receta tiene ingredientes marcados como `fromStock`, el operador debe seleccionar los lotes de stock a consumir al **iniciar la produccion** del lote:
+Cuando una receta tiene ingredientes marcados como `fromStock`, el operador debe seleccionar los lotes de stock a consumir al **iniciar la producción** del lote:
 
-1. El operador inicia produccion del lote LOT-2026-015
+1. El operador inicia producción del lote LOT-2026-015
 2. El sistema muestra los ingredientes con `fromStock = true`
 3. Para cada ingrediente, el operador selecciona:
    - El o los lotes de stock disponibles
@@ -104,11 +104,11 @@ Cuando una receta tiene ingredientes marcados como `fromStock`, el operador debe
 4. El sistema registra los egresos de stock correspondientes (crea StockMovements de tipo EGRESO)
 5. El lote pasa a IN_PROGRESS
 
-Esto permite trazabilidad completa desde el producto terminado hasta las materias primas utilizadas, incluyendo los lotes especificos de cada insumo.
+Esto permite trazabilidad completa desde el producto terminado hasta las materias primas utilizadas, incluyendo los lotes específicos de cada insumo.
 
-Ver [06 - Lotes](./06-lotes.md) para mas detalle sobre el consumo de stock en produccion.
+Ver [06 - Lotes](./06-lotes.md) para más detalle sobre el consumo de stock en producción.
 
-## Ejemplo completo: Laboratorio de quimica analitica
+## Ejemplo completo: Laboratorio de química analítica
 
 ### Setup
 
@@ -119,12 +119,12 @@ Ver [06 - Lotes](./06-lotes.md) para mas detalle sobre el consumo de stock en pr
    - CANTIDAD (QUANTITY, unidad: variada)
    - PROVEEDOR (TEXT)
    - FECHA DE VENCIMIENTO (DATE)
-   - NUMERO DE CERTIFICADO (TEXT)
-   - UBICACION (DROPDOWN: ALMACEN A, ALMACEN B, HELADERA, CAMPANA)
+   - NÚMERO DE CERTIFICADO (TEXT)
+   - UBICACIÓN (DROPDOWN: ALMACÉN A, ALMACÉN B, HELADERA, CAMPANA)
 
-2. Aprobar el registro via circuito de aprobacion
+2. Aprobar el registro vía circuito de aprobación
 
-### Operacion
+### Operación
 
 ```
 Dia 1 - Recepcion de reactivos:
@@ -147,7 +147,7 @@ Resultado en pagina de stock:
 
 ## Trazabilidad
 
-El modulo de stock proporciona trazabilidad en multiples niveles:
+El módulo de stock proporciona trazabilidad en múltiples niveles:
 
 ```
 Proveedor (via campo PROVEEDOR)
@@ -161,7 +161,7 @@ Proveedor (via campo PROVEEDOR)
 
 ## Permisos
 
-| Accion | Roles permitidos |
+| Acción | Roles permitidos |
 |--------|-----------------|
 | Ver stock | Todos |
 | Crear movimientos (crear entrada en registro STOCK) | ADMIN, QUALITY_MANAGER, TECHNICIAN |

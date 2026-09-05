@@ -15,7 +15,6 @@ synapse/
     types/                ← tipos TS y enums compartidos      → packages/types/CLAUDE.md
     validators/           ← schemas Zod compartidos            → packages/validators/CLAUDE.md
   docs/
-    user-guide/                ← guía de usuario activa (12 módulos)
     design/                    ← briefs de diseño activos
     legacy/                    ← markdowns originales (QualitTab) — referencia histórica
   TO_DO.md                     ← TODO lo pendiente, centralizado
@@ -138,7 +137,7 @@ El motor de workflows configurable inspirado en Microsoft Lists + Power Automate
 
 - **`TO_DO.md`** — todo lo pendiente, en un solo lugar. Los `CLAUDE.md` describen cómo es el sistema hoy; lo que falta va ahí.
 
-- `docs/user-guide/` — 12 módulos describiendo el sistema desde la perspectiva del usuario (administradores, calidad, técnicos, auditores). Es la referencia funcional canónica.
+- `apps/web/src/content/docs/` — guía de usuario, 18 secciones. Es la **referencia funcional canónica** y a la vez lo que se sirve en `/docs`: hay una sola copia. Estuvo duplicada entre `docs/user-guide/` y la propia página hasta el 2026-09-05, y las dos copias divergieron.
 - `docs/design/` — briefs visuales y mockups del rediseño actual.
 - `docs/legacy/` — markdowns del diseño original (QualitTab). Útil para entender el porqué de decisiones, **no** para inferir estado actual del código.
 - `WORKFLOW_ENGINE_SPEC.md` — spec del motor v2 (13 secciones: arquitectura, schema, backend, frontend, pilot, criterios de aceptación, riesgos, evolución futura).
