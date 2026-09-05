@@ -2,6 +2,8 @@ import { clearSession, getToken } from './session'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
 
+const esperar = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
 async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken()
 
@@ -17,7 +19,10 @@ async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> 
   if (res.status === 401) {
     // Se limpia también la cookie del middleware: si quedara, seguiría
     // dejando entrar a las páginas privadas para rebotar en cada request.
-    clearSession()
+    // Se espera el borrado de las cachés antes de navegar: la navegación dura
+    // descarga la página y cortaría la promesa por la mitad. Con techo, porque
+    // quedar atrapado sin poder salir es peor que dejar una caché sin borrar.
+    await Promise.race([clearSession(), esperar(1500)])
     window.location.href = '/login'
     throw new Error('No autorizado')
   }

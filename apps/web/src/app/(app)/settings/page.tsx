@@ -500,7 +500,10 @@ function WhitelistTab({ orgId }: { orgId: string }) {
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
           <CardTitle>Whitelist de emails</CardTitle>
-          <CardDescription>Emails autorizados para ingresar a la organización</CardDescription>
+          <CardDescription>
+            Emails autorizados para ingresar. Autorizar no crea el usuario: se vuelve
+            miembro —y aparece en Usuarios— la primera vez que inicia sesión.
+          </CardDescription>
         </div>
         <Button size="sm" onClick={() => setAdding(true)}>
           <Plus className="mr-2 h-4 w-4" />
@@ -555,16 +558,16 @@ function WhitelistTab({ orgId }: { orgId: string }) {
                   <Mail className="h-4 w-4 text-muted-foreground" />
                   <div className="flex-1">
                     <p className="text-sm font-medium">{item.email}</p>
-                    {item.usedAt && (
-                      <p className="text-xs text-muted-foreground">
-                        Ingresó el {new Date(item.usedAt).toLocaleDateString('es-AR')}
-                      </p>
-                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {item.usedAt
+                        ? `Ingresó el ${new Date(item.usedAt).toLocaleDateString('es-AR')}`
+                        : 'Nunca inició sesión — aparece en Usuarios cuando lo haga'}
+                    </p>
                   </div>
                   <Badge variant={role.variant}>{role.label}</Badge>
                   {!item.usedAt && (
                     <Badge variant="outline" className="text-amber-600">
-                      Pendiente
+                      Sin ingresar
                     </Badge>
                   )}
                   <Button

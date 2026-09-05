@@ -81,14 +81,15 @@ export function saveSession(token: string): boolean {
  * comparte entre turnos. Sin esto, quien entra después puede quedarse sin
  * conexión y leer lo que dejó el turno anterior.
  *
- * El borrado es asincrónico y no se espera: el logout no debe quedar colgado
- * porque el almacenamiento del navegador tarde. La caché está nombrada por
- * usuario de todas formas, así que la limpieza es defensa en profundidad, no
- * lo único que separa a un usuario del otro.
+ * **Devuelve la promesa del borrado a propósito.** Lo sincrónico —token y
+ * cookie— ya está hecho cuando la función retorna, pero vaciar la caché no: si
+ * el que llama navega enseguida con `window.location`, la página se descarga y
+ * la promesa a medias se corta, dejando los datos en el disco. Quien cierre
+ * sesión debe esperarla, con un techo de tiempo.
  */
-export function clearSession(): void {
-  if (typeof window === 'undefined') return
+export function clearSession(): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve()
   localStorage.removeItem(TOKEN_KEY)
   document.cookie = `${SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`
-  void purgeApiCaches()
+  return purgeApiCaches()
 }

@@ -26,7 +26,8 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import { BrainMark } from '@/components/brand/brain-mark'
-import { useMe, initials, roleLabel } from '@/lib/use-me'
+import { useMe } from '@/lib/use-me'
+import { UserMenu } from '@/components/layout/user-menu'
 import { api } from '@/lib/api'
 
 interface NavItem {
@@ -139,9 +140,6 @@ export function Sidebar({ open = false, onNavigate }: SidebarProps) {
 
   const orgName = me?.organizationName ?? '—'
   const orgInitial = (orgName ?? '·').slice(0, 1).toUpperCase()
-  const userName = me?.name ?? '—'
-  const userInitials = initials(me?.name)
-  const userRoleText = me?.role ? roleLabel[me.role] : '—'
   const userAreaText = me?.areaName ? ` · ${me.areaName}` : ''
 
   return (
@@ -249,39 +247,7 @@ export function Sidebar({ open = false, onNavigate }: SidebarProps) {
         ))}
       </nav>
 
-      {/* User */}
-      <div className="flex items-center gap-2.5 border-t border-white/5 px-4 py-3.5">
-        {me?.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={me.avatarUrl}
-            alt={userName}
-            className="h-8 w-8 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-medium"
-            style={{
-              background: 'linear-gradient(135deg, #7AB8FF, #1E3A8A)',
-              color: '#F3F6FC',
-            }}
-          >
-            {userInitials}
-          </div>
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px]" style={{ color: '#F3F6FC' }}>
-            {userName}
-          </div>
-          <div
-            className="mt-0.5 truncate text-[9px] uppercase tracking-[0.14em]"
-            style={{ fontFamily: 'var(--font-mono)', color: '#6A7797' }}
-          >
-            {me?.positionName ?? userRoleText}
-          </div>
-        </div>
-        <ChevronDown className="h-3 w-3 shrink-0" style={{ color: '#6A7797' }} />
-      </div>
+      <UserMenu />
     </aside>
   )
 }

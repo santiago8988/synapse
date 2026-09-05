@@ -16,7 +16,7 @@ interface OrganizationState {
     role: string
     areaId: string | null
   }) => void
-  clearAuth: () => void
+  clearAuth: () => Promise<void>
 }
 
 export const useOrganizationStore = create<OrganizationState>((set) => ({
@@ -35,8 +35,12 @@ export const useOrganizationStore = create<OrganizationState>((set) => ({
       role: data.role,
       areaId: data.areaId,
     }),
+  /**
+   * Devuelve la promesa de `clearSession`: quien cierre sesión tiene que
+   * esperarla antes de navegar, o el borrado de las cachés se corta a la mitad.
+   */
   clearAuth: () => {
-    clearSession()
+    const borrado = clearSession()
     set({
       token: null,
       organizationId: null,
@@ -45,5 +49,6 @@ export const useOrganizationStore = create<OrganizationState>((set) => ({
       role: null,
       areaId: null,
     })
+    return borrado
   },
 }))

@@ -94,6 +94,27 @@ describe('session', () => {
     expect(hasSessionCookie()).toBe(false)
   })
 
+  it('cerrar sesión borra las cachés de la API y se puede esperar', async () => {
+    // El contrato importa tanto como el efecto: quien cierra sesión navega con
+    // `window.location` enseguida, y si `clearSession` no devolviera la promesa
+    // del borrado, la descarga de la página lo cortaría por la mitad y los
+    // datos quedarían en el disco de una tablet compartida.
+    const borradas: string[] = []
+    vi.stubGlobal('caches', {
+      keys: async () => ['synapse-api-u1-org-1', 'next-static-js-assets'],
+      delete: async (n: string) => {
+        borradas.push(n)
+        return true
+      },
+    })
+
+    saveSession(tokenCon({ sub: 'u1', exp: enUnaHora }))
+    await clearSession()
+
+    expect(borradas).toEqual(['synapse-api-u1-org-1'])
+    vi.unstubAllGlobals()
+  })
+
   it('sin sesión previa, getToken devuelve null y no hay cookie', () => {
     expect(getToken()).toBeNull()
     expect(hasSessionCookie()).toBe(false)
