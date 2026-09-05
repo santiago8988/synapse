@@ -207,7 +207,7 @@ cierra también §13c.
 
 ## Tests
 
-Hay 147 tests en `apps/api` y 47 en `apps/web`. Corren con `pnpm test` y en CI.
+Hay 155 tests en `apps/api` y 47 en `apps/web`. Corren con `pnpm test` y en CI.
 
 > §14 (tests del frontend) se resolvió el 2026-09-05: runner montado, helpers de
 > fórmulas y comparaciones, manejo de sesión y el `DynamicRecordForm`.

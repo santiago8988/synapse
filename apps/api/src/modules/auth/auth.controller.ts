@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
 import { ConfigService } from '@nestjs/config'
 import { AuthCodeService } from './auth-code.service'
+import { normalizeFrontendUrl } from '../../common/config/frontend-url'
 
 @Controller('auth')
 export class AuthController {
@@ -39,7 +40,7 @@ export class AuthController {
       memberships: Array<{ organizationId: string }>
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000')
+    const frontendUrl = normalizeFrontendUrl(this.configService.get<string>('FRONTEND_URL'))
 
     // Nunca se redirige con el JWT en la URL: viajaba a los logs del servidor
     // de Next, al historial del navegador y al header Referer, y dura 7 dias.

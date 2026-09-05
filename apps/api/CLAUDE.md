@@ -48,6 +48,8 @@ apps/api/src/
       r2-storage.service.ts            ← Cloudflare R2 con presigned URLs (producción)
       storage.controller.ts            ← sirve los archivos del backend local
       storage.module.ts                ← elige backend según env
+    config/
+      frontend-url.ts                  ← normaliza FRONTEND_URL (barra final)
     areas/
       area-scope.ts                    ← alcance jerárquico de áreas por usuario
     flows/
@@ -128,6 +130,15 @@ de firmar—.
 `FRONTEND_URL` cumple doble función: es el origen que se acepta por CORS
 (`main.ts`) y a dónde se redirige después del login (`auth.controller.ts`). Si
 queda desactualizada el síntoma es un login que "no hace nada", sin error.
+
+Pasa por `normalizeFrontendUrl` (`common/config/frontend-url.ts`), que le
+recorta la barra final. No es cosmético: la barra de direcciones del navegador
+muestra la URL **con** barra, y pegada tal cual el header
+`Access-Control-Allow-Origin` sale con barra y deja de coincidir con el
+`Origin`, que nunca la lleva. Lo insidioso es que el redirect del login sigue
+funcionando —queda doble barra y el navegador la normaliza— así que falla solo
+el canje del código, con un "Failed to fetch" que no señala a ningún lado.
+Ocurrió en el primer deploy a producción.
 
 `NEXT_PUBLIC_API_URL` se hornea en el bundle del frontend **al construir**, no
 al arrancar: cambiarla exige rebuildear. Es lo que impide probar la app desde
