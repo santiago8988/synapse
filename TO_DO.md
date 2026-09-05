@@ -243,6 +243,21 @@ del otro.
 
 ## Visualización
 
+### 23. El dashboard no respeta la jerarquía de áreas
+
+`dashboard.service.getStats` filtra por `organizationId` y nada más. Un
+TECHNICIAN ve los conteos y los vencimientos de toda la organización, cuando la
+regla del sistema es que cada uno ve su área y las que dependen de ella.
+
+No es una fuga entre organizaciones —el filtro de tenant está— pero contradice
+lo que la app promete en el resto de las pantallas, y en una organización con
+varias plantas convierte el dashboard en ruido: la mitad de lo que muestra no
+es problema de quien lo mira.
+
+El arreglo pasa por reusar la resolución de áreas de `area-access.guard` en las
+consultas del dashboard. Conviene hacerlo junto con §15, que incluye cubrir ese
+guard con tests.
+
 ### 20. Las dos columnas de estado dicen lo mismo con distinto detalle
 
 En `/records/[id]`, para registros con companion, la tabla muestra el estado del

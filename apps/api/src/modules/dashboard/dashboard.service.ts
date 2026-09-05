@@ -15,13 +15,14 @@ export class DashboardService {
 
     const [
       activeRecords,
-      overdueEntries,
+      overdueEntriesList,
       openNCs,
       inProgressNCs,
       instrumentsByStatus,
       recentEntries,
       upcomingEntries,
       upcomingRevisions,
+      instrumentsDueCalibration,
       pendingApprovals,
       expiringTrainings,
     ] = await Promise.all([
@@ -30,13 +31,19 @@ export class DashboardService {
         where: { organizationId, isActive: true },
       }),
 
-      // Entries vencidas (dueDate pasada, no completadas)
-      this.prisma.entry.count({
+      // Entries vencidas (dueDate pasada, no completadas). Se traen los datos,
+      // no solo el conteo: un número sin a dónde ir obliga a salir a buscarlas.
+      this.prisma.entry.findMany({
         where: {
           record: { organizationId },
           dueDate: { lt: now },
           status: 'DRAFT',
         },
+        include: {
+          record: { select: { id: true, name: true } },
+        },
+        orderBy: { dueDate: 'asc' },
+        take: 10,
       }),
 
       // NCs abiertas
@@ -60,7 +67,7 @@ export class DashboardService {
       this.prisma.entry.findMany({
         where: { record: { organizationId } },
         include: {
-          record: { select: { name: true } },
+          record: { select: { id: true, name: true } },
         },
         orderBy: { createdAt: 'desc' },
         take: 10,
@@ -74,7 +81,7 @@ export class DashboardService {
           status: 'DRAFT',
         },
         include: {
-          record: { select: { name: true } },
+          record: { select: { id: true, name: true } },
         },
         orderBy: { dueDate: 'asc' },
         take: 10,
@@ -87,9 +94,29 @@ export class DashboardService {
           revisionDate: { gte: now, lte: thirtyDaysFromNow },
         },
         include: {
-          record: { select: { name: true, notifyDaysBefore: true } },
+          record: { select: { id: true, name: true, notifyDaysBefore: true } },
         },
         orderBy: { revisionDate: 'asc' },
+        take: 10,
+      }),
+
+      // Instrumentos con la calibración vencida o por vencer en 30 días. Es el
+      // dato accionable del parque de instrumental: cuántos hay en calibración
+      // ahora mismo no le sirve a nadie para decidir algo.
+      this.prisma.instrument.findMany({
+        where: {
+          organizationId,
+          status: { not: 'DECOMMISSIONED' },
+          nextCalibrationAt: { not: null, lte: thirtyDaysFromNow },
+        },
+        select: {
+          id: true,
+          nextCalibrationAt: true,
+          // El instrumento no tiene nombre propio: su identidad vive en la
+          // entry que lo creó, y el nombre visible sale del registro.
+          record: { select: { name: true } },
+        },
+        orderBy: { nextCalibrationAt: 'asc' },
         take: 10,
       }),
 
@@ -125,7 +152,13 @@ export class DashboardService {
 
     return {
       activeRecords,
-      overdueEntries,
+      overdueEntries: overdueEntriesList.length,
+      overdueEntriesList: overdueEntriesList.map((e) => ({
+        id: e.id,
+        recordId: e.record.id,
+        recordName: e.record.name,
+        dueDate: e.dueDate,
+      })),
       nonConformities: {
         open: openNCs,
         inProgress: inProgressNCs,
@@ -134,6 +167,7 @@ export class DashboardService {
       instruments,
       recentEntries: recentEntries.map((e) => ({
         id: e.id,
+        recordId: e.record.id,
         recordName: e.record.name,
         status: e.status,
         createdAt: e.createdAt,
@@ -141,15 +175,22 @@ export class DashboardService {
       })),
       upcomingEntries: upcomingEntries.map((e) => ({
         id: e.id,
+        recordId: e.record.id,
         recordName: e.record.name,
         status: e.status,
         dueDate: e.dueDate,
       })),
       upcomingRevisions: upcomingRevisions.map((e) => ({
         id: e.id,
+        recordId: e.record.id,
         recordName: e.record.name,
         revisionDate: e.revisionDate,
         notifyDaysBefore: e.record.notifyDaysBefore,
+      })),
+      instrumentsDueCalibration: instrumentsDueCalibration.map((i) => ({
+        id: i.id,
+        recordName: i.record.name,
+        nextCalibrationAt: i.nextCalibrationAt,
       })),
       pendingApprovals,
       expiringTrainings: expiringTrainings.map((t) => ({
