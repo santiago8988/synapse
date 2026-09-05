@@ -17,7 +17,14 @@ export default defineConfig({
   test: {
     include: ['src/**/*.spec.ts', 'src/**/*.spec.tsx'],
     environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
     globals: false,
+  },
+  // Next transforma el JSX por su cuenta; Vitest no hereda esa configuracion.
+  // Sin esto, cualquier .tsx falla con "React is not defined".
+  esbuild: {
+    jsx: 'automatic',
+    jsxImportSource: 'react',
   },
   resolve: {
     alias: {

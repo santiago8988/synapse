@@ -252,5 +252,24 @@ recargar y apuntar al directorio temporal.
 
 ## Testing
 
-No hay tests en el frontend todavía (`TO_DO.md` §14). El backend tiene 116, que
-corren con `pnpm test` y en CI.
+**Vitest** con `jsdom`, config en `vitest.config.mts`. Los tests van al lado del
+código como `*.spec.ts` / `*.spec.tsx`.
+
+```bash
+pnpm --filter @synapse/web test
+pnpm test                          # todo el monorepo, vía turbo
+```
+
+34 tests: los helpers de fórmulas y comparaciones (varios casos existen para
+fijar que el preview coincida con el evaluador del backend, que son
+implementaciones separadas), el manejo de sesión —incluido uno que verifica que
+la cookie **no** contenga el token— y el `DynamicRecordForm`, sobre todo la
+regla de que un campo identificador queda bloqueado cuando la entrada está
+`COMPLETED`.
+
+Dos detalles del entorno: `jsdom` está fijado en la 25 porque la 30 arrastra una
+dependencia ESM que Node 20 no puede requerir, y el config declara
+`esbuild.jsx: 'automatic'` porque Vitest no hereda la transformación de JSX de
+Next.
+
+El backend tiene 116. Lo que falta cubrir está en `TO_DO.md` §15.
