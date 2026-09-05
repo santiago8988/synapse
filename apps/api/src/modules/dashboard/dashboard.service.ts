@@ -1,17 +1,67 @@
 import { Injectable } from '@nestjs/common'
 import { PrismaService } from '../../prisma/prisma.service'
+import { JwtPayload } from '../../common/decorators/current-user.decorator'
+import { alcanceDeAreas, filtroDeRecordsVisibles } from '../../common/areas/area-scope'
+import { ApprovalService } from '../approval/approval.service'
 
 @Injectable()
 export class DashboardService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private approval: ApprovalService,
+  ) {}
 
-  async getStats(organizationId: string) {
+  /**
+   * Resumen de lo que requiere atención, acotado a lo que el usuario ve.
+   *
+   * Todo lo de acá pasa por dos filtros y el orden importa: primero
+   * `organizationId` —el aislamiento entre inquilinos, que no es negociable— y
+   * después el árbol de áreas. El segundo decide cuánto de lo propio se muestra;
+   * el primero, que nunca se muestre lo ajeno.
+   */
+  async getStats(user: JwtPayload) {
+    const organizationId = user.organizationId
     const now = new Date()
     const sevenDaysFromNow = new Date()
     sevenDaysFromNow.setDate(now.getDate() + 7)
 
     const thirtyDaysFromNow = new Date()
     thirtyDaysFromNow.setDate(now.getDate() + 30)
+
+    // Las áreas de la organización se traen una sola vez y el árbol se camina
+    // en memoria: resolverlo por consulta recursiva en cada una de las siete
+    // agregaciones de abajo seria pagar el mismo arbol seis veces.
+    const areas = await this.prisma.area.findMany({
+      where: { organizationId },
+      select: { id: true, parentId: true },
+    })
+    const areasVisibles = alcanceDeAreas(user, areas)
+    const recordVisible = filtroDeRecordsVisibles(organizationId, areasVisibles)
+
+    /**
+     * No conformidades: el área les llega por la entrada que las originó. Las
+     * que se cargan a mano no tienen entrada, y como los registros sin
+     * clasificar, se muestran a todos — una NC que nadie ve es exactamente el
+     * problema que las NC existen para evitar.
+     */
+    const ncVisible =
+      areasVisibles === null
+        ? { organizationId }
+        : {
+            organizationId,
+            OR: [{ entry: { record: recordVisible } }, { entryId: null }],
+          }
+
+    /** Filtro de personas: null = toda la organización. */
+    const personaVisible =
+      areasVisibles === null
+        ? { organizationId }
+        : {
+            organizationId,
+            // La capacitación propia siempre se ve, aunque el usuario no tenga
+            // área: es su vencimiento y nadie más lo va a mirar por él.
+            OR: [{ areaId: { in: areasVisibles } }, { userId: user.sub }],
+          }
 
     const [
       activeRecords,
@@ -23,19 +73,19 @@ export class DashboardService {
       upcomingEntries,
       upcomingRevisions,
       instrumentsDueCalibration,
-      pendingApprovals,
+      pendingApprovalsForUser,
       expiringTrainings,
     ] = await Promise.all([
       // Registros activos
       this.prisma.record.count({
-        where: { organizationId, isActive: true },
+        where: { ...recordVisible, isActive: true },
       }),
 
       // Entries vencidas (dueDate pasada, no completadas). Se traen los datos,
       // no solo el conteo: un número sin a dónde ir obliga a salir a buscarlas.
       this.prisma.entry.findMany({
         where: {
-          record: { organizationId },
+          record: recordVisible,
           dueDate: { lt: now },
           status: 'DRAFT',
         },
@@ -48,24 +98,24 @@ export class DashboardService {
 
       // NCs abiertas
       this.prisma.nonConformity.count({
-        where: { organizationId, status: 'OPEN' },
+        where: { ...ncVisible, status: 'OPEN' },
       }),
 
       // NCs en progreso
       this.prisma.nonConformity.count({
-        where: { organizationId, status: 'IN_PROGRESS' },
+        where: { ...ncVisible, status: 'IN_PROGRESS' },
       }),
 
       // Instrumentos agrupados por estado
       this.prisma.instrument.groupBy({
         by: ['status'],
-        where: { organizationId },
+        where: { organizationId, record: recordVisible },
         _count: true,
       }),
 
       // Últimas 10 entries
       this.prisma.entry.findMany({
-        where: { record: { organizationId } },
+        where: { record: recordVisible },
         include: {
           record: { select: { id: true, name: true } },
         },
@@ -76,7 +126,7 @@ export class DashboardService {
       // Entries próximas a vencer (próximos 7 días)
       this.prisma.entry.findMany({
         where: {
-          record: { organizationId },
+          record: recordVisible,
           dueDate: { gte: now, lte: sevenDaysFromNow },
           status: 'DRAFT',
         },
@@ -90,7 +140,7 @@ export class DashboardService {
       // Revisiones próximas a vencer (próximos 30 días)
       this.prisma.entry.findMany({
         where: {
-          record: { organizationId, type: 'NOT_PERIODIC_WITH_REVISION' },
+          record: { ...recordVisible, type: 'NOT_PERIODIC_WITH_REVISION' },
           revisionDate: { gte: now, lte: thirtyDaysFromNow },
         },
         include: {
@@ -106,6 +156,7 @@ export class DashboardService {
       this.prisma.instrument.findMany({
         where: {
           organizationId,
+          record: recordVisible,
           status: { not: 'DECOMMISSIONED' },
           nextCalibrationAt: { not: null, lte: thirtyDaysFromNow },
         },
@@ -120,18 +171,18 @@ export class DashboardService {
         take: 10,
       }),
 
-      // Solicitudes de aprobación pendientes
-      this.prisma.approvalRequest.count({
-        where: {
-          organizationId,
-          status: { in: ['PENDING_REVIEW', 'PENDING_APPROVAL'] },
-        },
-      }),
+      // Aprobaciones que le tocan a este usuario, no las de toda la
+      // organización. Un `ApprovalRequest` apunta a su entidad de forma
+      // polimórfica (entityType + entityId), así que no tiene área que filtrar;
+      // pero el alcance que importa acá no es el área sino el rol de calidad:
+      // lo accionable es lo que uno tiene que revisar o aprobar.
+      this.approval.getPendingForUser(organizationId, user.sub),
 
       // Capacitaciones próximas a vencer (próximos 30 días)
       this.prisma.training.findMany({
         where: {
           organizationId,
+          organizationUser: personaVisible,
           expiresAt: { gte: now, lte: thirtyDaysFromNow },
         },
         include: {
@@ -192,7 +243,7 @@ export class DashboardService {
         recordName: i.record.name,
         nextCalibrationAt: i.nextCalibrationAt,
       })),
-      pendingApprovals,
+      pendingApprovals: pendingApprovalsForUser.length,
       expiringTrainings: expiringTrainings.map((t) => ({
         id: t.id,
         name: t.name,

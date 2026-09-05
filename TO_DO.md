@@ -194,7 +194,7 @@ cierra también §13c.
 
 ## Tests
 
-Hay 116 tests en `apps/api` y 46 en `apps/web`. Corren con `pnpm test` y en CI.
+Hay 131 tests en `apps/api` y 47 en `apps/web`. Corren con `pnpm test` y en CI.
 
 > §14 (tests del frontend) se resolvió el 2026-09-05: runner montado, helpers de
 > fórmulas y comparaciones, manejo de sesión y el `DynamicRecordForm`.
@@ -243,20 +243,42 @@ del otro.
 
 ## Visualización
 
-### 23. El dashboard no respeta la jerarquía de áreas
+> §23 (jerarquía de áreas en el dashboard) se resolvió el 2026-09-05 con
+> `common/areas/area-scope.ts`, con 15 tests. Al hacerlo apareció algo más
+> grande, abajo.
 
-`dashboard.service.getStats` filtra por `organizationId` y nada más. Un
-TECHNICIAN ve los conteos y los vencimientos de toda la organización, cuando la
-regla del sistema es que cada uno ve su área y las que dependen de ella.
+### 24. La visibilidad por área no se aplica en ningún módulo
 
-No es una fuga entre organizaciones —el filtro de tenant está— pero contradice
-lo que la app promete en el resto de las pantallas, y en una organización con
-varias plantas convierte el dashboard en ruido: la mitad de lo que muestra no
-es problema de quien lo mira.
+`AreaAccessGuard` existe desde el principio y **no está referenciado en ningún
+controller**. O sea que la regla más citada del sistema —cada uno ve su área y
+las que dependen de ella— hoy solo rige en el dashboard, que fue el primero en
+aplicarla.
 
-El arreglo pasa por reusar la resolución de áreas de `area-access.guard` en las
-consultas del dashboard. Conviene hacerlo junto con §15, que incluye cubrir ese
-guard con tests.
+En la práctica, cualquier usuario que entre a `/records`, `/non-conformities` o
+`/instruments` ve todo lo de la organización. No es una fuga entre inquilinos
+—el filtro por `organizationId` está en todos lados— pero contradice lo que la
+documentación afirma y lo que un auditor esperaría de un control de accesos.
+
+El resultado incómodo mientras tanto: **el dashboard es más estricto que las
+listas a las que lleva.** Alguien puede no ver un vencimiento en el resumen y
+encontrarlo entrando al módulo.
+
+La pieza que falta ya está hecha: `alcanceDeAreas` y `filtroDeRecordsVisibles`
+en `common/areas/area-scope.ts`. Lo que resta es aplicarla módulo por módulo,
+y eso hay que hacerlo con cuidado y de a poco, porque cada módulo que se
+restringe le puede sacar de la vista a alguien algo que hoy usa. Conviene
+empezar por `records`, que es de donde cuelga el área de casi todo lo demás.
+
+Decisiones ya tomadas al resolver §23, para no reabrirlas en cada módulo:
+
+- `ADMIN` y `AUDITOR` no tienen restricción.
+- Un registro **sin área** se muestra a todos: no es "de otro", está sin
+  clasificar, y esconderlo hace desaparecer trabajo sin que nadie se entere.
+- Sin área asignada, un usuario solo ve lo no clasificado — y la pantalla se lo
+  dice, en vez de mostrarle un tablero vacío que parece "todo en orden".
+- Las aprobaciones no se filtran por área: un `ApprovalRequest` apunta a su
+  entidad de forma polimórfica y no tiene área. El alcance que importa ahí es
+  el rol de calidad — lo que a uno le toca revisar o aprobar.
 
 ### 20. Las dos columnas de estado dicen lo mismo con distinto detalle
 

@@ -48,6 +48,8 @@ apps/api/src/
       r2-storage.service.ts            ← Cloudflare R2 con presigned URLs (producción)
       storage.controller.ts            ← sirve los archivos del backend local
       storage.module.ts                ← elige backend según env
+    areas/
+      area-scope.ts                    ← alcance jerárquico de áreas por usuario
     flows/
       flow-config.ts                   ← valida config de flujos; decide si se ejecutan
       flow-evaluation.ts               ← resuelve paths y evalúa condiciones
@@ -129,6 +131,33 @@ queda desactualizada el síntoma es un login que "no hace nada", sin error.
 `NEXT_PUBLIC_API_URL` se hornea en el bundle del frontend **al construir**, no
 al arrancar: cambiarla exige rebuildear. Es lo que impide probar la app desde
 un celular apuntando a `localhost`. Ver `TO_DO.md` §22.
+
+## Visibilidad por área
+
+La regla: **cada usuario ve su área y todas las que dependen de ella.** `ADMIN`
+y `AUDITOR` no tienen restricción — auditar una sola área no es auditar.
+
+Vive en `common/areas/area-scope.ts`:
+
+- `alcanceDeAreas(user, areas)` → `string[] | null`. **`null` significa "sin
+  restricción"; `[]` significa "ninguna área".** No son lo mismo y confundirlos
+  convierte silenciosamente un tablero vacío en uno completo, o al revés.
+- `filtroDeRecordsVisibles(organizationId, alcance)` → el `where` de Prisma.
+- `descendientesDe(areas, raizId)` — camina el árbol en memoria, sin consultas
+  recursivas, y tolera ciclos.
+
+El orden de los dos filtros importa y no es negociable: primero
+`organizationId`, que aísla inquilinos, y después el área, que decide cuánto de
+lo propio se muestra. El filtro de áreas **nunca** reemplaza al de organización.
+
+**Un `Record` sin área se muestra a todos.** Pertenece a 0..N áreas
+(`RecordArea`), y ese cero significa "sin clasificar", no "de otro". Esconderlo
+haría desaparecer trabajo sin que nadie se entere.
+
+> **Hoy solo lo aplica el dashboard.** `AreaAccessGuard` implementa la misma
+> regla con consultas recursivas y **no está referenciado en ningún
+> controller**. O sea que en el resto de los módulos la visibilidad por área no
+> rige. Ver `TO_DO.md` §24.
 
 ## Patrones obligatorios para controllers
 

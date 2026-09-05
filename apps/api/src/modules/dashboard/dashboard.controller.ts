@@ -13,6 +13,6 @@ export class DashboardController {
 
   @Get('stats')
   getStats(@CurrentUser() user: JwtPayload) {
-    return this.service.getStats(user.organizationId)
+    return this.service.getStats(user)
   }
 }

@@ -188,6 +188,18 @@ export default function DashboardPage() {
   const nombre = firstName(me?.name) || 'vos'
   const organizacion = me?.organizationName ?? 'tu organización'
 
+  // ADMIN y AUDITOR ven la organización entera; el resto, su área y las que
+  // cuelgan de ella. Quien no tiene área asignada solo ve lo no clasificado, y
+  // conviene que lo sepa antes de concluir que no hay nada que hacer.
+  const veTodo = me?.role === 'ADMIN' || me?.role === 'AUDITOR'
+  const alcanceTexto = !me
+    ? null
+    : veTodo
+      ? null
+      : me.areaName
+        ? `Alcance: ${me.areaName} y las áreas que dependen de ella.`
+        : 'No tenés un área asignada, así que solo ves lo que no está clasificado. Pedile a un administrador que te asigne una.'
+
   const calibracionesVencidas =
     data?.instrumentsDueCalibration.filter((i) => diasHasta(i.nextCalibrationAt) < 0).length ?? 0
 
@@ -252,6 +264,14 @@ export default function DashboardPage() {
                 ? 'Nada vencido ni por vencer. No hay no conformidades ni aprobaciones esperando.'
                 : 'Esto es lo que necesita atención hoy.'}
           </p>
+          {/* Decir el alcance evita la lectura peligrosa: que un tablero
+              tranquilo signifique que la organización entera está tranquila,
+              cuando en realidad muestra un área. */}
+          {alcanceTexto && (
+            <p className="mt-1 text-[12px]" style={{ color: 'var(--ink-3)' }}>
+              {alcanceTexto}
+            </p>
+          )}
         </div>
       </div>
 
@@ -306,9 +326,13 @@ export default function DashboardPage() {
               alerta
             />
             <Kpi
-              label="Aprobaciones pendientes"
+              label="Aprobaciones que te tocan"
               value={data.pendingApprovals}
-              detail="Esperando revisión o aprobación"
+              detail={
+                data.pendingApprovals === 0
+                  ? 'Nada esperando tu firma'
+                  : 'Esperan que revises o apruebes'
+              }
               href="/approvals"
               linkLabel="VER CIRCUITO"
               alerta
