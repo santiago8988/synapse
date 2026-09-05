@@ -10,9 +10,7 @@ Frontend Next.js 14 (App Router) del sistema Synapse. PWA mobile-first orientada
 - **TanStack Query** para fetching, cache e invalidación
 - **Zustand** para estado global liviano (`store/organization.store.ts`)
 - **@xyflow/react** para el editor visual de flujos y el mapa global
-
-> `next-pwa` **no está instalado**: hay `manifest.json` pero no service worker,
-> así que la app es instalable pero no funciona offline. Ver `TO_DO.md` §13.
+- **Serwist** (`@serwist/next`) para el service worker — ver la sección PWA
 
 ## Estructura de rutas (App Router)
 
@@ -21,6 +19,8 @@ apps/web/src/app/
   layout.tsx                            ← root layout
   globals.css                           ← Tailwind + tokens de tema
   
+  offline/page.tsx                      ← fallback del service worker (pública)
+
   (auth)/
     login/page.tsx
     callback/page.tsx
@@ -61,7 +61,7 @@ apps/web/src/
     brand/
       brain-mark.tsx
     layout/
-      sidebar.tsx · header.tsx · logo.tsx
+      sidebar.tsx · header.tsx · logo.tsx · offline-banner.tsx
       ↳ grupos de la sidebar: Dashboard (suelto) · Estructura · Catálogos ·
         Seguimiento · Calidad · Configuración. Un grupo con label vacío se
         renderiza sin encabezado.
@@ -86,6 +86,8 @@ apps/web/src/
   
   lib/
     api.ts                              ← API client centralizado
+    session.ts                          ← token + cookie del middleware
+    offline-cache.ts                    ← nombres y purga de las cachés de API
   
   store/
     organization.store.ts               ← org activa + usuario
@@ -188,10 +190,48 @@ cliente no vuelve a pasar por el middleware y no vería la cookie nueva.
 ## PWA
 
 `public/manifest.json` con tema `#0C1324`, `display: standalone`,
-`start_url: /dashboard`, así que la app es instalable.
+`start_url: /dashboard`: la app se instala desde el navegador del celular y
+arranca sin barra de direcciones.
 
-**No hay service worker**: `next-pwa` no está instalado. Sin cache offline ni
-push notifications. Ver `TO_DO.md` §13.
+El service worker se arma con **Serwist** (`@serwist/next`), no con `next-pwa`
+—sin mantenimiento desde 2022—. Fuente en `src/app/sw.ts`, configuración en
+`next.config.mjs`, y se genera `public/sw.js` en cada build (gitignoreado).
+
+**Alcance: se lee sin conexión, no se escribe.** Todo lo que no sea `GET` va
+contra la red y falla en el momento si no hay. No es una limitación técnica:
+encolar cargas y sincronizarlas después deja una entrada sin una hora obvia
+para el `AuditLog`, que en un sistema de calidad es peor que no tener la
+función. Ver `TO_DO.md` §13b.
+
+Cuatro cosas que conviene entender antes de tocar `sw.ts`:
+
+- **Las cachés de API están nombradas por usuario y organización**
+  (`lib/offline-cache.ts`, a partir del `Authorization` del propio pedido). La
+  tablet de planta se comparte entre turnos: una sola caché dejaría que el
+  turno de la tarde lea sin conexión lo que quedó de la mañana. El JWT protege
+  contra el servidor; esto es lo único que protege contra el disco.
+- **Las reglas propias van antes de `defaultCache`, y eso no es cosmético.** La
+  última regla de `defaultCache` manda todo lo cross-origin a una única caché
+  compartida, y como la API vive en otro origen, sin esas reglas cada respuesta
+  terminaría ahí, mezclada entre usuarios.
+- **`clearSession` borra las cachés de API** al cerrar sesión — defensa en
+  profundidad sobre el punto anterior.
+- **`/offline` es pública en el middleware** y va en
+  `additionalPrecacheEntries`. Pública porque el worker la precachea al
+  instalarse: si en ese momento no hubiera sesión, guardaría el HTML del login
+  bajo esa URL. En `additionalPrecacheEntries` porque el manifiesto de Serwist
+  para Next incluye los assets y `public/`, pero no las páginas.
+
+El middleware también excluye `sw.js` y `swe-worker-*.js` del matcher: el
+navegador los pide sin pasar por la app y un redirect al login rompe el
+registro sin ningún error visible.
+
+`OfflineBanner` (`components/layout/offline-banner.tsx`) avisa arriba de todo
+mientras no hay conexión. Con el worker activo una pantalla offline se ve igual
+que una online, solo que con datos de hace un rato — y eso no puede quedar
+implícito.
+
+El service worker está **apagado en desarrollo** (`disable: isDev`).
 
 ## Paleta y estados de badges
 
@@ -224,7 +264,7 @@ Los mensajes de error del backend vienen en español — mostrarlos directamente
 
 ## Headers de seguridad
 
-Configurados en `next.config.js`: CSP, `X-Frame-Options: DENY`,
+Configurados en `next.config.mjs`: CSP, `X-Frame-Options: DENY`,
 `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` y HSTS.
 
 Cuatro decisiones que conviene no romper sin entenderlas:
@@ -246,9 +286,16 @@ El origen de R2 sale de `NEXT_PUBLIC_R2_URL`, que fija el bucket exacto. Sin esa
 variable se cae a un comodín de subdominio, que funciona pero acepta cualquier
 cuenta de Cloudflare.
 
+`worker-src 'self'` y `manifest-src 'self'` están declarados aunque hoy
+`default-src 'self'` ya los cubriría: si alguna vez se afloja `default-src`, el
+service worker no debería quedar colgado de esa herencia.
+
 `distDir` se lee de `NEXT_DIST_DIR`, así que se puede construir en un directorio
 aparte sin editar el archivo — editarlo con el dev server corriendo lo hace
 recargar y apuntar al directorio temporal.
+
+El archivo es `.mjs` y no `.js` porque `@serwist/next` es ESM puro y Node 20 no
+lo puede `require`.
 
 ## Testing
 
@@ -260,12 +307,17 @@ pnpm --filter @synapse/web test
 pnpm test                          # todo el monorepo, vía turbo
 ```
 
-34 tests: los helpers de fórmulas y comparaciones (varios casos existen para
+46 tests: los helpers de fórmulas y comparaciones (varios casos existen para
 fijar que el preview coincida con el evaluador del backend, que son
 implementaciones separadas), el manejo de sesión —incluido uno que verifica que
-la cookie **no** contenga el token— y el `DynamicRecordForm`, sobre todo la
-regla de que un campo identificador queda bloqueado cuando la entrada está
+la cookie **no** contenga el token—, el nombrado de las cachés offline —que dos
+usuarios nunca compartan caché— y el `DynamicRecordForm`, sobre todo la regla
+de que un campo identificador queda bloqueado cuando la entrada está
 `COMPLETED`.
+
+`sw.ts` se typechequea aparte con `tsconfig.sw.json`: necesita `lib: webworker`,
+que es incompatible con `lib: dom`. Por eso `pnpm typecheck` corre `tsc` dos
+veces.
 
 Dos detalles del entorno: `jsdom` está fijado en la 25 porque la 30 arrastra una
 dependencia ESM que Node 20 no puede requerir, y el config declara

@@ -18,8 +18,14 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const SESSION_COOKIE = 'synapse_session_exp'
 
-/** Rutas del grupo `(auth)`: accesibles sin sesión. */
-const RUTAS_PUBLICAS = ['/login', '/callback', '/select-org']
+/**
+ * Rutas accesibles sin sesión: el grupo `(auth)` y la pantalla de sin conexión.
+ *
+ * `/offline` está acá porque el service worker la precachea al instalarse. Si
+ * en ese momento no hubiera sesión, el middleware redirigiría al login y el
+ * worker guardaría el HTML del login bajo la URL de la pantalla de offline.
+ */
+const RUTAS_PUBLICAS = ['/login', '/callback', '/select-org', '/offline']
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -53,11 +59,16 @@ export function middleware(request: NextRequest) {
 export const config = {
   /*
    * Se excluye todo lo que no es una página: los assets de Next, el favicon,
-   * el manifest y los iconos de la PWA. El resto queda protegido por defecto,
-   * de modo que una página nueva nace protegida en vez de haber que acordarse
-   * de agregarla a una lista.
+   * el manifest, los iconos de la PWA y los scripts del service worker. El
+   * resto queda protegido por defecto, de modo que una página nueva nace
+   * protegida en vez de haber que acordarse de agregarla a una lista.
+   *
+   * Los `.js` del worker (`sw.js` y los `swe-worker-*.js` que genera Serwist)
+   * tienen que quedar afuera sí o sí: el navegador los pide sin pasar por la
+   * app, y un redirect al login rompe el registro del service worker sin
+   * ningún error visible.
    */
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json|icon|apple-icon|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|icon|apple-icon|sw.js|swe-worker-.*\\.js|.*\\.(?:png|jpg|jpeg|svg|webp|ico)$).*)',
   ],
 }

@@ -1,4 +1,6 @@
-/** @type {import('next').NextConfig} */
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import withSerwistInit from '@serwist/next'
 
 const isDev = process.env.NODE_ENV !== 'production'
 
@@ -54,6 +56,12 @@ const csp = [
   // algunos textos de la UI.
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
 
+  // El service worker se sirve desde el propio origen. Sin declararlo cae en
+  // default-src, que hoy lo permite — pero si alguna vez se afloja default-src
+  // no queremos que el worker quede colgado de esa herencia.
+  "worker-src 'self'",
+  "manifest-src 'self'",
+
   // La app nunca se embebe en otro sitio.
   "frame-ancestors 'none'",
   "base-uri 'self'",
@@ -87,6 +95,7 @@ if (!isDev) {
   })
 }
 
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   // Permite construir en un directorio aparte sin editar este archivo:
   //   NEXT_DIST_DIR=.next-verify next build
@@ -102,4 +111,38 @@ const nextConfig = {
   },
 }
 
-module.exports = nextConfig
+/** Hash corto del contenido de un archivo, para versionar entradas de precache. */
+function revisionDe(rutaRelativa) {
+  return createHash('sha256')
+    .update(readFileSync(new URL(rutaRelativa, import.meta.url)))
+    .digest('hex')
+    .slice(0, 16)
+}
+
+/**
+ * Service worker (PWA).
+ *
+ * Se usa Serwist y no `next-pwa`: este último está sin mantenimiento desde
+ * 2022 y Serwist es su continuación, la que recomienda la documentación de
+ * Next.js. Es también el motivo por el que este archivo es `.mjs`:
+ * `@serwist/next` es ESM puro y Node 20 no lo puede `require`.
+ *
+ * Está apagado en desarrollo a propósito. Un service worker sirviendo desde
+ * caché en local es la forma más rápida de perder una tarde depurando un bug
+ * que ya estaba arreglado.
+ *
+ * La pantalla `/offline` va en `additionalPrecacheEntries` porque el manifiesto
+ * que arma Serwist para Next incluye los assets construidos y `public/`, pero
+ * no las páginas. El `revision` sale del contenido del archivo: así se vuelve a
+ * bajar cuando la pantalla cambia, y no en cada build.
+ */
+const withSerwist = withSerwistInit({
+  swSrc: 'src/app/sw.ts',
+  swDest: 'public/sw.js',
+  disable: isDev,
+  additionalPrecacheEntries: [
+    { url: '/offline', revision: revisionDe('./src/app/offline/page.tsx') },
+  ],
+})
+
+export default withSerwist(nextConfig)

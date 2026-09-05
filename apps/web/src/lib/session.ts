@@ -17,6 +17,8 @@
  * a la API sigue exigiendo el JWT y responde 401 sin él.
  */
 
+import { purgeApiCaches } from './offline-cache'
+
 const TOKEN_KEY = 'synapse_token'
 
 /** Cookie que lee el middleware. Contiene el `exp` del JWT, en segundos. */
@@ -71,9 +73,22 @@ export function saveSession(token: string): boolean {
   return true
 }
 
-/** Cierra la sesión: borra el token y la cookie del middleware. */
+/**
+ * Cierra la sesión: borra el token, la cookie del middleware y las respuestas
+ * de la API que el service worker haya guardado.
+ *
+ * Lo de las cachés importa en el caso de uso real: la tablet de planta se
+ * comparte entre turnos. Sin esto, quien entra después puede quedarse sin
+ * conexión y leer lo que dejó el turno anterior.
+ *
+ * El borrado es asincrónico y no se espera: el logout no debe quedar colgado
+ * porque el almacenamiento del navegador tarde. La caché está nombrada por
+ * usuario de todas formas, así que la limpieza es defensa en profundidad, no
+ * lo único que separa a un usuario del otro.
+ */
 export function clearSession(): void {
   if (typeof window === 'undefined') return
   localStorage.removeItem(TOKEN_KEY)
   document.cookie = `${SESSION_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`
+  void purgeApiCaches()
 }

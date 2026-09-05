@@ -7,7 +7,7 @@ suelta en otro archivo, movela para acá.
 Cada punto dice qué pasa, por qué importa y dónde tocar. Lo que no tiene una
 razón concreta para existir no debería estar en esta lista.
 
-Última revisión: 2026-09-04.
+Última revisión: 2026-09-05.
 
 ---
 
@@ -120,18 +120,32 @@ fallidas— hoy no tiene dónde correr.
 El almacén de códigos de login (`auth-code.service.ts`) también lo necesitaría
 si la API pasa a correr en más de una instancia; hoy es memoria del proceso.
 
-### 13. `next-pwa`
+> §13 (service worker) se resolvió el 2026-09-05 con **Serwist**, no con
+> `next-pwa`: este último está sin mantenimiento desde 2022 y Serwist es su
+> continuación. La app lee sin conexión; escribir sin conexión quedó afuera a
+> pedido, ver abajo.
 
-La documentación describía una PWA con service worker y runtime caching. El
-paquete **no está instalado** y `next.config.js` no lo configura. Existe
-`public/manifest.json`, así que la app es instalable, pero no funciona offline
-ni cachea nada.
+### 13b. Carga de datos sin conexión
+
+Hoy todo lo que no sea `GET` va contra la red y falla en el momento si no hay.
+Es la decisión correcta por defecto —el operario se entera cuando todavía puede
+hacer algo— pero deja sin resolver el caso de la planta sin señal.
+
+Encolar las cargas y sincronizarlas al volver la conexión no es un problema
+técnico sino normativo: una entrada que se completa a las 10:15 y se sincroniza
+a las 14:00 no tiene una hora obvia para el `AuditLog`. Registrar la de carga
+miente sobre cuándo se hizo el ensayo; registrar la de sincronización miente
+sobre cuándo se registró. La salida honesta es guardar las dos y que la
+auditoría muestre ambas, lo que implica una columna nueva en `Entry` y decidir
+cuál manda para los vencimientos.
+
+Queda pendiente de decisión, junto con §9.
 
 ---
 
 ## Tests
 
-Hay 116 tests en `apps/api` y 34 en `apps/web`. Corren con `pnpm test` y en CI.
+Hay 116 tests en `apps/api` y 46 en `apps/web`. Corren con `pnpm test` y en CI.
 
 > §14 (tests del frontend) se resolvió el 2026-09-05: runner montado, helpers de
 > fórmulas y comparaciones, manejo de sesión y el `DynamicRecordForm`.

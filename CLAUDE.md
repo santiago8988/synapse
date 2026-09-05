@@ -33,7 +33,7 @@ Task runner: **Turborepo** (`turbo.json`).
 
 > `REDIS_URL` sigue en el `.env` pero **BullMQ y Redis no están cableados** (ni dependencia ni importaciones). Ver `TO_DO.md` §11.
 
-**Frontend** — Next.js 14 App Router · TypeScript strict · Tailwind CSS · shadcn/ui · React Hook Form + Zod · TanStack Query · Zustand · next-pwa.
+**Frontend** — Next.js 14 App Router · TypeScript strict · Tailwind CSS · shadcn/ui · React Hook Form + Zod · TanStack Query · Zustand · Serwist (service worker: se lee sin conexión, no se escribe).
 
 **Infra** — PostgreSQL en Supabase/Railway · Redis en Upstash · Frontend en Vercel · R2 en Cloudflare.
 
@@ -44,7 +44,7 @@ pnpm dev            # api + web en paralelo (concurrently)
 pnpm dev:turbo      # idem vía turbo
 pnpm build          # build de todo el monorepo
 pnpm typecheck      # tsc --noEmit en todos los workspaces
-pnpm test           # tests (hoy solo apps/api, 116 tests con Vitest)
+pnpm test           # tests (162 con Vitest: 116 en apps/api, 46 en apps/web)
 pnpm lint           # lint de todo el monorepo
 pnpm db:generate    # genera Prisma Client
 pnpm db:push        # push del schema (sin migración)

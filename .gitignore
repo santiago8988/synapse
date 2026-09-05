@@ -18,3 +18,8 @@ tsconfig.tsbuildinfo
 
 # Storage local de PDFs subidos (dev). En prod van a R2 — nunca al repo.
 apps/api/uploads/
+
+# Service worker generado por Serwist en cada build (apps/web).
+apps/web/public/sw.js
+apps/web/public/sw.js.map
+apps/web/public/swe-worker-*.js

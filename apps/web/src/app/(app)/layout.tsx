@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
+import { OfflineBanner } from '@/components/layout/offline-banner'
 import { cn } from '@/lib/utils'
 
 // Rutas que renderizan edge-to-edge (el componente maneja su propio layout/scroll).
@@ -40,6 +41,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Sidebar open={drawerOpen} onNavigate={() => setDrawerOpen(false)} />
       <div className={cn('synapse-backdrop', drawerOpen && 'open')} onClick={() => setDrawerOpen(false)} aria-hidden />
       <div className="flex min-w-0 flex-col overflow-hidden">
+        <OfflineBanner />
         <Header onMenuClick={() => setDrawerOpen(true)} />
         <main
           id="main-content"
