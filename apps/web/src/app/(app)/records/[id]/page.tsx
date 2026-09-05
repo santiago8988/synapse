@@ -34,6 +34,9 @@ import {
 } from 'lucide-react'
 import { KanbanBoard, type KanbanCard, type KanbanColor, type KanbanColumn, type KanbanTransition } from '@/components/kanban'
 import { FlowEditor } from '@/components/flow-editor'
+import { useMe } from '@/lib/use-me'
+import { ColumnPicker } from '@/components/records/column-picker'
+import { useColumnPreferences } from '@/components/records/use-column-preferences'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -896,10 +899,18 @@ function SynEntriesTabbedCard({
     queryKey: ['record-actions', record.id],
     queryFn: () => api.records.listActions(record.id) as Promise<Array<{ id: string }>>,
   })
+
+  // La preferencia de columnas se guarda por usuario: las tablets de planta se
+  // comparten y cada uno mira campos distintos.
+  const { data: me } = useMe()
   const flowCount = flows.length
-  const visibleFields = record.fields.filter(
+  // Campos que pueden ser columna. FORMULA y COMPARISON se excluyen siempre:
+  // su valor se muestra en el detalle de la entrada, no en la grilla.
+  const columnables = record.fields.filter(
     (f) => f.fieldType !== 'FORMULA' && f.fieldType !== 'COMPARISON',
   )
+  const columnPrefs = useColumnPreferences(me?.id, record.id)
+  const visibleFields = columnables.filter((f) => !columnPrefs.isHidden(f.id))
   const canCreate = !(record.type === 'PERIODIC' && record.actionsAsTarget.length > 0)
 
   // Map de los colores de DropdownStateOption (workflow engine v2) a las
@@ -1044,6 +1055,9 @@ function SynEntriesTabbedCard({
           </button>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {tab === 'entries' && columnables.length > 0 && (
+            <ColumnPicker fields={columnables} prefs={columnPrefs} />
+          )}
           <button type="button" className="syn-btn syn-btn-subtle" style={{ padding: '6px 10px' }}>
             <ListFilter className="h-3.5 w-3.5" /> Filtrar
           </button>

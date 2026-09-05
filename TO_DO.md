@@ -180,3 +180,44 @@ a una PWA pensada para usarse en planta. Vale la pena medirlo antes de decidir.
 
 Mientras tanto: cualquier función que se agregue de un lado hay que agregarla
 del otro.
+
+---
+
+## Visualización
+
+### 20. Las dos columnas de estado dicen lo mismo con distinto detalle
+
+En `/records/[id]`, para registros con companion, la tabla muestra el estado del
+lote (`PLANNED → IN_PROGRESS → COMPLETED → APPROVED/REJECTED`) y el de la
+entrada (`DRAFT`/`COMPLETED`) en columnas adyacentes, ambas rotuladas ESTADO.
+
+No son independientes: `batches.service.changeStatus` completa la entrada
+automáticamente cuando el lote llega a COMPLETED. Así que el estado de la
+entrada es una sombra binaria de una escala de cinco pasos.
+
+La implicación va en un solo sentido: completar la entrada por
+`POST /entries/:id/complete` **no** toca el lote. O sea que es alcanzable
+"entrada COMPLETADA con lote PLANIFICADO", que no es un estado legítimo sino
+una inconsistencia — alguien dio por cerrado el registro de una producción que
+no arrancó.
+
+Propuesta: una sola columna, la del lote, y mostrar la de la entrada solo cuando
+contradiga lo que el lote implica. Ahí deja de ser ruido y pasa a ser un
+detector de inconsistencias.
+
+Se decidió dejar las dos por ahora.
+
+### 21. El desvío entre cantidad pedida y producida no se ve
+
+Un lote puede pedir 100 L y producir 90. Lo que viaja al stock por el flujo es
+lo producido (`$batch.quantity`), así que el desvío importa. Hoy están en
+columnas separadas por el borde de un grupo y el ojo no las compara solo.
+
+Mostrarlo junto —`90 / 100 L`, con el desvío marcado— requiere que el sistema
+sepa qué campo del registro representa la cantidad esperada, y hoy no hay
+ninguna relación declarada entre el campo `CANTIDAD` y `Batch.producedQuantity`.
+Inferirlo por el nombre sería frágil.
+
+La forma honesta es declararlo: que un registro tipo BATCH pueda marcar cuál de
+sus campos es la cantidad esperada. Es una decisión de modelado, no de UI, y
+habilitaría además advertir cuando el desvío supera un umbral.
