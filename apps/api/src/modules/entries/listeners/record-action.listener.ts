@@ -34,6 +34,15 @@ import { Prisma } from '@prisma/client'
 /** Un destino que no responde no puede dejar el listener colgado. */
 const WEBHOOK_TIMEOUT_MS = 10_000
 
+/**
+ * Cuantos saltos encadenados se permiten antes de cortar.
+ *
+ * `allowCascade` evita el caso comun, pero es opt-in: dos flujos que se apuntan
+ * y ambos con la casilla marcada se realimentan sin fin, creando entradas hasta
+ * llenar la base. El tope es la red que atrapa eso.
+ */
+const MAX_CASCADE_DEPTH = 5
+
 @Injectable()
 export class RecordActionListener {
   private readonly logger = new Logger(RecordActionListener.name)
@@ -64,7 +73,21 @@ export class RecordActionListener {
       }
     }
 
+    if (event.cascadeDepth >= MAX_CASCADE_DEPTH) {
+      this.logger.warn(
+        `Cascada cortada en el salto ${event.cascadeDepth} (entry ${event.entryId}): ` +
+          `se alcanzo el maximo de ${MAX_CASCADE_DEPTH}. Revisar si hay flujos que se apuntan entre si.`,
+      )
+      return
+    }
+
     for (const action of event.record.actionsAsSource) {
+      // Anti-loop. handleEntryCreated no tenia ninguna verificacion: hasta
+      // ahora daba igual porque las entradas creadas por cascada no emitian
+      // evento y la cadena moria en el primer salto. Al hacer que la cadena
+      // continue, esta guarda pasa a ser lo que impide el loop.
+      if (event.cascadeDepth > 0 && !action.allowCascade) continue
+
       const mapping = sanitizeFieldMapping(action.fieldMapping)
 
       // Fail-closed: un flujo a medio configurar no se ejecuta. Antes creaba
@@ -186,6 +209,17 @@ export class RecordActionListener {
         }
       }
 
+      // La cadena sigue un salto mas. Va despues de los companions para que el
+      // proximo eslabon vea el lote o la muestra ya creados.
+      await this.emitCascadeCreated(
+        newEntry.id,
+        action.targetRecordId,
+        event.organizationId,
+        event.createdById,
+        targetData,
+        event.cascadeDepth + 1,
+      )
+
       if (targetType === 'STOCK') {
         const lotField = action.targetRecord.fields.find((f) => f.label.toUpperCase() === 'LOTE' && f.isActive) || identifierField
         const productField = action.targetRecord.fields.find((f) => f.label.toUpperCase() === 'PRODUCTO' && f.isActive)
@@ -258,6 +292,14 @@ export class RecordActionListener {
       })
       if (actions.length === 0) return
 
+      if (event.cascadeDepth >= MAX_CASCADE_DEPTH) {
+        this.logger.warn(
+          `Cascada cortada en el salto ${event.cascadeDepth} (entry ${event.entryId}): ` +
+            `se alcanzo el maximo de ${MAX_CASCADE_DEPTH}.`,
+        )
+        return
+      }
+
       // Cargamos la entry source UNA vez con sus companions. Lo usan
       // matchesCondition (para evaluar paths $batch.* / $sample.* / $instrument.*
       // / data.<fieldId>) y executeCreateEntry para resolver fieldMapping.
@@ -320,6 +362,53 @@ export class RecordActionListener {
       )
       // No re-throwear: el update original ya commiteó.
     }
+  }
+
+  /**
+   * Emite `EntryCreatedEvent` por una entry que creo una cascada, para que la
+   * cadena pueda continuar un salto mas.
+   *
+   * Hasta ahora las entradas creadas por cascada no emitian nada, asi que un
+   * flujo A -> B -> C solo ejecutaba A -> B y el resto quedaba sin pasar, en
+   * silencio. Al emitir, `cascadeDepth` sube y son `allowCascade` y
+   * MAX_CASCADE_DEPTH los que deciden hasta donde sigue.
+   */
+  private async emitCascadeCreated(
+    entryId: string,
+    recordId: string,
+    organizationId: string,
+    createdById: string,
+    data: Record<string, unknown>,
+    cascadeDepth: number,
+  ) {
+    // Solo se consulta si hay a quien avisarle: la mayoria de los registros
+    // destino no tienen flujos propios y esta query seria puro costo.
+    const record = await this.prisma.record.findFirst({
+      where: { id: recordId, organizationId },
+      include: {
+        fields: { where: { isActive: true } },
+        actionsAsSource: {
+          include: {
+            targetRecord: { include: { fields: { where: { isActive: true } } } },
+          },
+        },
+      },
+    })
+    if (!record || record.actionsAsSource.length === 0) return
+
+    this.eventEmitter.emit(
+      EntryCreatedEvent.EVENT_NAME,
+      new EntryCreatedEvent(
+        entryId,
+        recordId,
+        organizationId,
+        createdById,
+        data,
+        {},
+        record,
+        cascadeDepth,
+      ),
+    )
   }
 
   /**
@@ -400,7 +489,7 @@ export class RecordActionListener {
       targetDueDate.setDate(targetDueDate.getDate() + action.targetRecord.periodicity)
     }
 
-    await this.prisma.entry.create({
+    const creada = await this.prisma.entry.create({
       data: {
         recordId: action.targetRecordId,
         createdById: event.changedById,
@@ -411,6 +500,15 @@ export class RecordActionListener {
         status: 'DRAFT',
       },
     })
+
+    await this.emitCascadeCreated(
+      creada.id,
+      action.targetRecordId,
+      event.organizationId,
+      event.changedById,
+      targetData,
+      event.cascadeDepth + 1,
+    )
 
     this.logger.log(
       `RecordAction ${action.id} (CREATE_ENTRY) disparada por FIELD_VALUE_CHANGED (field=${event.fieldId}, toValue=${String(event.toValue)})`,
@@ -518,6 +616,7 @@ export class RecordActionListener {
         event.changedById,
         true, // triggeredByCascade
         `Cascada de RecordAction ${action.id}`,
+        event.cascadeDepth + 1,
       ),
     )
 

@@ -21,6 +21,8 @@ export class EntryCreatedEvent {
         id: string
         targetRecordId: string
         fieldMapping: unknown
+        /** Si es false, la accion no reacciona a eventos originados en cascada. */
+        allowCascade: boolean
         targetRecord: {
           type: string
           periodicity: number | null
@@ -30,6 +32,13 @@ export class EntryCreatedEvent {
         }
       }>
     },
+    /**
+     * Cuántos saltos de cascada lleva esta creación. 0 = la originó una
+     * persona. Mayor a 0 significa que la creó otra RecordAction, y solo las
+     * acciones con `allowCascade` reaccionan. El tope corta las cadenas que se
+     * realimentan.
+     */
+    public readonly cascadeDepth: number = 0,
   ) {}
 }
 
@@ -102,5 +111,7 @@ export class EntryFieldValueChangedEvent {
     public readonly changedById: string,
     public readonly triggeredByCascade: boolean,
     public readonly reason: string | null = null,
+    /** Saltos de cascada acumulados. Ver EntryCreatedEvent.cascadeDepth. */
+    public readonly cascadeDepth: number = 0,
   ) {}
 }

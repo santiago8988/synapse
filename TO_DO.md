@@ -64,6 +64,11 @@ existiendo.
 
 ## Motor de flujos
 
+> §7 (cadenas de cascada y anti-loop) se resolvió el 2026-09-04. El diagnóstico
+> original de este archivo era incorrecto: no era que el flag no se propagara,
+> sino que las entradas creadas por cascada no emitían ningún evento, así que
+> la cadena moría en el primer salto.
+
 ### 6. `EMAIL` sigue sin implementarse
 
 `apps/api/src/modules/entries/listeners/record-action.listener.ts` — el handler
@@ -77,15 +82,6 @@ spam, y un sistema de calidad que avisa a la carpeta de correo no deseado es
 peor que uno que no avisa, porque todos creen que sí.
 
 `NOTIFY` y `WEBHOOK` se implementaron el 2026-09-04.
-
-### 7. `triggeredByCascade` no se propaga en las cascadas
-
-Cuando una acción crea una entry, el evento resultante no lleva el flag, así que
-el anti-loop de `allowCascade` no protege más allá del primer salto. Con dos
-flujos que se apuntan mutuamente y `allowCascade` en `true`, la cadena no tiene
-corte.
-
-Viene anotado de `WORKFLOW_ENGINE_SPEC.md` §riesgos.
 
 ### 8. Conviven dos modelos de no conformidades
 
@@ -150,7 +146,7 @@ ni cachea nada.
 
 ## Tests
 
-Hay 86 tests en `apps/api`, todos de lógica pura. Corren con `pnpm test` y en CI.
+Hay 116 tests en `apps/api`, todos de lógica pura. Corren con `pnpm test` y en CI.
 
 ### 14. El frontend no tiene ningún test
 
@@ -161,7 +157,6 @@ Ni runner configurado. Los primeros que valdría la pena: el `DynamicRecordForm`
 
 Por orden de valor:
 
-- `comparison-evaluator.service` — todos los operadores, constante contra campo.
 - `area-access.guard` — resolución del árbol recursivo de áreas.
 - Flujo de auth completo: whitelist, multi-organización, switch-org.
 - `TransitionValidatorService` — transiciones permitidas y `requireReason`.
