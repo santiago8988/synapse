@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Un push nuevo sobre la misma rama cancela la corrida anterior: no tiene
+# sentido esperar el resultado de un commit que ya quedó atrás.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck · Tests · Build
+    runs-on: ubuntu-latest
+
+    env:
+      # Prisma necesita que la variable exista para leer el bloque datasource
+      # al generar el cliente. No se conecta a nada: `prisma generate` es
+      # offline. La URL es un placeholder deliberado — el CI no toca la base.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      # El código de storage tiene un guard: sin R2 y con NODE_ENV=production
+      # falla al arrancar. En CI no se levanta la app, pero se deja explícito
+      # que este entorno no es producción.
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+        # La versión sale de packageManager en package.json, así que no se
+        # duplica acá: si se actualiza allá, el CI la sigue sola.
+
+      - name: Instalar Node
+        uses: actions/setup-node@v4
+        with:
+          # Se fija 20 para igualar el entorno de desarrollo. El SDK de AWS
+          # avisa que va a pedir >=22 en 2027; cuando se migre, se cambia acá
+          # y en las máquinas de desarrollo a la vez.
+          node-version: 20
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Generar el cliente de Prisma
+        # Sin esto el typecheck de la API falla: los tipos de los modelos salen
+        # del cliente generado, que no está versionado.
+        run: pnpm --filter @synapse/api exec prisma generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Build
+        # El build del frontend estuvo roto durante meses sin que nadie lo
+        # notara, porque en desarrollo los errores de tipo solo se muestran en
+        # un overlay. Correrlo acá es lo que evita que vuelva a pasar.
+        run: pnpm build

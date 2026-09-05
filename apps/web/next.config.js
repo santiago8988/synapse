@@ -88,6 +88,13 @@ if (!isDev) {
 }
 
 const nextConfig = {
+  // Permite construir en un directorio aparte sin editar este archivo:
+  //   NEXT_DIST_DIR=.next-verify next build
+  // Editarlo con el dev server corriendo lo hace recargar y apuntar al
+  // directorio temporal; si despues se borra, el server queda sirviendo desde
+  // una carpeta inexistente y la app pierde los estilos.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
+
   transpilePackages: ['@synapse/types', '@synapse/validators'],
 
   async headers() {
