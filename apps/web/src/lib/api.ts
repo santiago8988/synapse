@@ -166,6 +166,8 @@ export const api = {
       fetchApi(`/non-conformities/${id}/corrective-actions/${actionId}/complete`, { method: 'POST' }),
   },
   audit: {
+    /** Historia de un registro: sus cambios y los de sus entradas. */
+    forRecord: <T = unknown>(recordId: string) => fetchApi<T>(`/audit/record/${recordId}`),
     list: (filters?: Record<string, string | number | undefined>) => {
       const params = new URLSearchParams()
       if (filters) {

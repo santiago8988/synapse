@@ -89,6 +89,9 @@ consolidar.
 
 ## ISO / trazabilidad
 
+> §10 (timeline de auditoría en el detalle de registro) se resolvió el
+> 2026-09-05.
+
 ### 9. Cadena de custodia de muestras (ISO 17025 §7.4)
 
 Especificado en detalle en `SAMPLE_CUSTODY_SPEC.md`. Falta el modelo
@@ -96,12 +99,6 @@ Especificado en detalle en `SAMPLE_CUSTODY_SPEC.md`. Falta el modelo
 `apps/web/src/app/(app)/samples/[id]/custody/page.tsx`.
 
 Es el hueco de cumplimiento más grande que queda.
-
-### 10. La pestaña Auditoría del detalle de registro es un placeholder
-
-`apps/web/src/app/(app)/records/[id]/page.tsx` — la pestaña existe pero no
-muestra el timeline. Los datos ya están: el `AuditLog` guarda `before` y `after`
-desde 2026-09-04, y `/audit` los lista de forma global.
 
 ---
 

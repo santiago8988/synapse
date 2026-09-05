@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common'
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common'
 import { AuditService } from './audit.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { TenantGuard } from '../../common/guards/tenant.guard'
@@ -12,6 +12,25 @@ import { AuditIgnore } from '../../common/decorators/audit-ignore.decorator'
 @AuditIgnore()
 export class AuditController {
   constructor(private service: AuditService) {}
+
+  /**
+   * Historia de un registro para la pestaña Auditoría de /records/[id].
+   *
+   * Admite QUALITY_MANAGER, a diferencia del listado global, porque devuelve
+   * una vista reducida: sin IP y sin los payloads crudos, solo qué campos
+   * cambiaron. Ver el comentario de `findForRecord`.
+   */
+  @Get('record/:recordId')
+  @Roles('ADMIN', 'QUALITY_MANAGER', 'AUDITOR')
+  findForRecord(
+    @Param('recordId') recordId: string,
+    @CurrentUser() user: JwtPayload,
+    @Query('take') take?: string,
+  ) {
+    return this.service.findForRecord(recordId, user.organizationId, {
+      take: take ? parseInt(take, 10) : undefined,
+    })
+  }
 
   @Get()
   @Roles('ADMIN', 'AUDITOR')

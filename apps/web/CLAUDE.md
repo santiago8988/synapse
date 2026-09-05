@@ -62,13 +62,14 @@ apps/web/src/
       brain-mark.tsx
     layout/
       sidebar.tsx · header.tsx · logo.tsx
+      ↳ grupos de la sidebar: Dashboard (suelto) · Estructura · Catálogos ·
+        Seguimiento · Calidad · Configuración. Un grupo con label vacío se
+        renderiza sin encabezado.
       notifications-panel.tsx          ← campanita: avisos de la acción NOTIFY
     records/
       column-picker.tsx                ← qué columnas ve cada usuario
       use-column-preferences.ts        ← preferencia por usuario y registro
-      ↳ grupos: Dashboard (suelto) · Estructura · Catálogos · Seguimiento ·
-        Calidad · Configuración. Un grupo con label vacío se renderiza sin
-        encabezado.
+      audit-timeline.tsx               ← historia del registro y sus entradas
     ui/                                 ← shadcn primitives (no modificar)
       avatar · badge · button · card · separator · tooltip
     forms/
@@ -135,7 +136,11 @@ El componente `SynEntriesTabbedCard` (interno al page) renderiza una de estas ta
 - **Entries** — tabla de entries del Record. Default si el Record NO tiene field `isStatus`.
 - **Kanban** — drag-drop entre columnas según el field DROPDOWN con `comparisonConfig.isStatus: true`. Aparece SOLO cuando ese field existe; default cuando aparece. Componente: `components/kanban/`. Las transitions y `requireReason` se respetan vía `KanbanBoard.allowedTransitions` y modal de motivo.
 - **Versiones** — historial de versiones del Record (cuando se editan campos vía `editWithVersion`).
-- **Auditoría** — placeholder. El `AuditLog` ya guarda `before` y `after`, así que los datos para el timeline existen (`TO_DO.md` §10).
+- **Auditoría** — timeline del registro y de todas sus entradas, con los campos
+  que cambiaron y sus valores anterior y nuevo. Consume `GET /audit/record/:id`,
+  que devuelve una vista reducida —sin IP ni payloads crudos— y por eso admite
+  también a `QUALITY_MANAGER`, mientras que `/audit` sigue limitado a `ADMIN` y
+  `AUDITOR`.
 - **Definición** — estructura de campos del Record.
 - **Flujos · N** — Visual Flow Editor. Mapa mental horizontal: el registro
   origen a la izquierda y **una rama por flujo** a la derecha, unidas por curvas
@@ -237,8 +242,9 @@ Cuatro decisiones que conviene no romper sin entenderlas:
 `camera=(self)` está permitido porque el alta de registros usa
 `capture="environment"`.
 
-El origen de R2 se acepta hoy por comodín de subdominio; se endurece definiendo
-`NEXT_PUBLIC_R2_URL` (`TO_DO.md` §4).
+El origen de R2 sale de `NEXT_PUBLIC_R2_URL`, que fija el bucket exacto. Sin esa
+variable se cae a un comodín de subdominio, que funciona pero acepta cualquier
+cuenta de Cloudflare.
 
 `distDir` se lee de `NEXT_DIST_DIR`, así que se puede construir en un directorio
 aparte sin editar el archivo — editarlo con el dev server corriendo lo hace
@@ -246,5 +252,5 @@ recargar y apuntar al directorio temporal.
 
 ## Testing
 
-No hay tests en el frontend todavía (`TO_DO.md` §14). El backend tiene 70, que
+No hay tests en el frontend todavía (`TO_DO.md` §14). El backend tiene 116, que
 corren con `pnpm test` y en CI.

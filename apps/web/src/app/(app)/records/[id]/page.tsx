@@ -36,6 +36,7 @@ import { KanbanBoard, type KanbanCard, type KanbanColor, type KanbanColumn, type
 import { FlowEditor } from '@/components/flow-editor'
 import { useMe } from '@/lib/use-me'
 import { ColumnPicker } from '@/components/records/column-picker'
+import { AuditTimeline } from '@/components/records/audit-timeline'
 import { useColumnPreferences } from '@/components/records/use-column-preferences'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -1319,11 +1320,7 @@ function SynEntriesTabbedCard({
         </div>
       )}
 
-      {tab === 'audit' && (
-        <div style={{ padding: 20, fontSize: 13, color: 'var(--ink-2)' }}>
-          Log inmutable de cambios. Próximamente: timeline de eventos con firma digital y sello temporal.
-        </div>
-      )}
+      {tab === 'audit' && <AuditTimeline recordId={record.id} />}
 
       {tab === 'flows' && (
         <div style={{ padding: 16 }}>
