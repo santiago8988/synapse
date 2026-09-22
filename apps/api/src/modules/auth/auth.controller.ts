@@ -16,8 +16,15 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
 import { ConfigService } from '@nestjs/config'
 import { AuthCodeService } from './auth-code.service'
+import { Public } from '../../common/decorators/public.decorator'
 import { normalizeFrontendUrl } from '../../common/config/frontend-url'
 
+/**
+ * Las cuatro rutas del flujo de ingreso llevan `@Public()`: son las unicas que se
+ * atienden sin JWT, porque son justamente las que lo emiten. Con los guards
+ * globales de `app.module.ts`, sin ese decorador el propio login quedaria
+ * exigiendo el token que todavia no existe.
+ */
 @Controller('auth')
 export class AuthController {
   constructor(
@@ -27,12 +34,14 @@ export class AuthController {
   ) {}
 
   @Get('google')
+  @Public()
   @UseGuards(AuthGuard('google'))
   googleAuth() {
     // Redirige a Google
   }
 
   @Get('google/callback')
+  @Public()
   @UseGuards(AuthGuard('google'))
   async googleCallback(@Req() req: Request, @Res() res: Response) {
     const { user, memberships } = req.user as {
@@ -62,6 +71,7 @@ export class AuthController {
    * pantalla de seleccion necesita mostrarlas antes de que el usuario elija.
    */
   @Post('exchange/organizations')
+  @Public()
   async exchangeOrganizations(@Body() body: { code?: string }) {
     if (!body?.code) throw new BadRequestException('Falta el código')
     const entry = this.authCodes.peek(body.code)
@@ -76,6 +86,7 @@ export class AuthController {
    * falla, asi que aunque quede en un log ya no sirve.
    */
   @Post('exchange')
+  @Public()
   async exchange(@Body() body: { code?: string; organizationId?: string }) {
     if (!body?.code) throw new BadRequestException('Falta el código')
 

@@ -105,7 +105,28 @@ export class DocumentsService {
       if (existing) throw new ConflictException('Ya existe un documento con ese código')
     }
 
-    return this.prisma.document.update({ where: { id }, data })
+    // Los campos se enumeran uno por uno en vez de pasar `data` entero.
+    //
+    // El tipo de `data` solo existe en compilacion: en runtime es el body tal
+    // como llego, y Prisma acepta cualquier campo real del modelo. Pasandolo
+    // entero, un PATCH sobre un documento propio en DRAFT con
+    // `{"organizationId": "<otro tenant>"}` movia el documento a otra
+    // organizacion. Peor todavia era `fileKey`: se firma una URL a partir de el
+    // sin verificar a que organizacion pertenece la key, asi que escribir la
+    // key ajena devolvia una URL firmada al PDF del otro laboratorio — y de
+    // paso puenteaba la guarda de `setFileKey`, que justamente impide
+    // reemplazar el archivo sin crear una version nueva.
+    //
+    // El filtro por organizacion no cubre esto: el documento es propio y la
+    // operacion esta autorizada; lo que sobraban eran los campos tocables.
+    return this.prisma.document.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined ? { title: data.title } : {}),
+        ...(data.code !== undefined ? { code: data.code } : {}),
+        ...(data.status !== undefined ? { status: data.status } : {}),
+      },
+    })
   }
 
   async setFileKey(id: string, organizationId: string, fileKey: string) {

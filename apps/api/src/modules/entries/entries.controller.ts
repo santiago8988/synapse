@@ -21,6 +21,7 @@ import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
 import { StorageService } from '../../common/storage/storage.service'
 import type { UserRole } from '@synapse/types'
+import { assertUploadedPdf, PDF_UPLOAD_OPTIONS } from '../../common/storage/uploaded-pdf'
 
 const FILE_PDF_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
 
@@ -68,8 +69,9 @@ export class EntriesController {
   findOne(
     @Param('recordId') recordId: string,
     @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
   ) {
-    return this.service.findById(id, recordId)
+    return this.service.findById(id, recordId, user.organizationId)
   }
 
   @Patch(':id')
@@ -80,7 +82,15 @@ export class EntriesController {
     @CurrentUser() user: JwtPayload,
     @Body() body: { data: Record<string, unknown>; transitionReason?: string },
   ) {
-    return this.service.update(id, recordId, body.data, user.sub, user.role as UserRole, body.transitionReason)
+    return this.service.update(
+      id,
+      recordId,
+      user.organizationId,
+      body.data,
+      user.sub,
+      user.role as UserRole,
+      body.transitionReason,
+    )
   }
 
   @Post(':id/complete')
@@ -88,8 +98,9 @@ export class EntriesController {
   complete(
     @Param('recordId') recordId: string,
     @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
   ) {
-    return this.service.complete(id, recordId)
+    return this.service.complete(id, recordId, user.organizationId)
   }
 
   // ─── FILE_PDF uploads ─────────────────────────────────────────────────────
@@ -101,7 +112,7 @@ export class EntriesController {
    */
   @Post(':id/files')
   @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', PDF_UPLOAD_OPTIONS))
   async uploadFile(
     @Param('recordId') recordId: string,
     @Param('id') id: string,
@@ -110,13 +121,12 @@ export class EntriesController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!fieldId) throw new BadRequestException('Falta el query param `field` (id del field FILE_PDF)')
-    if (!file) throw new BadRequestException('No se adjuntó ningún archivo')
-    if (file.mimetype !== 'application/pdf') {
-      throw new BadRequestException('Solo se permiten archivos PDF (application/pdf)')
-    }
-    if (file.size > FILE_PDF_MAX_BYTES) {
-      throw new BadRequestException('El archivo supera el tamaño máximo permitido (10 MB)')
-    }
+    assertUploadedPdf(file, FILE_PDF_MAX_BYTES)
+
+    // Se verifica el acceso ANTES de escribir en el storage. Si no, un pedido
+    // contra la entry de otra organización guardaba el archivo y recién después
+    // fallaba, dejando un objeto huérfano por cada intento.
+    await this.service.findById(id, recordId, user.organizationId)
 
     const stored = await this.storage.put('entries', user.organizationId, file)
 
@@ -129,7 +139,15 @@ export class EntriesController {
       uploadedById: user.sub,
     }
 
-    await this.service.setFieldValue(id, recordId, fieldId, value, user.sub, user.role as UserRole)
+    await this.service.setFieldValue(
+      id,
+      recordId,
+      user.organizationId,
+      fieldId,
+      value,
+      user.sub,
+      user.role as UserRole,
+    )
     return {
       ...value,
       url: await this.storage.signedUrl('entries', stored.key, { downloadName: stored.name }),
@@ -146,13 +164,24 @@ export class EntriesController {
   ) {
     if (!fieldId) throw new BadRequestException('Falta el query param `field`')
 
-    // Leer el value actual para borrar el archivo del storage.
-    const current = await this.service.getFieldValue(id, recordId, fieldId)
+    // Leer el value actual para borrar el archivo del storage. getFieldValue
+    // valida la organización primero, así que un pedido cruzado no llega nunca
+    // al remove: si no, bastaba un par de ids para borrarle un adjunto a otro
+    // tenant.
+    const current = await this.service.getFieldValue(id, recordId, user.organizationId, fieldId)
     if (current && typeof current === 'object' && 'key' in current) {
       await this.storage.remove('entries', (current as { key: string }).key)
     }
 
-    await this.service.setFieldValue(id, recordId, fieldId, null, user.sub, user.role as UserRole)
+    await this.service.setFieldValue(
+      id,
+      recordId,
+      user.organizationId,
+      fieldId,
+      null,
+      user.sub,
+      user.role as UserRole,
+    )
     return { ok: true }
   }
 }

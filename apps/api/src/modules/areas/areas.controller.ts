@@ -24,13 +24,17 @@ export class AreasController {
 
   @Patch(':areaId')
   @Roles('ADMIN', 'QUALITY_MANAGER')
-  update(@Param('areaId') areaId: string, @Body() body: { name?: string; parentId?: string | null }) {
-    return this.service.update(areaId, body)
+  update(
+    @CurrentUser() user: JwtPayload,
+    @Param('areaId') areaId: string,
+    @Body() body: { name?: string; parentId?: string | null },
+  ) {
+    return this.service.update(areaId, user.organizationId, body)
   }
 
   @Delete(':areaId')
   @Roles('ADMIN')
-  delete(@Param('areaId') areaId: string) {
-    return this.service.delete(areaId)
+  delete(@CurrentUser() user: JwtPayload, @Param('areaId') areaId: string) {
+    return this.service.delete(areaId, user.organizationId)
   }
 }

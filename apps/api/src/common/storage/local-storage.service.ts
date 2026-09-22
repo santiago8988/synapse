@@ -22,12 +22,21 @@ import {
  * No usar en producción: el filesystem de Vercel/Railway es efímero y los
  * archivos se pierden en cada redeploy.
  */
+
+/**
+ * Separación de dominio de la clave de firma de URLs. Fijos y versionados: si
+ * cambian, las URLs ya emitidas dejan de validar (viven 15 minutos, así que el
+ * efecto de un cambio es esa ventana).
+ */
+const STORAGE_KEY_SALT = 'synapse-storage-url'
+const STORAGE_KEY_INFO = 'signed-file-url-v1'
+
 @Injectable()
 export class LocalStorageService extends StorageService {
   private readonly logger = new Logger(LocalStorageService.name)
   private readonly rootDir: string
   private readonly apiBaseUrl: string
-  private readonly signingSecret: string
+  private readonly signingKey: Buffer
 
   constructor(private config: ConfigService) {
     super()
@@ -35,8 +44,8 @@ export class LocalStorageService extends StorageService {
     this.apiBaseUrl = (
       this.config.get<string>('API_PUBLIC_URL') ?? 'http://localhost:3001/api'
     ).replace(/\/+$/, '')
-    // Secreto propio si existe; si no, se reutiliza el del JWT. Nunca vacío:
-    // una firma con secreto vacío es una firma que cualquiera puede fabricar.
+    // Secreto propio si existe; si no, el del JWT como material de partida.
+    // Nunca vacío: una firma con secreto vacío la puede fabricar cualquiera.
     const secret =
       this.config.get<string>('STORAGE_SIGNING_SECRET') ||
       this.config.get<string>('JWT_SECRET')
@@ -45,7 +54,14 @@ export class LocalStorageService extends StorageService {
         'Falta STORAGE_SIGNING_SECRET (o JWT_SECRET) — no se pueden firmar URLs de archivos',
       )
     }
-    this.signingSecret = secret
+    // El secreto NO se usa crudo. Antes, si no había STORAGE_SIGNING_SECRET, este
+    // HMAC se calculaba con el mismo material que firma los JWT: dos propósitos
+    // criptográficos sobre una sola clave, y filtrar uno comprometía el otro.
+    // HKDF con una etiqueta de dominio propia los vuelve independientes — de la
+    // clave derivada no se puede volver al secreto ni forjar un token.
+    this.signingKey = Buffer.from(
+      crypto.hkdfSync('sha256', secret, STORAGE_KEY_SALT, STORAGE_KEY_INFO, 32),
+    )
   }
 
   async put(
@@ -117,10 +133,13 @@ export class LocalStorageService extends StorageService {
   }
 
   private sign(scope: StorageScope, key: string, expiresAt: number): string {
-    return crypto
-      .createHmac('sha256', this.signingSecret)
-      .update(`${scope}:${key}:${expiresAt}`)
-      .digest('hex')
+    // Los campos se delimitan por longitud y no solo por ":": una key puede
+    // contener ":", y con la concatenación simple dos ternas distintas podían
+    // producir el mismo mensaje a firmar.
+    const message = [scope, key, String(expiresAt)]
+      .map((field) => `${field.length}:${field}`)
+      .join('')
+    return crypto.createHmac('sha256', this.signingKey).update(message).digest('hex')
   }
 
   /**

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
-import { APP_INTERCEPTOR } from '@nestjs/core'
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 import { PrismaModule } from './prisma/prisma.module'
 import { EventsModule } from './common/events/events.module'
 import { StorageModule } from './common/storage/storage.module'
@@ -26,6 +26,9 @@ import { StockModule } from './modules/stock/stock.module'
 import { CalibrationTemplatesModule } from './modules/calibration-templates/calibration-templates.module'
 import { CalibrationsModule } from './modules/calibrations/calibrations.module'
 import { AuditInterceptor } from './common/interceptors/audit.interceptor'
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard'
+import { TenantGuard } from './common/guards/tenant.guard'
+import { RolesGuard } from './common/guards/roles.guard'
 
 @Module({
   imports: [
@@ -56,6 +59,16 @@ import { AuditInterceptor } from './common/interceptors/audit.interceptor'
     CalibrationsModule,
   ],
   providers: [
+    // Deny-by-default. Los guards eran opt-in por controller con `@UseGuards`, y
+    // ahi el default es abierto: un controller nuevo al que se le olvida el
+    // decorador queda sin autenticacion. Registrados globalmente, la regla se
+    // invierte y abrir una ruta exige `@Public()` explicito.
+    //
+    // El orden importa: JwtAuthGuard deja el usuario en la request, TenantGuard
+    // lee su organizationId y RolesGuard su rol.
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: TenantGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditInterceptor,

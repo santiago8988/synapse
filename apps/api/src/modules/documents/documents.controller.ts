@@ -18,6 +18,7 @@ import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
 import { DocumentStatus } from '@prisma/client'
 import { StorageService } from '../../common/storage/storage.service'
+import { assertUploadedPdf, PDF_UPLOAD_OPTIONS } from '../../common/storage/uploaded-pdf'
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -58,15 +59,15 @@ export class DocumentsController {
 
   @Post(':id/upload')
   @Roles('ADMIN', 'QUALITY_MANAGER')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', PDF_UPLOAD_OPTIONS))
   async uploadFile(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    if (!file) {
-      return { error: 'No se adjuntó ningún archivo' }
-    }
+    // Este endpoint no validaba nada: ni tipo ni tamaño. Entraba cualquier
+    // archivo y StorageController lo devolvía declarado como application/pdf.
+    assertUploadedPdf(file)
 
     const stored = await this.storage.put('documents', user.organizationId, file)
     const document = await this.service.setFileKey(id, user.organizationId, stored.key)
@@ -76,7 +77,7 @@ export class DocumentsController {
 
   @Post(':id/version')
   @Roles('ADMIN', 'QUALITY_MANAGER')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', PDF_UPLOAD_OPTIONS))
   async createVersion(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
@@ -84,8 +85,9 @@ export class DocumentsController {
     @Body() body: { reason?: string },
   ) {
     // Si no se adjunta archivo, la nueva versión hereda el de la anterior.
+    // Si se adjunta, se valida igual que en el upload.
     const stored = file
-      ? await this.storage.put('documents', user.organizationId, file)
+      ? await this.storage.put('documents', user.organizationId, assertUploadedPdf(file))
       : null
 
     return this.service.createNewVersion(id, user.organizationId, user.sub, {

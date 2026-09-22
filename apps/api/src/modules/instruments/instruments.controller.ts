@@ -18,6 +18,7 @@ import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
 import { StorageService } from '../../common/storage/storage.service'
+import { assertUploadedPdf, PDF_UPLOAD_OPTIONS } from '../../common/storage/uploaded-pdf'
 
 const CERT_PDF_MAX_BYTES = 10 * 1024 * 1024
 
@@ -77,20 +78,14 @@ export class InstrumentsController {
 
   @Post(':id/certificates')
   @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', PDF_UPLOAD_OPTIONS))
   async uploadCertificate(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
     @UploadedFile() file: Express.Multer.File,
     @Body() body: { result?: string; calibrationDate?: string; notes?: string },
   ) {
-    if (!file) throw new BadRequestException('No se adjuntó ningún archivo')
-    if (file.mimetype !== 'application/pdf') {
-      throw new BadRequestException('Solo se permiten archivos PDF (application/pdf)')
-    }
-    if (file.size > CERT_PDF_MAX_BYTES) {
-      throw new BadRequestException('El archivo supera el tamaño máximo permitido (10 MB)')
-    }
+    assertUploadedPdf(file, CERT_PDF_MAX_BYTES)
 
     if (body.result !== 'PASSED' && body.result !== 'FAILED') {
       throw new BadRequestException(

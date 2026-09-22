@@ -69,11 +69,24 @@ export class EntriesService {
     return { ...entry, data: signed }
   }
 
-  async findAll(recordId: string, organizationId: string) {
+  /**
+   * Verifica que el registro sea de la organización que pide, y lo devuelve.
+   *
+   * Una Entry se identifica por `recordId` + `entryId`, pero ninguno de los dos
+   * dice a qué organización pertenece: eso lo dice el Record. Sin este chequeo,
+   * conocer un par de ids alcanzaba para leer, editar, cerrar o borrarle los
+   * adjuntos a los registros de calidad de otro tenant.
+   */
+  private async assertRecordInOrg(recordId: string, organizationId: string) {
     const record = await this.prisma.record.findFirst({
       where: { id: recordId, organizationId },
     })
     if (!record) throw new NotFoundException('Registro no encontrado')
+    return record
+  }
+
+  async findAll(recordId: string, organizationId: string) {
+    const record = await this.assertRecordInOrg(recordId, organizationId)
 
     const entries = await this.prisma.entry.findMany({
       where: { recordId },
@@ -93,7 +106,9 @@ export class EntriesService {
     return Promise.all(entries.map((e) => this.signEntryFiles(e)))
   }
 
-  async findById(entryId: string, recordId: string) {
+  async findById(entryId: string, recordId: string, organizationId: string) {
+    await this.assertRecordInOrg(recordId, organizationId)
+
     const entry = await this.prisma.entry.findFirst({
       where: { id: entryId, recordId },
       include: { nonConformities: true },
@@ -393,12 +408,13 @@ export class EntriesService {
   async update(
     entryId: string,
     recordId: string,
+    organizationId: string,
     data: Record<string, unknown>,
     changedById: string,
     userRole: UserRole,
     transitionReason?: string,
   ) {
-    const entry = await this.findById(entryId, recordId)
+    const entry = await this.findById(entryId, recordId, organizationId)
 
     // Cargar el record con sus fields activos — lo necesitamos para validar
     // identifiers (si está COMPLETED), validar transitions (DROPDOWN-as-status)
@@ -474,8 +490,8 @@ export class EntriesService {
     return JSON.stringify(a) === JSON.stringify(b)
   }
 
-  async complete(entryId: string, recordId: string) {
-    await this.findById(entryId, recordId)
+  async complete(entryId: string, recordId: string, organizationId: string) {
+    await this.findById(entryId, recordId, organizationId)
 
     const updatedEntry = await this.prisma.entry.update({
       where: { id: entryId },
@@ -504,8 +520,13 @@ export class EntriesService {
    * el endpoint DELETE de archivos que necesita saber el `key` antes de
    * borrar el archivo físico.
    */
-  async getFieldValue(entryId: string, recordId: string, fieldId: string): Promise<unknown> {
-    const entry = await this.findById(entryId, recordId)
+  async getFieldValue(
+    entryId: string,
+    recordId: string,
+    organizationId: string,
+    fieldId: string,
+  ): Promise<unknown> {
+    const entry = await this.findById(entryId, recordId, organizationId)
     const data = (entry.data ?? {}) as Record<string, unknown>
     return data[fieldId] ?? null
   }
@@ -519,12 +540,13 @@ export class EntriesService {
   async setFieldValue(
     entryId: string,
     recordId: string,
+    organizationId: string,
     fieldId: string,
     value: unknown,
     changedById: string,
     userRole: UserRole,
   ) {
-    const entry = await this.findById(entryId, recordId)
+    const entry = await this.findById(entryId, recordId, organizationId)
     const existingData = (entry.data ?? {}) as Record<string, unknown>
 
     // Identifiers no se modifican en COMPLETED (consistente con update()).

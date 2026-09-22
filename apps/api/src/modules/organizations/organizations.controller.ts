@@ -36,8 +36,11 @@ export class OrganizationsController {
 
   @Delete(':id/whitelist/:whitelistId')
   @Roles('ADMIN')
-  removeWhitelist(@Param('whitelistId') whitelistId: string) {
-    return this.service.removeFromWhitelist(whitelistId)
+  removeWhitelist(
+    @CurrentUser() user: JwtPayload,
+    @Param('whitelistId') whitelistId: string,
+  ) {
+    return this.service.removeFromWhitelist(whitelistId, user.organizationId)
   }
 
   @Get(':id/users')
@@ -48,6 +51,7 @@ export class OrganizationsController {
   @Patch(':id/users/:userId')
   @Roles('ADMIN')
   updateUser(
+    @CurrentUser() user: JwtPayload,
     @Param('userId') userId: string,
     @Body() body: {
       role?: string
@@ -58,7 +62,7 @@ export class OrganizationsController {
       isActive?: boolean
     },
   ) {
-    return this.service.updateUser(userId, body)
+    return this.service.updateUser(userId, user.organizationId, body)
   }
 
   // ─── Positions ──────────────────────────────

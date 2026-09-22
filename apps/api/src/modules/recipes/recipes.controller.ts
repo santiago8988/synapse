@@ -19,6 +19,7 @@ import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
 import { StorageService } from '../../common/storage/storage.service'
+import { assertUploadedPdf, PDF_UPLOAD_OPTIONS } from '../../common/storage/uploaded-pdf'
 
 const STEPS_PDF_MAX_BYTES = 10 * 1024 * 1024
 
@@ -79,19 +80,13 @@ export class RecipesController {
 
   @Post(':id/steps-pdf')
   @Roles('ADMIN', 'QUALITY_MANAGER')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', PDF_UPLOAD_OPTIONS))
   async uploadStepsPdf(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    if (!file) throw new BadRequestException('No se adjuntó ningún archivo')
-    if (file.mimetype !== 'application/pdf') {
-      throw new BadRequestException('Solo se permiten archivos PDF (application/pdf)')
-    }
-    if (file.size > STEPS_PDF_MAX_BYTES) {
-      throw new BadRequestException('El archivo supera el tamaño máximo permitido (10 MB)')
-    }
+    assertUploadedPdf(file, STEPS_PDF_MAX_BYTES)
 
     // Una sola versión vigente del PDF de pasos: el anterior se borra.
     const previous = await this.service.getStepsPdf(id, user.organizationId)

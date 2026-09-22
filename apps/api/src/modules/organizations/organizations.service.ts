@@ -32,7 +32,16 @@ export class OrganizationsService {
   }
 
   async update(id: string, data: { name?: string; logoUrl?: string }) {
-    return this.prisma.organization.update({ where: { id }, data })
+    // Campos enumerados, no `data` entero: el tipo se borra en runtime y Prisma
+    // acepta cualquier campo del modelo, asi que el body podia cambiar el `slug`
+    // —que es unico y direcciona la organizacion— ademas de nombre y logo.
+    return this.prisma.organization.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined ? { name: data.name } : {}),
+        ...(data.logoUrl !== undefined ? { logoUrl: data.logoUrl } : {}),
+      },
+    })
   }
 
   async getWhitelist(organizationId: string) {
@@ -53,7 +62,15 @@ export class OrganizationsService {
     })
   }
 
-  async removeFromWhitelist(whitelistId: string) {
+  async removeFromWhitelist(whitelistId: string, organizationId: string) {
+    // El id llega de la URL: sin filtrar por organización, un ADMIN de cualquier
+    // tenant borraba las invitaciones pendientes de otro.
+    const entry = await this.prisma.emailWhitelist.findFirst({
+      where: { id: whitelistId, organizationId },
+      select: { id: true },
+    })
+    if (!entry) throw new NotFoundException('Invitación no encontrada')
+
     return this.prisma.emailWhitelist.delete({ where: { id: whitelistId } })
   }
 
@@ -65,8 +82,18 @@ export class OrganizationsService {
     })
   }
 
+  /**
+   * El `id` es de OrganizationUser y llega de la URL. Antes no se cruzaba con la
+   * organización de quien pide, así que un ADMIN de cualquier tenant podía pasar
+   * el id de un miembro de otro y cambiarle el `role` o ponerle `isActive: false`
+   * — escalada de privilegios y lockout cross-tenant con una sola request.
+   *
+   * `areaId` y `positionId` se validan por lo mismo: son ids libres en el body y
+   * apuntar a un área o un puesto de otra organización mezcla los tenants.
+   */
   async updateUser(
     id: string,
+    organizationId: string,
     data: {
       role?: string
       areaId?: string | null
@@ -76,6 +103,28 @@ export class OrganizationsService {
       isActive?: boolean
     },
   ) {
+    const member = await this.prisma.organizationUser.findFirst({
+      where: { id, organizationId },
+      select: { id: true },
+    })
+    if (!member) throw new NotFoundException('Usuario no encontrado en esta organización')
+
+    if (data.areaId) {
+      const area = await this.prisma.area.findFirst({
+        where: { id: data.areaId, organizationId },
+        select: { id: true },
+      })
+      if (!area) throw new NotFoundException('Área no encontrada')
+    }
+
+    if (data.positionId) {
+      const position = await this.prisma.position.findFirst({
+        where: { id: data.positionId, organizationId },
+        select: { id: true },
+      })
+      if (!position) throw new NotFoundException('Puesto no encontrado')
+    }
+
     return this.prisma.organizationUser.update({
       where: { id },
       data: {
