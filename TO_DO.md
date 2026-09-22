@@ -82,6 +82,24 @@ Tres decisiones que conviene tener presentes:
 Al cerrarse, `matrices` y `recipes` pudieron recibir `.strict()`, que era lo
 único que le faltaba a la Fase 1.1 del plan de seguridad.
 
+> **La base ya tenía las tablas.** Al aplicar la migración salió `42P07:
+> relation "MatrixRequiredInstrument" already exists`. Las cuatro tablas
+> existían en producción **con datos** (1, 2, 1 y 2 filas), creadas por un
+> `prisma db push` que nunca dejó migración ni schema en el repo. O sea que la
+> feature se diseñó entera —el schema de la base coincide casi exacto con el
+> que reconstruí leyendo el frontend—, se empujó a la base, y solo el frontend
+> llegó al código.
+>
+> La migración quedó **idempotente** (`IF NOT EXISTS` + FKs condicionales) para
+> que funcione igual en esta base y en una nueva. Sobre la base actual agregó
+> solo los dos índices únicos que faltaban.
+>
+> **Pendiente de decidir: `assignedById` no tiene foreign key.** Las 3 filas que
+> ya existían apuntan a `OrganizationUser` que no existen, así que la constraint
+> no se puede crear sin borrarlas antes. Son datos de prueba de aquel `db push`.
+> Si se borran, la FK se agrega en una migración de dos líneas y la trazabilidad
+> queda con integridad referencial completa.
+
 > **Queda una punta suelta, menor:** `api.records.addField`, `updateField` y
 > `deleteField` apuntan a `POST/PATCH/DELETE /records/:id/fields[...]`, que
 > tampoco existen — pero **nadie los llama** (0 call sites). Los reemplazó
@@ -149,6 +167,24 @@ existiendo.
 > original de este archivo era incorrecto: no era que el flag no se propagara,
 > sino que las entradas creadas por cascada no emitían ningún evento, así que
 > la cadena moría en el primer salto.
+
+**Drift concreto, medido el 2026-09-22** con
+`prisma migrate diff --from-schema-datasource --to-schema-datamodel`. Tres
+diferencias entre la base de producción y `schema.prisma`, ninguna relacionada
+con la trazabilidad de instrumental:
+
+| Objeto | Base | Schema |
+|---|---|---|
+| `Recipe` | `UNIQUE (organizationId, code, version)` | `UNIQUE (organizationId, code)` |
+| `Notification` | índice `(userId, organizationId, createdAt)` con otra forma | el declarado |
+| `EntryStatusLog.entryId` | FK con otra acción de borrado | `ON DELETE RESTRICT` |
+
+**El de `Recipe` es el que hay que mirar antes de tocar nada**: el schema pide
+un único más estricto que el de la base, y como versionar una fórmula crea
+filas con el mismo `code`, aplicarlo probablemente falle. Las migraciones
+nuevas no lo arrastran —`migrate deploy` solo corre los archivos de
+`migrations/`— pero cualquiera que corra `prisma db push` o `migrate dev` lo va
+a encontrar.
 
 ### 6. `EMAIL` sigue sin implementarse
 

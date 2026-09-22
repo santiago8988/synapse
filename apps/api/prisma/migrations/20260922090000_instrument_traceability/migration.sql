@@ -1,35 +1,41 @@
 -- Trazabilidad de instrumental (ISO 17025 §6.4).
 --
--- Que equipo se uso en que ensayo o lote. La UI de esta feature ya existia
--- entera en el frontend y el backend no tenia nada: ni modelo, ni servicio, ni
--- endpoint. Los bloques quedaban invisibles porque colgaban de un campo que la
--- API nunca devolvia, y lo que el usuario cargaba en "Instrumentos requeridos"
--- del formulario de matrices se descartaba en silencio. Ver TO_DO.md §26.
+-- Que equipo se uso en que ensayo o lote. La plantilla (Matriz para muestras,
+-- Formula para lotes) lista las etiquetas genericas que el metodo requiere
+-- —"Termometro", "pHmetro"—, y cada corrida les asigna el instrumento real.
+-- Ver TO_DO.md §26.
 --
--- Se declara en dos pasos:
+-- ─────────────────────────────────────────────────────────────────────────
+-- POR QUE ESTA MIGRACION ES IDEMPOTENTE
+-- ─────────────────────────────────────────────────────────────────────────
 --
---   1. La plantilla (Matriz para muestras, Formula para lotes) lista los
---      equipos que el metodo REQUIERE, por etiqueta generica: "Termometro",
---      "pHmetro". Son labels y no instrumentos concretos porque la plantilla
---      describe el metodo, no una corrida.
---   2. Cada muestra o lote ASIGNA a cada etiqueta el instrumento real que se
---      uso. Ahi la trazabilidad se vuelve verificable: la asignacion apunta a
---      un Instrument, con su estado, su proxima calibracion y sus certificados.
+-- Las cuatro tablas YA EXISTEN en la base de produccion, con datos. Llegaron
+-- por un `prisma db push` que nunca dejo migracion ni schema en el repo: la
+-- feature se diseño, se empujo a la base y solo el frontend llego al codigo.
+-- Un `CREATE TABLE` pelado falla con 42P07 (relation already exists) y deja la
+-- migracion trabada, que es exactamente lo que paso en el primer intento.
 --
--- Solo agrega tablas. No toca ninguna existente, asi que el rollback es
--- DROP TABLE de las cuatro y no hay backfill que hacer: arrancan vacias y las
--- pantallas que las leen ya toleran la lista vacia.
+-- Con IF NOT EXISTS, esta migracion hace lo correcto en los dos escenarios:
 --
--- Las asignaciones NO son append-only: mientras la corrida esta abierta se
--- puede corregir a que equipo se apunto. Queda registrado quien asigno y
--- cuando; el paper trail del acto vive en AuditLog, que loguea el POST y el
--- DELETE.
+--   * base nueva      -> crea todo
+--   * base con drift  -> crea solo lo que falta (los dos indices unicos)
+--
+-- No usa `prisma db push` como arreglo justamente para que el repo quede con
+-- la migracion que describe el estado, y la proxima base arranque igual.
+--
+-- ROLLBACK: DROP TABLE de las cuatro. No hay backfill: ninguna tabla existente
+-- se toca. Ojo con que en la base actual eso borraria las filas que ya estan.
+--
+-- NOTA sobre `assignedById`: queda como columna sin foreign key. Las filas que
+-- ya existen apuntan a OrganizationUser que no existen, asi que la constraint
+-- no se puede crear sin limpiarlas primero. Es una decision pendiente, anotada
+-- en TO_DO.md §26.
 
 -- ─────────────────────────────────────────────
 -- Equipos que una plantilla requiere
 -- ─────────────────────────────────────────────
 
-CREATE TABLE "MatrixRequiredInstrument" (
+CREATE TABLE IF NOT EXISTS "MatrixRequiredInstrument" (
     "id"       TEXT    NOT NULL,
     "matrixId" TEXT    NOT NULL,
     -- Etiqueta generica del equipo, no un instrumento concreto.
@@ -39,15 +45,10 @@ CREATE TABLE "MatrixRequiredInstrument" (
     CONSTRAINT "MatrixRequiredInstrument_pkey" PRIMARY KEY ("id")
 );
 
-CREATE INDEX "MatrixRequiredInstrument_matrixId_idx" ON "MatrixRequiredInstrument"("matrixId");
+CREATE INDEX IF NOT EXISTS "MatrixRequiredInstrument_matrixId_idx"
+    ON "MatrixRequiredInstrument"("matrixId");
 
--- Cascade igual que MatrixParameter y MatrixCondition: la lista de equipos es
--- parte de la definicion de la matriz y no sobrevive sin ella.
-ALTER TABLE "MatrixRequiredInstrument"
-    ADD CONSTRAINT "MatrixRequiredInstrument_matrixId_fkey"
-    FOREIGN KEY ("matrixId") REFERENCES "Matrix"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
-CREATE TABLE "RecipeRequiredInstrument" (
+CREATE TABLE IF NOT EXISTS "RecipeRequiredInstrument" (
     "id"       TEXT    NOT NULL,
     "recipeId" TEXT    NOT NULL,
     "label"    TEXT    NOT NULL,
@@ -56,17 +57,14 @@ CREATE TABLE "RecipeRequiredInstrument" (
     CONSTRAINT "RecipeRequiredInstrument_pkey" PRIMARY KEY ("id")
 );
 
-CREATE INDEX "RecipeRequiredInstrument_recipeId_idx" ON "RecipeRequiredInstrument"("recipeId");
-
-ALTER TABLE "RecipeRequiredInstrument"
-    ADD CONSTRAINT "RecipeRequiredInstrument_recipeId_fkey"
-    FOREIGN KEY ("recipeId") REFERENCES "Recipe"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+CREATE INDEX IF NOT EXISTS "RecipeRequiredInstrument_recipeId_idx"
+    ON "RecipeRequiredInstrument"("recipeId");
 
 -- ─────────────────────────────────────────────
 -- Instrumento real asignado a cada etiqueta
 -- ─────────────────────────────────────────────
 
-CREATE TABLE "SampleInstrumentAssignment" (
+CREATE TABLE IF NOT EXISTS "SampleInstrumentAssignment" (
     "id"           TEXT         NOT NULL,
     "sampleId"     TEXT         NOT NULL,
     "instrumentId" TEXT         NOT NULL,
@@ -81,36 +79,21 @@ CREATE TABLE "SampleInstrumentAssignment" (
     CONSTRAINT "SampleInstrumentAssignment_pkey" PRIMARY KEY ("id")
 );
 
--- Una etiqueta se cubre con un solo equipo, y un equipo no cubre dos etiquetas
--- de la misma muestra. La UI ya filtraba los instrumentos ya usados; esto lo
--- hace cierto tambien cuando el pedido no viene de la UI.
-CREATE UNIQUE INDEX "SampleInstrumentAssignment_sampleId_label_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "SampleInstrumentAssignment_sampleId_label_key"
     ON "SampleInstrumentAssignment"("sampleId", "label");
-CREATE UNIQUE INDEX "SampleInstrumentAssignment_sampleId_instrumentId_key"
+
+-- Un equipo no cubre dos etiquetas de la misma muestra. La UI ya filtraba los
+-- instrumentos ya usados; esto lo hace cierto tambien cuando el pedido no
+-- viene de la UI. Es lo unico que esta migracion agrega sobre la base actual.
+CREATE UNIQUE INDEX IF NOT EXISTS "SampleInstrumentAssignment_sampleId_instrumentId_key"
     ON "SampleInstrumentAssignment"("sampleId", "instrumentId");
-CREATE INDEX "SampleInstrumentAssignment_sampleId_idx"
-    ON "SampleInstrumentAssignment"("sampleId");
+
 -- Para responder "en que ensayos se uso este equipo", que es la pregunta que
 -- hace un auditor cuando una calibracion sale no conforme.
-CREATE INDEX "SampleInstrumentAssignment_instrumentId_idx"
+CREATE INDEX IF NOT EXISTS "SampleInstrumentAssignment_instrumentId_idx"
     ON "SampleInstrumentAssignment"("instrumentId");
 
-ALTER TABLE "SampleInstrumentAssignment"
-    ADD CONSTRAINT "SampleInstrumentAssignment_sampleId_fkey"
-    FOREIGN KEY ("sampleId") REFERENCES "Sample"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- Sin cascade: un instrumento no se borra, se da de baja (DECOMMISSIONED). Si
--- alguna vez se borrara, la FK tiene que frenarlo antes de que se lleve la
--- evidencia de los ensayos donde se uso.
-ALTER TABLE "SampleInstrumentAssignment"
-    ADD CONSTRAINT "SampleInstrumentAssignment_instrumentId_fkey"
-    FOREIGN KEY ("instrumentId") REFERENCES "Instrument"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE "SampleInstrumentAssignment"
-    ADD CONSTRAINT "SampleInstrumentAssignment_assignedById_fkey"
-    FOREIGN KEY ("assignedById") REFERENCES "OrganizationUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
-CREATE TABLE "BatchInstrumentAssignment" (
+CREATE TABLE IF NOT EXISTS "BatchInstrumentAssignment" (
     "id"           TEXT         NOT NULL,
     "batchId"      TEXT         NOT NULL,
     "instrumentId" TEXT         NOT NULL,
@@ -122,23 +105,64 @@ CREATE TABLE "BatchInstrumentAssignment" (
     CONSTRAINT "BatchInstrumentAssignment_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "BatchInstrumentAssignment_batchId_label_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "BatchInstrumentAssignment_batchId_label_key"
     ON "BatchInstrumentAssignment"("batchId", "label");
-CREATE UNIQUE INDEX "BatchInstrumentAssignment_batchId_instrumentId_key"
+
+CREATE UNIQUE INDEX IF NOT EXISTS "BatchInstrumentAssignment_batchId_instrumentId_key"
     ON "BatchInstrumentAssignment"("batchId", "instrumentId");
-CREATE INDEX "BatchInstrumentAssignment_batchId_idx"
-    ON "BatchInstrumentAssignment"("batchId");
-CREATE INDEX "BatchInstrumentAssignment_instrumentId_idx"
+
+CREATE INDEX IF NOT EXISTS "BatchInstrumentAssignment_instrumentId_idx"
     ON "BatchInstrumentAssignment"("instrumentId");
 
-ALTER TABLE "BatchInstrumentAssignment"
-    ADD CONSTRAINT "BatchInstrumentAssignment_batchId_fkey"
-    FOREIGN KEY ("batchId") REFERENCES "Batch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- ─────────────────────────────────────────────
+-- Foreign keys
+-- ─────────────────────────────────────────────
+--
+-- Postgres no admite IF NOT EXISTS en ADD CONSTRAINT, asi que cada una se
+-- agrega solo si no esta. En la base actual ya existen todas y este bloque no
+-- hace nada; en una base nueva las crea.
 
-ALTER TABLE "BatchInstrumentAssignment"
-    ADD CONSTRAINT "BatchInstrumentAssignment_instrumentId_fkey"
-    FOREIGN KEY ("instrumentId") REFERENCES "Instrument"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'MatrixRequiredInstrument_matrixId_fkey') THEN
+        -- Cascade igual que MatrixParameter y MatrixCondition: la lista de
+        -- equipos es parte de la definicion de la matriz.
+        ALTER TABLE "MatrixRequiredInstrument"
+            ADD CONSTRAINT "MatrixRequiredInstrument_matrixId_fkey"
+            FOREIGN KEY ("matrixId") REFERENCES "Matrix"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
 
-ALTER TABLE "BatchInstrumentAssignment"
-    ADD CONSTRAINT "BatchInstrumentAssignment_assignedById_fkey"
-    FOREIGN KEY ("assignedById") REFERENCES "OrganizationUser"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'RecipeRequiredInstrument_recipeId_fkey') THEN
+        ALTER TABLE "RecipeRequiredInstrument"
+            ADD CONSTRAINT "RecipeRequiredInstrument_recipeId_fkey"
+            FOREIGN KEY ("recipeId") REFERENCES "Recipe"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SampleInstrumentAssignment_sampleId_fkey') THEN
+        ALTER TABLE "SampleInstrumentAssignment"
+            ADD CONSTRAINT "SampleInstrumentAssignment_sampleId_fkey"
+            FOREIGN KEY ("sampleId") REFERENCES "Sample"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+
+    -- Sin cascade: un instrumento no se borra, se da de baja. Si alguna vez se
+    -- borrara, la FK tiene que frenarlo antes de que se lleve la evidencia de
+    -- los ensayos donde se uso.
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SampleInstrumentAssignment_instrumentId_fkey') THEN
+        ALTER TABLE "SampleInstrumentAssignment"
+            ADD CONSTRAINT "SampleInstrumentAssignment_instrumentId_fkey"
+            FOREIGN KEY ("instrumentId") REFERENCES "Instrument"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'BatchInstrumentAssignment_batchId_fkey') THEN
+        ALTER TABLE "BatchInstrumentAssignment"
+            ADD CONSTRAINT "BatchInstrumentAssignment_batchId_fkey"
+            FOREIGN KEY ("batchId") REFERENCES "Batch"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'BatchInstrumentAssignment_instrumentId_fkey') THEN
+        ALTER TABLE "BatchInstrumentAssignment"
+            ADD CONSTRAINT "BatchInstrumentAssignment_instrumentId_fkey"
+            FOREIGN KEY ("instrumentId") REFERENCES "Instrument"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+    END IF;
+END
+$$;

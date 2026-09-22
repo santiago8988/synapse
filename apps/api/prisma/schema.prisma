@@ -242,8 +242,6 @@ model OrganizationUser {
   approvalDecisions  ApprovalDecision[] @relation("ApprovalDecider")
   trainings          Training[]
   ledAreas           Area[]             @relation("AreaLeader")
-  sampleInstrumentAssignments SampleInstrumentAssignment[]
-  batchInstrumentAssignments  BatchInstrumentAssignment[]
 
   @@unique([userId, organizationId])
   @@index([organizationId])
@@ -1102,17 +1100,18 @@ model SampleInstrumentAssignment {
   label        String
   order        Int
   assignedAt   DateTime @default(now())
+  // Sin FK a OrganizationUser: las filas que ya existen en la base apuntan a
+  // usuarios que no existen, asi que la constraint no se puede crear sin
+  // limpiarlas antes. Ver TO_DO.md §26.
   assignedById String
 
-  sample     Sample           @relation(fields: [sampleId], references: [id], onDelete: Cascade)
-  instrument Instrument       @relation(fields: [instrumentId], references: [id])
-  assignedBy OrganizationUser @relation(fields: [assignedById], references: [id])
+  sample     Sample     @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+  instrument Instrument @relation(fields: [instrumentId], references: [id])
 
   // Una etiqueta se cubre con un solo equipo, y un equipo no cubre dos
   // etiquetas de la misma muestra.
   @@unique([sampleId, label])
   @@unique([sampleId, instrumentId])
-  @@index([sampleId])
   @@index([instrumentId])
 }
 
@@ -1123,14 +1122,13 @@ model BatchInstrumentAssignment {
   label        String
   order        Int
   assignedAt   DateTime @default(now())
+  // Ver la nota de SampleInstrumentAssignment.
   assignedById String
 
-  batch      Batch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  instrument Instrument       @relation(fields: [instrumentId], references: [id])
-  assignedBy OrganizationUser @relation(fields: [assignedById], references: [id])
+  batch      Batch      @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  instrument Instrument @relation(fields: [instrumentId], references: [id])
 
   @@unique([batchId, label])
   @@unique([batchId, instrumentId])
-  @@index([batchId])
   @@index([instrumentId])
 }
