@@ -11,28 +11,79 @@
 
 Lo urgente ya está cerrado: no queda un camino conocido para cruzar tenants ni para subir un archivo arbitrario. Lo que sigue es estructural.
 
-**Estado del código:** 3 commits en `fix/aislamiento-multitenant-y-hardening`, sin pushear. Typecheck limpio (api y web), `pnpm build` completo en verde, 213 tests (eran 155).
+**Estado del código:** rama `fix/aislamiento-multitenant-y-hardening`, 14 commits pusheados. Typecheck limpio (api y web), `pnpm build` completo, **313 tests** (eran 155). Migración aplicada en producción.
 
 | Commit | Qué |
 |---|---|
 | `47d18c5` | los arreglos de §1: IDOR, mass assignment, revocación de JWT, guards globales, subidas, storage, headers |
-| `25fc23a` | primer tramo de la Fase 1.1: `@ZodBody` + interceptor global, 8 endpoints |
+| `25fc23a` | Fase 1.1: `@ZodBody` + interceptor global, `organizations` y `areas` |
 | `364ad6a` | `packages/validators` emite CommonJS — sin esto el dist de la API no arrancaba |
 | `229db0e` | este documento |
 | `74f605d` | Fase 1.1 en `documents` y `entries`, más el acotado de `Entry.data` |
 | `5e05081` | Fase 1.1 en `auth` — la superficie pública |
+| `c539a4d` | TO_DO §25: el mensaje genérico de los errores de validación |
 | `fa45817` | Fase 1.1 en `records` y flujos |
 | `4b7e4ce` | Fase 1.1 en los 11 módulos restantes — 43 de 45 `@Body()` |
 | `8dcfd9e` | seis rutas que el frontend llama y el backend no tiene (TO_DO §26 y §27) |
 | `8483056` | `.strict()` en 41 objetos |
 | `44feb5f` | ciclo de producción de lotes (TO_DO §27) |
-| (siguiente) | trazabilidad de instrumental (TO_DO §26) + `.strict()` en matrices y recipes — **cierra la Fase 1.1** |
+| `6e44cef` | trazabilidad de instrumental (TO_DO §26) + `.strict()` en matrices y recipes |
+| `6264123` | migración idempotente — las tablas ya existían en producción |
+
+---
+
+## 0.1 Para retomar en otra sesión
+
+**Dónde está todo:** la rama tiene los 14 commits y está pusheada. Este documento tiene el plan por fases; `TO_DO.md` tiene lo que se encontró de paso y no es de seguridad (§5, §25, §26, §27).
+
+### Qué está terminado
+
+- **§1 completo** — los siete agujeros de aislamiento, mass assignment, revocación de JWT, guards globales, validación de subidas, derivación de la clave de storage y headers.
+- **Fase 1.1 completa** — los 45 `@Body()` de la API: 43 con schema y `.strict()`, y los 2 restantes son multipart, donde el decorador no funciona por diseño (el interceptor global corre antes que multer).
+- **TO_DO §27** — ciclo de producción de lotes: `stock-check`, `start` y `complete`.
+- **TO_DO §26** — trazabilidad de instrumental (ISO 17025 §6.4), con su migración aplicada.
+
+### Lo primero que hay que mirar al volver
+
+1. **Una decisión pendiente, chica**: las 3 filas huérfanas de `SampleInstrumentAssignment` / `BatchInstrumentAssignment` tienen `assignedById` apuntando a usuarios que no existen (datos de prueba de un `db push` viejo). Mientras estén, la FK no se puede crear. Si se borran, es una migración de dos líneas. Detalle en `TO_DO.md` §26.
+2. **Drift de base preexistente** (`TO_DO.md` §5). El de `Recipe` es el peligroso: el schema pide un unique más estricto que el de la base y versionar una fórmula crea filas con el mismo `code`, así que aplicarlo probablemente falle. `migrate deploy` no lo arrastra, pero `db push` o `migrate dev` sí lo encuentran.
+3. **`TO_DO.md` §25** — los errores de validación no dicen qué campo falló. Ahora afecta a los 43 endpoints migrados. Es chico y cambia el contrato de error de toda la API, así que conviene hacerlo de una vez.
+
+### Cómo seguir el plan
+
+El siguiente tramo es **Fase 1.2** (rate limiting + Redis) o **Fase 1.3** (cookie `httpOnly` + CSP sin `unsafe-inline`). La 1.3 es la más cara y la que cierra la última vía de takeover por XSS; la 1.2 es más barata pero no cierra nada que esté abierto hoy.
+
+### Cómo verificar que todo sigue en pie
+
+```bash
+pnpm --filter @synapse/api test      # 313 tests
+pnpm typecheck                        # api y web
+pnpm build                            # el build completo, que es lo que corre CI
+```
+
+Y lo que no es obvio y conviene repetir después de tocar el backend:
+
+```bash
+# El dist tiene que ARRANCAR, no solo compilar: packages/validators entra por
+# require en runtime y un `main` mal apuntado no lo detecta ni tsc ni el build.
+cd apps/api && node dist/main.js
+
+# Las rutas que Nest registra tienen que coincidir con las que el cliente pega.
+# Asi aparecieron TO_DO §26 y §27.
+```
+
+### Dos reglas que salieron de este trabajo y conviene no perder
+
+- **El tipo inline de un controller no es la fuente de verdad.** Se borra al compilar; lo que manda es lo que el service escribe. Copiarlo para armar un schema rompió cosas en silencio cuatro veces (`addFields` de records, `fromStock` de recipes, `periodicity` de calibration-templates).
+- **El riesgo de validar no es dejar pasar algo: es rechazar algo legítimo.** Antes de cerrar un schema hay que mirar qué manda el frontend hoy.
+
+---
 
 **Las tres cosas que más mueven la aguja, en orden:**
 
-1. **Validación de entrada en runtime** (Fase 1.1) — hoy no existe. Es la causa raíz de tres vulnerabilidades distintas que aparecieron en esta auditoría — y la tercera se encontró **verificando este mismo plan**, después de dar la clase por cerrada.
-2. **Aislamiento multitenant en la base con RLS** (Fase 2.4) — hoy el aislamiento es una convención que se olvidó 6 veces.
-3. **Token fuera de `localStorage`** (Fase 1.3) — hoy un XSS entrega la sesión, y la CSP no lo frena.
+1. ~~**Validación de entrada en runtime** (Fase 1.1)~~ — **hecha**. Era la causa raíz de tres vulnerabilidades distintas de esta auditoría, y la tercera apareció **verificando este mismo plan**, después de dar la clase por cerrada. Hoy los 43 endpoints con body JSON validan con `.strict()`.
+2. **Token fuera de `localStorage`** (Fase 1.3) — hoy un XSS entrega la sesión, y la CSP no lo frena. **Es la que queda más arriba**: es la última vía de takeover abierta.
+3. **Aislamiento multitenant en la base con RLS** (Fase 2.4) — el aislamiento sigue siendo una convención que se olvidó 7 veces. Los tests de regresión tapan los siete casos conocidos, no la clase.
 
 **Lo que NO hay que copiar de BBSplap:** el servicio de autorización separado con aserciones Ed25519, FIDO2 en commits, y todo el hardening de contenedores. Ver §4.
 
