@@ -5,7 +5,13 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
-import { Prisma } from '@prisma/client'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  createRecordActionSchema,
+  updateRecordActionSchema,
+  type CreateRecordActionInput,
+  type UpdateRecordActionInput,
+} from '@synapse/validators'
 
 /**
  * Flujos (`RecordAction`) de un registro.
@@ -39,39 +45,23 @@ export class RecordActionsController {
 
   @Post()
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(createRecordActionSchema)
   create(
     @Param('recordId') recordId: string,
     @CurrentUser() user: JwtPayload,
-    @Body()
-    body: {
-      targetRecordId: string
-      fieldMapping: Array<{ sourceFieldId: string; targetFieldId: string }>
-      trigger?: 'ENTRY_CREATED' | 'ENTRY_COMPLETED' | 'FIELD_VALUE_CHANGED' | 'COMPARISON_FAILED'
-      condition?: Prisma.InputJsonValue | null
-      allowCascade?: boolean
-      actionType?: 'CREATE_ENTRY' | 'UPDATE_FIELD' | 'NOTIFY' | 'EMAIL' | 'WEBHOOK'
-      actionConfig?: Prisma.InputJsonValue | null
-    },
+    @Body() body: CreateRecordActionInput,
   ) {
     return this.service.addAction(recordId, user.organizationId, body)
   }
 
   @Patch(':id')
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(updateRecordActionSchema)
   update(
     @Param('recordId') recordId: string,
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body()
-    body: {
-      targetRecordId?: string
-      fieldMapping?: Array<{ sourceFieldId: string; targetFieldId: string }>
-      trigger?: 'ENTRY_CREATED' | 'ENTRY_COMPLETED' | 'FIELD_VALUE_CHANGED' | 'COMPARISON_FAILED'
-      condition?: Prisma.InputJsonValue | null
-      allowCascade?: boolean
-      actionType?: 'CREATE_ENTRY' | 'UPDATE_FIELD' | 'NOTIFY' | 'EMAIL' | 'WEBHOOK'
-      actionConfig?: Prisma.InputJsonValue | null
-    },
+    @Body() body: UpdateRecordActionInput,
   ) {
     return this.service.updateAction(recordId, id, user.organizationId, body)
   }

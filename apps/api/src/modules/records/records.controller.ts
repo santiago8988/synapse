@@ -5,7 +5,13 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
-import { Prisma, RecordType, FieldType } from '@prisma/client'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  createRecordSchema,
+  editRecordSchema,
+  type CreateRecordInput,
+  type EditRecordInput,
+} from '@synapse/validators'
 
 @Controller('records')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -23,29 +29,8 @@ export class RecordsController {
 
   @Post()
   @Roles('ADMIN', 'QUALITY_MANAGER')
-  create(
-    @CurrentUser() user: JwtPayload,
-    @Body()
-    body: {
-      name: string
-      type: RecordType
-      areaIds?: string[]
-      documentId?: string
-      periodicity?: number
-      notifyDaysBefore?: number
-      fields: Array<{
-        label: string
-        fieldType: FieldType
-        order: number
-        isIdentifier?: boolean
-        isRequired?: boolean
-        relatedRecordId?: string
-        relatedFieldIds?: string[]
-        comparisonConfig?: Prisma.InputJsonValue
-        formulaConfig?: Prisma.InputJsonValue
-      }>
-    },
-  ) {
+  @ZodBody(createRecordSchema)
+  create(@CurrentUser() user: JwtPayload, @Body() body: CreateRecordInput) {
     return this.service.create(user.organizationId, user.sub, body)
   }
 
@@ -66,35 +51,11 @@ export class RecordsController {
 
   @Patch(':id')
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(editRecordSchema)
   editWithVersion(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body()
-    body: {
-      name?: string
-      areaIds?: string[]
-      periodicity?: number
-      notifyDaysBefore?: number
-      changeReason: string
-      addFields?: Array<{
-        label: string
-        fieldType: FieldType
-        order: number
-        isIdentifier?: boolean
-        isRequired?: boolean
-        comparisonConfig?: Prisma.InputJsonValue
-        formulaConfig?: Prisma.InputJsonValue
-      }>
-      removeFieldIds?: string[]
-      updateFields?: Array<{
-        id: string
-        label?: string
-        order?: number
-        isRequired?: boolean
-        comparisonConfig?: Prisma.InputJsonValue
-        formulaConfig?: Prisma.InputJsonValue
-      }>
-    },
+    @Body() body: EditRecordInput,
   ) {
     return this.service.editWithVersion(id, user.organizationId, body)
   }

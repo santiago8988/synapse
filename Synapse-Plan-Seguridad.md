@@ -20,7 +20,8 @@ Lo urgente ya está cerrado: no queda un camino conocido para cruzar tenants ni 
 | `364ad6a` | `packages/validators` emite CommonJS — sin esto el dist de la API no arrancaba |
 | `229db0e` | este documento |
 | `74f605d` | Fase 1.1 en `documents` y `entries`, más el acotado de `Entry.data` |
-| (siguiente) | Fase 1.1 en `auth` — la superficie pública |
+| `5e05081` | Fase 1.1 en `auth` — la superficie pública |
+| (siguiente) | Fase 1.1 en `records` y flujos |
 
 **Las tres cosas que más mueven la aguja, en orden:**
 
@@ -197,9 +198,11 @@ Y lo que cierra la clase no es el 400: es que el interceptor **reemplaza `reques
 
 1. ~~Registrar `ZodValidationPipe` como pipe global.~~ **Hecho** como `@ZodBody` + `ZodValidationInterceptor` global, registrado antes del `AuditInterceptor` para que el audit log guarde el body ya limpio.
 2. Un schema por endpoint de escritura. `.strict()` **al final de la fase**, no al principio: es el equivalente del `extra="forbid"` de BBSplap, pero activarlo antes de saber qué manda realmente el frontend convierte en 400 de producción un campo de más que hoy se descarta sin consecuencia.
-3. Empezar por los endpoints que escriben, en este orden: `organizations` ✅, `areas` ✅, `documents` ✅, `entries` ✅, `auth` ✅, `records`.
+3. Empezar por los endpoints que escriben, en este orden: `organizations` ✅, `areas` ✅, `documents` ✅, `entries` ✅, `auth` ✅, `records` ✅.
 
-   El orden del plan no incluía `auth`, y debería haber ido primero: sus tres endpoints con body son `@Public()`, o sea **la superficie entera que se atiende sin token**. Van 15 de los 45 `@Body()` de la API; de los 30 que faltan, 6 son multipart y no llevan schema.
+   El orden del plan no incluía `auth`, y debería haber ido primero: sus tres endpoints con body son `@Public()`, o sea **la superficie entera que se atiende sin token**. Van 19 de los 45 `@Body()` de la API; de los 26 que faltan, 6 son multipart y no llevan schema.
+
+   Las columnas Json de configuración (`comparisonConfig`, `formulaConfig`, `condition`, `actionConfig`) se acotan en forma pero **no en significado**: existen schemas semánticos para las tres y aplicarlos en la entrada rompería el guardado de configuraciones incompletas, que en flujos es un estado de edición normal y deliberado. El motivo largo está en `packages/validators/src/json.ts`.
 4. Reutilizar los schemas de `packages/validators` que ya existen; extender donde falten. **Hecho** para los 8 endpoints migrados: se extendió `updateOrgUserSchema`, al que le faltaban `positionId`, `phone` y `signature`, y se agregaron `createPosition`, `setAreaLeader` y `addTraining`.
 5. ~~Acotar `Entry.data`~~ **Hecho** (`entryDataSchema`): 300 claves, 10 000 caracteres por texto, 500 items por lista y profundidad declarada explícita en vez de `z.lazy()`. El tamaño total ya estaba acotado aguas arriba —el body parser de Express corta el JSON en 100 kB—; lo que faltaba era la forma. Los números son holgados a propósito: el objetivo de la fase no es afinar cuotas sino que deje de entrar cualquier cosa.
 
