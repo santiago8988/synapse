@@ -242,6 +242,8 @@ model OrganizationUser {
   approvalDecisions  ApprovalDecision[] @relation("ApprovalDecider")
   trainings          Training[]
   ledAreas           Area[]             @relation("AreaLeader")
+  sampleInstrumentAssignments SampleInstrumentAssignment[]
+  batchInstrumentAssignments  BatchInstrumentAssignment[]
 
   @@unique([userId, organizationId])
   @@index([organizationId])
@@ -458,6 +460,8 @@ model Instrument {
   record       Record                  @relation(fields: [recordId], references: [id])
   statusLogs   InstrumentStatusLog[]
   certificates InstrumentCertificate[]
+  sampleAssignments SampleInstrumentAssignment[]
+  batchAssignments  BatchInstrumentAssignment[]
 
   @@index([organizationId])
   @@index([recordId])
@@ -566,6 +570,7 @@ model Recipe {
   usedAsIngredientIn   RecipeIngredient[] @relation("IngredientStockRecipe")
   steps                RecipeStep[]
   batches              Batch[]
+  requiredInstruments  RecipeRequiredInstrument[]
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -625,6 +630,7 @@ model Batch {
   record       Record            @relation(fields: [recordId], references: [id])
   recipe       Recipe?           @relation(fields: [recipeId], references: [id])
   statusLogs   BatchStatusLog[]
+  instrumentAssignments BatchInstrumentAssignment[]
 
   @@index([organizationId])
   @@index([recordId])
@@ -667,6 +673,7 @@ model Sample {
   entry        Entry        @relation(fields: [entryId], references: [id])
   record       Record       @relation(fields: [recordId], references: [id])
   matrix       Matrix?      @relation(fields: [matrixId], references: [id])
+  instrumentAssignments SampleInstrumentAssignment[]
 
   @@index([organizationId])
   @@index([recordId])
@@ -693,6 +700,7 @@ model Matrix {
   parameters   MatrixParameter[]
   conditions   MatrixCondition[]
   samples      Sample[]
+  requiredInstruments MatrixRequiredInstrument[]
 
   @@index([organizationId])
 }
@@ -1044,4 +1052,85 @@ model EntryStatusLog {
   @@index([recordId])
   @@index([organizationId])
   @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────
+// TRAZABILIDAD DE INSTRUMENTAL (ISO 17025 §6.4)
+// ─────────────────────────────────────────────
+//
+// Qué equipo se usó en qué ensayo o lote. Se declara en dos pasos:
+//
+//   1. La plantilla —una Matriz para muestras, una Fórmula para lotes— lista
+//      los equipos que el método REQUIERE, por etiqueta genérica
+//      ("Termómetro", "pHmetro"). Son labels y no instrumentos concretos
+//      porque la plantilla describe el método, no una corrida.
+//   2. Cada muestra o lote ASIGNA a cada etiqueta el instrumento real que se
+//      usó. Ahí es donde la trazabilidad se vuelve un hecho verificable: la
+//      asignación apunta a un Instrument, que tiene su estado, su próxima
+//      calibración y sus certificados.
+//
+// Las asignaciones no son append-only: mientras la corrida está abierta se
+// puede corregir a qué equipo se apuntó. Lo que sí queda registrado es quién
+// asignó y cuándo.
+
+model MatrixRequiredInstrument {
+  id       String @id @default(cuid())
+  matrixId String
+  label    String
+  order    Int
+
+  matrix Matrix @relation(fields: [matrixId], references: [id], onDelete: Cascade)
+
+  @@index([matrixId])
+}
+
+model RecipeRequiredInstrument {
+  id       String @id @default(cuid())
+  recipeId String
+  label    String
+  order    Int
+
+  recipe Recipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([recipeId])
+}
+
+model SampleInstrumentAssignment {
+  id           String   @id @default(cuid())
+  sampleId     String
+  instrumentId String
+  label        String
+  order        Int
+  assignedAt   DateTime @default(now())
+  assignedById String
+
+  sample     Sample           @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+  instrument Instrument       @relation(fields: [instrumentId], references: [id])
+  assignedBy OrganizationUser @relation(fields: [assignedById], references: [id])
+
+  // Una etiqueta se cubre con un solo equipo, y un equipo no cubre dos
+  // etiquetas de la misma muestra.
+  @@unique([sampleId, label])
+  @@unique([sampleId, instrumentId])
+  @@index([sampleId])
+  @@index([instrumentId])
+}
+
+model BatchInstrumentAssignment {
+  id           String   @id @default(cuid())
+  batchId      String
+  instrumentId String
+  label        String
+  order        Int
+  assignedAt   DateTime @default(now())
+  assignedById String
+
+  batch      Batch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  instrument Instrument       @relation(fields: [instrumentId], references: [id])
+  assignedBy OrganizationUser @relation(fields: [assignedById], references: [id])
+
+  @@unique([batchId, label])
+  @@unique([batchId, instrumentId])
+  @@index([batchId])
+  @@index([instrumentId])
 }

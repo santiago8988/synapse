@@ -292,6 +292,23 @@ Para saltear el log en un endpoint específico: `@AuditIgnore()` (justificar el 
 
 6. **Estado de instrumental**: un `Instrument` en `IN_CALIBRATION` o `IN_REPAIR` no puede ser referenciado por una nueva Entry. Validar en `entries.service.create` cuando un campo `RELATED_ENTRY` apunta a un registro `INSTRUMENTAL`.
 
+   **Trazabilidad de equipamiento (ISO 17025 §6.4)** — qué instrumento físico
+   se usó en qué ensayo o lote. Se declara en dos pasos: la plantilla
+   (`Matrix` para muestras, `Recipe` para lotes) lista etiquetas genéricas en
+   `requiredInstruments` —"Termómetro", "pHmetro"—, y cada corrida les asigna
+   el instrumento real vía `SampleInstrumentAssignment` /
+   `BatchInstrumentAssignment`.
+
+   La etiqueta **se copia** a la asignación en vez de referenciarse por id:
+   editar la plantilla no puede cambiar lo que dice una corrida ya cerrada.
+
+   A diferencia de la regla de arriba, asignar **no** valida el estado del
+   instrumento. Si de hecho se usó un equipo en calibración o dado de baja, el
+   registro tiene que decirlo; bloquearlo empuja a falsear el dato. La UI
+   muestra la condición con un chip y el `AuditLog` guarda quién asignó qué.
+   Las asignaciones no son append-only — se corrigen mientras la corrida está
+   abierta.
+
 7. **NC automática**: si una `Entry` tiene un campo `COMPARISON` que falla, crear automáticamente una `NonConformity` asignada al área del Record.
 
 8. **Approval workflow**: las plantillas (Records, Documents, Recipes, Matrices, CalibrationTemplates) tienen `RecordStatus = DRAFT/ACTIVE/SUPERSEDED` y atraviesan `ApprovalRequest` + `ApprovalDecision` antes de pasar a `ACTIVE`.

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Param, Query, Body, UseGuards } from '@nestjs/common'
+import { Controller, Get, Post, Delete, Patch, Param, Query, Body, UseGuards } from '@nestjs/common'
 import { BatchesService } from './batches.service'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'
 import { TenantGuard } from '../../common/guards/tenant.guard'
@@ -7,6 +7,8 @@ import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
 import { ZodBody } from '../../common/decorators/zod-body.decorator'
 import {
+  assignInstrumentSchema,
+  type AssignInstrumentInput,
   changeBatchStatusSchema,
   consumeStockSchema,
   completeBatchSchema,
@@ -104,4 +106,36 @@ export class BatchesController {
   ) {
     return this.service.update(id, user.organizationId, body)
   }
+  // ─── Trazabilidad de instrumental (ISO 17025 §6.4) ────────────────────────
+
+  /**
+   * Asigna un instrumento real a una etiqueta que la plantilla requiere.
+   *
+   * Es idempotente por etiqueta: volver a asignar la misma etiqueta cambia el
+   * equipo en vez de fallar, porque corregir a que equipo se apunto es normal
+   * mientras la corrida esta abierta.
+   */
+  @Post(':id/instrument-assignments')
+  @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  @ZodBody(assignInstrumentSchema)
+  assignInstrument(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() body: AssignInstrumentInput,
+  ) {
+    return this.service.assignInstrument(id, user.organizationId, user.sub, body)
+  }
+
+  @Delete(':id/instrument-assignments/:assignmentId')
+  @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  unassignInstrument(
+    @Param('id') id: string,
+    @Param('assignmentId') assignmentId: string,
+    // La organizacion sale del JWT, nunca de la ruta: es lo que impide borrarle
+    // la trazabilidad a otro laboratorio conociendo un id.
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.service.unassignInstrument(id, assignmentId, user.organizationId)
+  }
+
 }

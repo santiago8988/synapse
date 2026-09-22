@@ -45,10 +45,25 @@ export class SamplesService {
           },
         },
         entry: true,
+        instrumentAssignments: {
+          orderBy: { order: 'asc' },
+          include: {
+            instrument: {
+              select: {
+                id: true,
+                status: true,
+                nextCalibrationAt: true,
+                entry: { select: { id: true, data: true } },
+                record: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
         matrix: {
           include: {
             parameters: { orderBy: { order: 'asc' } },
             conditions: { orderBy: { order: 'asc' } },
+            requiredInstruments: { orderBy: { order: 'asc' } },
           },
         },
       },
@@ -173,4 +188,80 @@ export class SamplesService {
       },
     })
   }
+  /**
+   * Asigna un instrumento real a una de las etiquetas que la plantilla
+   * requiere. Ver TO_DO.md §26.
+   *
+   * Es un upsert por (sampleId, label): cambiar el equipo de una etiqueta ya
+   * cubierta es una correccion normal mientras la corrida esta abierta, no un
+   * conflicto. Lo que el indice unico impide es que el mismo equipo cubra dos
+   * etiquetas distintas.
+   *
+   * **No se valida el estado del instrumento a proposito.** Un equipo en
+   * calibracion, en reparacion o dado de baja se puede asignar: si de hecho se
+   * uso, el registro tiene que decirlo — bloquearlo empuja a falsear el dato.
+   * La UI muestra la condicion de cada equipo con un chip para que la decision
+   * sea informada, y el AuditLog queda con quien asigno que.
+   */
+  async assignInstrument(
+    sampleId: string,
+    organizationId: string,
+    assignedByUserId: string,
+    data: { label: string; instrumentId: string; order: number },
+  ) {
+    await this.findById(sampleId, organizationId)
+
+    // El instrumento tiene que ser de la misma organizacion: el id viene del
+    // body y sin este filtro se podria apuntar al equipo de otro laboratorio.
+    const instrumento = await this.prisma.instrument.findFirst({
+      where: { id: data.instrumentId, organizationId },
+      select: { id: true },
+    })
+    if (!instrumento) throw new NotFoundException('Instrumento no encontrado')
+
+    const orgUser = await this.prisma.organizationUser.findFirst({
+      where: { userId: assignedByUserId, organizationId },
+    })
+    if (!orgUser) throw new NotFoundException('Usuario no encontrado')
+
+    await this.prisma.sampleInstrumentAssignment.upsert({
+      where: { sampleId_label: { sampleId, label: data.label } },
+      create: {
+        sampleId,
+        label: data.label,
+        order: data.order,
+        instrumentId: data.instrumentId,
+        assignedById: orgUser.id,
+      },
+      update: {
+        order: data.order,
+        instrumentId: data.instrumentId,
+        assignedById: orgUser.id,
+        assignedAt: new Date(),
+      },
+    })
+
+    return this.findById(sampleId, organizationId)
+  }
+
+  /**
+   * Quita una asignacion. El id de la asignacion llega de la URL, asi que se
+   * busca acotado al muestra —que ya se resolvio contra la
+   * organizacion—: sin eso, conocer un id alcanzaria para borrarle la
+   * trazabilidad a otro laboratorio.
+   */
+  async unassignInstrument(sampleId: string, assignmentId: string, organizationId: string) {
+    await this.findById(sampleId, organizationId)
+
+    const asignacion = await this.prisma.sampleInstrumentAssignment.findFirst({
+      where: { id: assignmentId, sampleId },
+      select: { id: true },
+    })
+    if (!asignacion) throw new NotFoundException('Asignacion no encontrada')
+
+    await this.prisma.sampleInstrumentAssignment.delete({ where: { id: assignmentId } })
+
+    return this.findById(sampleId, organizationId)
+  }
+
 }

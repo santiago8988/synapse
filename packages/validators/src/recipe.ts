@@ -1,17 +1,6 @@
 import { z } from 'zod'
 
 /**
- * NO lleva `.strict()`, a diferencia del resto de los schemas. Dos motivos:
- *
- *  1. El formulario manda `requiredInstruments` (TO_DO.md §26), igual que el de
- *     matrices.
- *  2. Cada ingrediente que vuelve del GET arrastra `stockRecipe`, el objeto de
- *     la relacion, y el formulario lo reenvia tal cual al editar.
- *
- * Con `.strict()` las dos cosas serian un 400 en cada guardado de formula.
- */
-
-/**
  * Un solo schema de ingrediente para alta y edicion.
  *
  * El tipo inline del controller declaraba menos campos en `update` que en
@@ -29,7 +18,20 @@ const ingrediente = z.object({
   order: z.number().int().min(0).max(10_000),
   fromStock: z.boolean().optional(),
   stockRecipeId: z.string().cuid().optional(),
-})
+  /**
+   * El objeto de la relacion, que vuelve del GET y el formulario reenvia tal
+   * cual al editar. Se acepta y se ignora — el service enumera los campos que
+   * escribe—; declararlo es lo que permite cerrar el schema con `.strict()` sin
+   * romper el guardado de una formula existente.
+   */
+  stockRecipe: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      code: z.string().nullish(),
+    })
+    .nullish(),
+}).strict()
 
 const paso = z.object({
   order: z.number().int().min(0).max(10_000),
@@ -37,7 +39,13 @@ const paso = z.object({
   description: z.string().max(5000).optional(),
   duration: z.number().int().nonnegative().max(1_000_000).optional(),
   controls: z.string().max(5000).optional(),
-})
+}).strict()
+
+/** Etiquetas de los equipos que la produccion requiere. Ver TO_DO.md §26. */
+const instrumentoRequerido = z.object({
+  label: z.string().min(1).max(200),
+  order: z.number().int().min(0).max(10_000),
+}).strict()
 
 const MAX_FILAS = 500
 
@@ -46,14 +54,16 @@ export const createRecipeSchema = z.object({
   code: z.string().min(1).max(50),
   ingredients: z.array(ingrediente).max(MAX_FILAS),
   steps: z.array(paso).max(MAX_FILAS),
-})
+  requiredInstruments: z.array(instrumentoRequerido).max(MAX_FILAS).optional(),
+}).strict()
 
 export const updateRecipeSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   code: z.string().min(1).max(50).optional(),
   ingredients: z.array(ingrediente).max(MAX_FILAS).optional(),
   steps: z.array(paso).max(MAX_FILAS).optional(),
-})
+  requiredInstruments: z.array(instrumentoRequerido).max(MAX_FILAS).optional(),
+}).strict()
 
 export type CreateRecipeInput = z.infer<typeof createRecipeSchema>
 export type UpdateRecipeInput = z.infer<typeof updateRecipeSchema>

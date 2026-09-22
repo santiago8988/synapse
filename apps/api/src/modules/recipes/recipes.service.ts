@@ -2,11 +2,18 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException }
 import { PrismaService } from '../../prisma/prisma.service'
 import { StorageService } from '../../common/storage/storage.service'
 
+interface RequiredInstrumentDto {
+  label: string
+  order: number
+}
+
 interface CreateRecipeDto {
   name: string
   code: string
   ingredients: Array<{ name: string; quantity: number; unit: string; order: number; fromStock?: boolean; stockRecipeId?: string }>
   steps: Array<{ order: number; name: string; description?: string; duration?: number; controls?: string }>
+  /** Etiquetas de los equipos que la produccion requiere. Ver TO_DO.md §26. */
+  requiredInstruments?: RequiredInstrumentDto[]
 }
 
 interface UpdateRecipeDto {
@@ -14,6 +21,7 @@ interface UpdateRecipeDto {
   code?: string
   ingredients?: Array<{ name: string; quantity: number; unit: string; order: number; fromStock?: boolean; stockRecipeId?: string }>
   steps?: Array<{ order: number; name: string; description?: string; duration?: number; controls?: string }>
+  requiredInstruments?: RequiredInstrumentDto[]
 }
 
 @Injectable()
@@ -32,6 +40,7 @@ export class RecipesService {
           include: { stockRecipe: { select: { id: true, name: true, code: true } } },
         },
         steps: { orderBy: { order: 'asc' } },
+        requiredInstruments: { orderBy: { order: 'asc' } },
         _count: { select: { batches: true } },
       },
       orderBy: { updatedAt: 'desc' },
@@ -48,6 +57,7 @@ export class RecipesService {
           include: { stockRecipe: { select: { id: true, name: true, code: true } } },
         },
         steps: { orderBy: { order: 'asc' } },
+        requiredInstruments: { orderBy: { order: 'asc' } },
       },
     })
     if (!recipe) throw new NotFoundException('Receta no encontrada')
@@ -112,10 +122,17 @@ export class RecipesService {
             controls: s.controls || null,
           })),
         },
+        requiredInstruments: {
+          create: (data.requiredInstruments ?? []).map((r) => ({
+            label: r.label,
+            order: r.order,
+          })),
+        },
       },
       include: {
         ingredients: { orderBy: { order: 'asc' } },
         steps: { orderBy: { order: 'asc' } },
+        requiredInstruments: { orderBy: { order: 'asc' } },
       },
     })
   }
@@ -164,6 +181,16 @@ export class RecipesService {
             })),
           })
         }
+        if (data.requiredInstruments) {
+          await tx.recipeRequiredInstrument.deleteMany({ where: { recipeId: id } })
+          await tx.recipeRequiredInstrument.createMany({
+            data: data.requiredInstruments.map((r) => ({
+              recipeId: id,
+              label: r.label,
+              order: r.order,
+            })),
+          })
+        }
         return tx.recipe.update({
           where: { id },
           data: {
@@ -173,6 +200,7 @@ export class RecipesService {
           include: {
             ingredients: { orderBy: { order: 'asc' } },
             steps: { orderBy: { order: 'asc' } },
+            requiredInstruments: { orderBy: { order: 'asc' } },
           },
         })
       })
@@ -213,10 +241,19 @@ export class RecipesService {
               controls: s.controls || null,
             })),
           },
+          // Se copian si el body no los trae: versionar una formula no puede
+          // perder los equipos que su produccion requiere.
+          requiredInstruments: {
+            create: (data.requiredInstruments ?? recipe.requiredInstruments).map((r) => ({
+              label: r.label,
+              order: r.order,
+            })),
+          },
         },
         include: {
           ingredients: { orderBy: { order: 'asc' } },
           steps: { orderBy: { order: 'asc' } },
+          requiredInstruments: { orderBy: { order: 'asc' } },
         },
       })
     })

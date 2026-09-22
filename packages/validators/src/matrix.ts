@@ -1,17 +1,5 @@
 import { z } from 'zod'
 
-/**
- * NO lleva `.strict()`, a diferencia del resto de los schemas.
- *
- * El formulario manda `requiredInstruments`, una feature de trazabilidad de
- * instrumentos que existe entera en el frontend y de la que el backend no tiene
- * ni modelo ni endpoint (TO_DO.md §26). Hoy el campo se descarta en silencio;
- * con `.strict()` cada guardado pasaria a ser un 400.
- *
- * Cerrar estos dos schemas es el ultimo paso de la Fase 1.1 y esta bloqueado
- * por esa decision: implementar la feature o sacar la seccion del formulario.
- */
-
 const parametro = z.object({
   name: z.string().min(1).max(200),
   method: z.string().max(200).optional(),
@@ -19,7 +7,7 @@ const parametro = z.object({
   minValue: z.number().finite().optional(),
   maxValue: z.number().finite().optional(),
   order: z.number().int().min(0).max(10_000),
-})
+}).strict()
 
 /**
  * `fieldType` queda como string acotado y no como enum: las condiciones de una
@@ -33,7 +21,16 @@ const condicion = z.object({
   unit: z.string().max(32).optional(),
   options: z.array(z.string().max(120)).max(200).optional(),
   order: z.number().int().min(0).max(10_000),
-})
+}).strict()
+
+/**
+ * Equipos que el metodo requiere, por etiqueta generica ("Termometro").
+ * No son instrumentos concretos: eso lo asigna cada muestra. Ver TO_DO.md §26.
+ */
+const instrumentoRequerido = z.object({
+  label: z.string().min(1).max(200),
+  order: z.number().int().min(0).max(10_000),
+}).strict()
 
 const MAX_FILAS = 300
 
@@ -43,7 +40,8 @@ export const createMatrixSchema = z.object({
   description: z.string().max(5000).optional(),
   parameters: z.array(parametro).max(MAX_FILAS),
   conditions: z.array(condicion).max(MAX_FILAS).optional(),
-})
+  requiredInstruments: z.array(instrumentoRequerido).max(MAX_FILAS).optional(),
+}).strict()
 
 export const updateMatrixSchema = z.object({
   name: z.string().min(1).max(200).optional(),
@@ -51,7 +49,8 @@ export const updateMatrixSchema = z.object({
   description: z.string().max(5000).optional(),
   parameters: z.array(parametro).max(MAX_FILAS).optional(),
   conditions: z.array(condicion).max(MAX_FILAS).optional(),
-})
+  requiredInstruments: z.array(instrumentoRequerido).max(MAX_FILAS).optional(),
+}).strict()
 
 export type CreateMatrixInput = z.infer<typeof createMatrixSchema>
 export type UpdateMatrixInput = z.infer<typeof updateMatrixSchema>

@@ -218,4 +218,29 @@ export class InstrumentsService {
 
     return certificate
   }
+  /**
+   * Instrumentos "reales" de la organizacion: los equipos fisicos, para el
+   * selector que asigna uno a cada etiqueta requerida por una plantilla.
+   *
+   * Se llama `real` para distinguirlo de los "requeridos", que son etiquetas
+   * genericas de una Matriz o una Formula y no equipos concretos.
+   *
+   * Devuelve todos, incluidos los que no estan ACTIVE: la UI muestra la
+   * condicion de cada uno con un chip y deja decidir. Ver el comentario de
+   * `assignInstrument`.
+   */
+  async findReal(organizationId: string) {
+    return this.prisma.instrument.findMany({
+      where: { organizationId },
+      select: {
+        id: true,
+        status: true,
+        nextCalibrationAt: true,
+        entry: { select: { id: true, data: true } },
+        record: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+  }
+
 }

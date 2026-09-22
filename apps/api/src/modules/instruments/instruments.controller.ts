@@ -49,6 +49,18 @@ export class InstrumentsController {
     return this.service.findPatterns(user.organizationId)
   }
 
+  /**
+   * Equipos fisicos de la organizacion, para el selector que los asigna a las
+   * etiquetas que una plantilla requiere.
+   *
+   * Va declarada antes de `@Get(':id')` porque si no la captura el parametro y
+   * "real" se interpreta como un id.
+   */
+  @Get('real')
+  findReal(@CurrentUser() user: JwtPayload) {
+    return this.service.findReal(user.organizationId)
+  }
+
   @Get(':id')
   findOne(
     @Param('id') id: string,

@@ -132,26 +132,31 @@ describe('matrices', () => {
     expect(() => createMatrixSchema.parse(payload)).not.toThrow()
   })
 
-  it('descarta requiredInstruments en vez de rechazarlo — la excepcion a .strict()', () => {
-    // matrices y recipes son los dos unicos schemas sin `.strict()`. El
-    // formulario manda `requiredInstruments`, una feature que existe entera en
-    // el frontend y de la que el backend no tiene ni modelo ni endpoint
-    // (TO_DO.md §26). Cerrarlos hoy convertiria cada guardado en un 400.
-    //
-    // Este test es el recordatorio: cuando §26 se resuelva, tiene que fallar, y
-    // ahi se agrega `.strict()`.
+  it('acepta requiredInstruments, que ahora el backend si guarda', () => {
+    // Este test existia al reves: verificaba que el campo se descartara, con un
+    // comentario diciendo que tenia que fallar cuando §26 se resolviera. Fallo.
+    // La feature existe y el schema quedo cerrado con `.strict()`.
     const parseado = createMatrixSchema.parse({
       name: 'X',
       parameters: [],
       requiredInstruments: [{ label: 'TERMOMETRO', order: 1 }],
     })
 
-    expect(parseado).not.toHaveProperty('requiredInstruments')
+    expect(parseado.requiredInstruments).toEqual([{ label: 'TERMOMETRO', order: 1 }])
   })
 
-  it('recetas tampoco es estricto: reenvia stockRecipe al editar', () => {
-    // Cada ingrediente que vuelve del GET arrastra el objeto de la relacion, y
-    // el formulario lo manda de vuelta tal cual.
+  it('ahora si rechaza los campos que no declara', () => {
+    expect(
+      createMatrixSchema.safeParse({ name: 'X', parameters: [], inventado: true }).success,
+    ).toBe(false)
+  })
+})
+
+describe('recetas — el round-trip del formulario', () => {
+  it('acepta el ingrediente tal como vuelve del GET, con stockRecipe', () => {
+    // El formulario reenvia el objeto de la relacion al editar. Se declara para
+    // poder cerrar el schema sin romper el guardado; el service lo ignora
+    // porque enumera los campos que escribe.
     const parseado = updateRecipeSchema.parse({
       requiredInstruments: [{ label: 'BALANZA', order: 1 }],
       ingredients: [
@@ -166,6 +171,11 @@ describe('matrices', () => {
     })
 
     expect(parseado.ingredients?.[0].name).toBe('ACIDO')
+    expect(parseado.requiredInstruments).toEqual([{ label: 'BALANZA', order: 1 }])
+  })
+
+  it('rechaza un campo que nadie declaro', () => {
+    expect(updateRecipeSchema.safeParse({ inventado: true }).success).toBe(false)
   })
 })
 

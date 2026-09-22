@@ -9,12 +9,19 @@ interface ConditionDto {
   order: number
 }
 
+interface RequiredInstrumentDto {
+  label: string
+  order: number
+}
+
 interface CreateMatrixDto {
   name: string
   code?: string
   description?: string
   parameters: Array<{ name: string; method?: string; unit?: string; minValue?: number; maxValue?: number; order: number }>
   conditions?: ConditionDto[]
+  /** Etiquetas de los equipos que el metodo requiere. Ver TO_DO.md §26. */
+  requiredInstruments?: RequiredInstrumentDto[]
 }
 
 interface UpdateMatrixDto {
@@ -23,6 +30,7 @@ interface UpdateMatrixDto {
   description?: string
   parameters?: Array<{ name: string; method?: string; unit?: string; minValue?: number; maxValue?: number; order: number }>
   conditions?: ConditionDto[]
+  requiredInstruments?: RequiredInstrumentDto[]
 }
 
 @Injectable()
@@ -35,6 +43,7 @@ export class MatricesService {
       include: {
         parameters: { orderBy: { order: 'asc' } },
         conditions: { orderBy: { order: 'asc' } },
+        requiredInstruments: { orderBy: { order: 'asc' } },
         _count: { select: { samples: true } },
       },
       orderBy: { updatedAt: 'desc' },
@@ -47,6 +56,7 @@ export class MatricesService {
       include: {
         parameters: { orderBy: { order: 'asc' } },
         conditions: { orderBy: { order: 'asc' } },
+        requiredInstruments: { orderBy: { order: 'asc' } },
       },
     })
     if (!matrix) throw new NotFoundException('Matriz no encontrada')
@@ -82,6 +92,14 @@ export class MatricesService {
             order: p.order,
           })),
         },
+        requiredInstruments: data.requiredInstruments?.length
+          ? {
+              create: data.requiredInstruments.map((r) => ({
+                label: r.label,
+                order: r.order,
+              })),
+            }
+          : undefined,
         conditions: data.conditions?.length
           ? {
               create: data.conditions.map((c) => ({
@@ -97,6 +115,7 @@ export class MatricesService {
       include: {
         parameters: { orderBy: { order: 'asc' } },
         conditions: { orderBy: { order: 'asc' } },
+        requiredInstruments: { orderBy: { order: 'asc' } },
       },
     })
   }
@@ -146,10 +165,20 @@ export class MatricesService {
               order: c.order,
             })),
           },
+          // Se copian a la version nueva si el body no los trae, igual que
+          // parameters y conditions: versionar una matriz no puede perder los
+          // equipos que su metodo requiere.
+          requiredInstruments: {
+            create: (data.requiredInstruments ?? matrix.requiredInstruments).map((r) => ({
+              label: r.label,
+              order: r.order,
+            })),
+          },
         },
         include: {
           parameters: { orderBy: { order: 'asc' } },
           conditions: { orderBy: { order: 'asc' } },
+          requiredInstruments: { orderBy: { order: 'asc' } },
         },
       })
 

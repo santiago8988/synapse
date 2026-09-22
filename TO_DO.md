@@ -54,40 +54,39 @@ Dos decisiones que conviene tener presentes:
 `consumeStock` sigue disponible como camino inverso (descontar al iniciar) y
 ahora tiene tests, que no tenía.
 
-### 26. Trazabilidad de instrumentos: la UI está entera, el backend no existe
+### 26. ~~Trazabilidad de instrumentos: la UI está entera, el backend no existe~~ — resuelto
 
-Hay una feature completa de ISO 17025 —**qué instrumento físico se usó en qué
-ensayo o lote**— construida en el frontend y sin una sola línea de backend.
+Implementada (ISO 17025 §6.4). Migración
+`20260922090000_instrument_traceability`: cuatro tablas nuevas, ninguna
+existente tocada.
 
-Lo que el frontend usa y **no existe**:
-
-| Pieza | Dónde la usa el frontend |
+| Pieza | Dónde |
 |---|---|
-| `Matrix.requiredInstruments` | formulario y ficha de matrices |
-| `Recipe.requiredInstruments` | detalle de lote |
-| `Sample.instrumentAssignments` / `Batch.instrumentAssignments` | bloque "Equipos asignados" |
-| `GET /instruments/real` | selector de instrumento real |
-| `POST/DELETE .../assign-instrument` | asignar y desasignar, en lotes y muestras |
+| `Matrix.requiredInstruments` / `Recipe.requiredInstruments` | etiquetas genéricas que el método requiere |
+| `Sample.instrumentAssignments` / `Batch.instrumentAssignments` | el instrumento real asignado a cada etiqueta |
+| `GET /instruments/real` | selector de equipos físicos |
+| `POST/DELETE .../instrument-assignments` | asignar y desasignar, en lotes y muestras |
 
-No hay modelo, ni servicio, ni endpoint, ni migración. `git log -S` confirma que
-nunca estuvo: entró con el rediseño (`00717b8`) como UI sola.
+Tres decisiones que conviene tener presentes:
 
-**Qué se ve hoy:** los bloques de asignación están detrás de
-`requiredInstruments?.length > 0`, que nunca es verdadero porque el backend no
-devuelve el campo — así que esa parte no se renderiza nunca y nadie recibe un
-error. Lo único alcanzable es la sección "Instrumentos requeridos" del
-formulario de matrices, que **sí** se muestra, deja cargar equipos y los
-descarta al guardar.
+- **La etiqueta se copia a la asignación, no se referencia por id.** Si la
+  plantilla se edita y una etiqueta cambia o desaparece, la corrida ya cerrada
+  tiene que seguir diciendo contra qué equipo se ensayó.
+- **No se valida el estado del instrumento al asignarlo.** Un equipo en
+  calibración, en reparación o dado de baja se puede asignar: si de hecho se
+  usó, el registro tiene que decirlo — bloquearlo empuja a falsear el dato. La
+  UI muestra la condición con un chip y el `AuditLog` guarda quién asignó qué.
+- **Las asignaciones no son append-only.** Corregir a qué equipo se apuntó es
+  normal mientras la corrida está abierta; el acto queda en el `AuditLog`.
 
-**Decisión pendiente:** implementarlo (2 modelos, ~5 endpoints, migración) o
-sacar esa sección del formulario de matrices. Para ISO 17025 §6.4 la
-trazabilidad del equipamiento usado en cada ensayo es un requisito real, así que
-la primera parece la respuesta, pero es una feature y no un arreglo.
+Al cerrarse, `matrices` y `recipes` pudieron recibir `.strict()`, que era lo
+único que le faltaba a la Fase 1.1 del plan de seguridad.
 
-**Bloquea `.strict()` en matrices.** Mientras el formulario mande
-`requiredInstruments`, cerrar el schema convierte cada guardado de matriz en un
-400. Los dos schemas de matrices quedan sin `.strict()` y con el comentario
-correspondiente hasta que esto se resuelva.
+> **Queda una punta suelta, menor:** `api.records.addField`, `updateField` y
+> `deleteField` apuntan a `POST/PATCH/DELETE /records/:id/fields[...]`, que
+> tampoco existen — pero **nadie los llama** (0 call sites). Los reemplazó
+> `editWithVersion`. Es código muerto del cliente, no un flujo roto. Conviene
+> borrarlos para que el cruce cliente↔backend quede en cero.
 
 ### 25. Los errores de validación no dicen qué campo falló
 
