@@ -6,7 +6,7 @@ export const addWhitelistSchema = z.object({
   email: z.string().email(),
   role: userRoleEnum.optional().default('TECHNICIAN'),
   areaId: z.string().cuid().optional(),
-})
+}).strict()
 
 /**
  * El rol viaja como enum y no como `string` libre: este es el endpoint por el
@@ -23,7 +23,7 @@ export const updateOrgUserSchema = z.object({
   phone: z.string().max(50).nullable().optional(),
   signature: z.string().max(500).nullable().optional(),
   isActive: z.boolean().optional(),
-})
+}).strict()
 
 export type AddWhitelistInput = z.infer<typeof addWhitelistSchema>
 export type UpdateOrgUserInput = z.infer<typeof updateOrgUserSchema>

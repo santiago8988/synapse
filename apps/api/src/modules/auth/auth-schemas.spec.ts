@@ -68,16 +68,14 @@ describe('exchangeSchema', () => {
     expect(parseado.organizationId).toBeUndefined()
   })
 
-  it('descarta los campos que no declara', () => {
-    const parseado = exchangeSchema.parse({
-      code: 'abc',
-      userId: 'otro-usuario',
-      role: 'ADMIN',
-    })
-
+  it('rechaza los campos que no declara', () => {
     // `userId` por body seria un bypass de autenticacion. El handler nunca lo
-    // leyo, pero ahora tampoco llega.
-    expect(parseado).toEqual({ code: 'abc' })
+    // leyo; con `.strict()` el pedido ni siquiera se procesa.
+    expect(
+      exchangeSchema.safeParse({ code: 'abc', userId: 'otro-usuario', role: 'ADMIN' }).success,
+    ).toBe(false)
+
+    expect(exchangeSchema.safeParse({ code: 'abc' }).success).toBe(true)
   })
 })
 
@@ -88,14 +86,15 @@ describe('switchOrgSchema', () => {
     )
   })
 
-  it('descarta userId, que es el campo peligroso de este endpoint', () => {
-    const parseado = switchOrgSchema.parse({
-      organizationId: 'clh3k2j9x0000qwer1234asdf',
-      userId: 'victima',
-    })
-
-    // Con `userId` aceptado, cualquiera pediria un token de cualquiera.
-    expect(parseado).toEqual({ organizationId: 'clh3k2j9x0000qwer1234asdf' })
+  it('rechaza userId, que es el campo peligroso de este endpoint', () => {
+    // Con `userId` aceptado alguna vez, cualquiera pediria un token de
+    // cualquiera. `.strict()` lo convierte en un 400 explicito.
+    expect(
+      switchOrgSchema.safeParse({
+        organizationId: 'clh3k2j9x0000qwer1234asdf',
+        userId: 'victima',
+      }).success,
+    ).toBe(false)
   })
 
   it('exige organizationId', () => {

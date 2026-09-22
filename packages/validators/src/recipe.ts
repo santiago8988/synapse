@@ -1,6 +1,17 @@
 import { z } from 'zod'
 
 /**
+ * NO lleva `.strict()`, a diferencia del resto de los schemas. Dos motivos:
+ *
+ *  1. El formulario manda `requiredInstruments` (TO_DO.md §26), igual que el de
+ *     matrices.
+ *  2. Cada ingrediente que vuelve del GET arrastra `stockRecipe`, el objeto de
+ *     la relacion, y el formulario lo reenvia tal cual al editar.
+ *
+ * Con `.strict()` las dos cosas serian un 400 en cada guardado de formula.
+ */
+
+/**
  * Un solo schema de ingrediente para alta y edicion.
  *
  * El tipo inline del controller declaraba menos campos en `update` que en

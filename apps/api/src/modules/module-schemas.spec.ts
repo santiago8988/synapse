@@ -132,10 +132,14 @@ describe('matrices', () => {
     expect(() => createMatrixSchema.parse(payload)).not.toThrow()
   })
 
-  it('descarta requiredInstruments, que el backend no conoce', () => {
-    // El formulario lo manda y ningun modelo, service ni schema del backend lo
-    // tiene. Ya se perdia antes de validar; esto lo deja documentado en vez de
-    // que parezca que el schema lo rompio. Ver TO_DO.md.
+  it('descarta requiredInstruments en vez de rechazarlo — la excepcion a .strict()', () => {
+    // matrices y recipes son los dos unicos schemas sin `.strict()`. El
+    // formulario manda `requiredInstruments`, una feature que existe entera en
+    // el frontend y de la que el backend no tiene ni modelo ni endpoint
+    // (TO_DO.md §26). Cerrarlos hoy convertiria cada guardado en un 400.
+    //
+    // Este test es el recordatorio: cuando §26 se resuelva, tiene que fallar, y
+    // ahi se agrega `.strict()`.
     const parseado = createMatrixSchema.parse({
       name: 'X',
       parameters: [],
@@ -143,6 +147,25 @@ describe('matrices', () => {
     })
 
     expect(parseado).not.toHaveProperty('requiredInstruments')
+  })
+
+  it('recetas tampoco es estricto: reenvia stockRecipe al editar', () => {
+    // Cada ingrediente que vuelve del GET arrastra el objeto de la relacion, y
+    // el formulario lo manda de vuelta tal cual.
+    const parseado = updateRecipeSchema.parse({
+      requiredInstruments: [{ label: 'BALANZA', order: 1 }],
+      ingredients: [
+        {
+          name: 'ACIDO',
+          quantity: 1,
+          unit: 'kg',
+          order: 1,
+          stockRecipe: { id: CUID, name: 'BASE', code: 'B-1' },
+        },
+      ],
+    })
+
+    expect(parseado.ingredients?.[0].name).toBe('ACIDO')
   })
 })
 
@@ -186,19 +209,23 @@ describe('limites y campos de mas', () => {
     )
   })
 
-  it('la no conformidad descarta campos que no declara', () => {
-    const parseado = createNonConformitySchema.parse({
-      title: 'DESVIO EN PESADA',
-      description: 'EL VALOR QUEDO FUERA DE TOLERANCIA',
-      organizationId: 'org-victima',
-      status: 'CLOSED',
-      createdById: 'otro-usuario',
-    })
+  it('la no conformidad rechaza campos que no declara', () => {
+    expect(
+      createNonConformitySchema.safeParse({
+        title: 'DESVIO EN PESADA',
+        description: 'EL VALOR QUEDO FUERA DE TOLERANCIA',
+        organizationId: 'org-victima',
+        status: 'CLOSED',
+        createdById: 'otro-usuario',
+      }).success,
+    ).toBe(false)
 
-    expect(parseado).toEqual({
-      title: 'DESVIO EN PESADA',
-      description: 'EL VALOR QUEDO FUERA DE TOLERANCIA',
-    })
+    expect(
+      createNonConformitySchema.safeParse({
+        title: 'DESVIO EN PESADA',
+        description: 'EL VALOR QUEDO FUERA DE TOLERANCIA',
+      }).success,
+    ).toBe(true)
   })
 
   it('la accion correctiva acepta la fecha del input date', () => {

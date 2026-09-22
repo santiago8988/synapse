@@ -5,7 +5,7 @@ const documentStatusEnum = z.enum(['DRAFT', 'ACTIVE', 'SUPERSEDED'])
 export const createDocumentSchema = z.object({
   title: z.string().min(1).max(200),
   code: z.string().max(50).optional(),
-})
+}).strict()
 
 /**
  * Los campos editables de un documento, y nada mas.
@@ -23,7 +23,7 @@ export const updateDocumentSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   code: z.string().max(50).optional(),
   status: documentStatusEnum.optional(),
-})
+}).strict()
 
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>
 export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>

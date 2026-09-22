@@ -11,7 +11,7 @@ export const changeBatchStatusSchema = z.object({
   producedQuantity: cantidad.optional(),
   unit: z.string().max(32).optional(),
   reason: z.string().max(1000).optional(),
-})
+}).strict()
 
 export const consumeStockSchema = z.object({
   consumptions: z
@@ -25,12 +25,12 @@ export const consumeStockSchema = z.object({
       }),
     )
     .max(500),
-})
+}).strict()
 
 export const updateBatchSchema = z.object({
   producedQuantity: cantidad.optional(),
   unit: z.string().max(32).optional(),
-})
+}).strict()
 
 export type ChangeBatchStatusInput = z.infer<typeof changeBatchStatusSchema>
 export type ConsumeStockInput = z.infer<typeof consumeStockSchema>

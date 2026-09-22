@@ -112,18 +112,23 @@ describe('entryDataSchema', () => {
 })
 
 describe('createEntrySchema', () => {
-  it('descarta los campos que no declara', () => {
-    const parseado = createEntrySchema.parse({
-      data: { 'field-1': 'X' },
-      lotNumber: 'L-001',
-      recordId: 'rec-de-otro',
-      organizationId: 'org-victima',
-      status: 'COMPLETED',
-    })
-
+  it('rechaza los campos que no declara', () => {
     // recordId sale de la URL y organizationId del JWT: que vengan en el body
-    // no significa nada, y ahora tampoco llegan al handler.
-    expect(parseado).toEqual({ data: { 'field-1': 'X' }, lotNumber: 'L-001' })
+    // no significa nada, y con `.strict()` el pedido se rechaza en vez de
+    // aceptarse a medias.
+    expect(
+      createEntrySchema.safeParse({
+        data: { 'field-1': 'X' },
+        lotNumber: 'L-001',
+        recordId: 'rec-de-otro',
+        organizationId: 'org-victima',
+        status: 'COMPLETED',
+      }).success,
+    ).toBe(false)
+
+    expect(
+      createEntrySchema.safeParse({ data: { 'field-1': 'X' }, lotNumber: 'L-001' }).success,
+    ).toBe(true)
   })
 
   it('exige data', () => {

@@ -84,8 +84,10 @@ describe('createRecordSchema — lo que manda el Record Builder', () => {
     expect(() => createRecordSchema.parse(payload)).not.toThrow()
   })
 
-  it('descarta los campos que no declara', () => {
-    const parseado = createRecordSchema.parse({
+  it('rechaza los campos que no declara', () => {
+    // Con `.strict()` un campo de mas es un 400 y no un campo descartado en
+    // silencio. Antes, `organizationId` en el body movia el registro de tenant.
+    const resultado = createRecordSchema.safeParse({
       name: 'X',
       type: 'NOT_PERIODIC',
       fields: [],
@@ -94,7 +96,13 @@ describe('createRecordSchema — lo que manda el Record Builder', () => {
       status: 'ACTIVE',
     })
 
-    expect(parseado).toEqual({ name: 'X', type: 'NOT_PERIODIC', fields: [] })
+    expect(resultado.success).toBe(false)
+  })
+
+  it('el payload limpio sigue entrando', () => {
+    expect(
+      createRecordSchema.safeParse({ name: 'X', type: 'NOT_PERIODIC', fields: [] }).success,
+    ).toBe(true)
   })
 
   it('rechaza un type que no existe', () => {

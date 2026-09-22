@@ -20,7 +20,7 @@ const codigoDeLogin = z.string().min(1).max(200)
 
 export const exchangeOrganizationsSchema = z.object({
   code: codigoDeLogin,
-})
+}).strict()
 
 export const exchangeSchema = z.object({
   code: codigoDeLogin,
@@ -28,7 +28,7 @@ export const exchangeSchema = z.object({
   // entre las que el codigo autoriza, y eso lo revalida el handler contra la
   // lista del codigo y despues `generateToken` contra la base.
   organizationId: z.string().cuid().optional(),
-})
+}).strict()
 
 /**
  * Solo `organizationId`. El usuario sale del JWT: aceptar un `userId` por body
@@ -37,7 +37,7 @@ export const exchangeSchema = z.object({
  */
 export const switchOrgSchema = z.object({
   organizationId: z.string().cuid(),
-})
+}).strict()
 
 export type ExchangeOrganizationsInput = z.infer<typeof exchangeOrganizationsSchema>
 export type ExchangeInput = z.infer<typeof exchangeSchema>

@@ -1,5 +1,17 @@
 import { z } from 'zod'
 
+/**
+ * NO lleva `.strict()`, a diferencia del resto de los schemas.
+ *
+ * El formulario manda `requiredInstruments`, una feature de trazabilidad de
+ * instrumentos que existe entera en el frontend y de la que el backend no tiene
+ * ni modelo ni endpoint (TO_DO.md §26). Hoy el campo se descarta en silencio;
+ * con `.strict()` cada guardado pasaria a ser un 400.
+ *
+ * Cerrar estos dos schemas es el ultimo paso de la Fase 1.1 y esta bloqueado
+ * por esa decision: implementar la feature o sacar la seccion del formulario.
+ */
+
 const parametro = z.object({
   name: z.string().min(1).max(200),
   method: z.string().max(200).optional(),

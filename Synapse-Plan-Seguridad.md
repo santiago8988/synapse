@@ -22,7 +22,9 @@ Lo urgente ya está cerrado: no queda un camino conocido para cruzar tenants ni 
 | `74f605d` | Fase 1.1 en `documents` y `entries`, más el acotado de `Entry.data` |
 | `5e05081` | Fase 1.1 en `auth` — la superficie pública |
 | `fa45817` | Fase 1.1 en `records` y flujos |
-| (siguiente) | Fase 1.1 en los 10 módulos restantes — cierra la cobertura |
+| `4b7e4ce` | Fase 1.1 en los 11 módulos restantes — 43 de 45 `@Body()` |
+| `8dcfd9e` | seis rutas que el frontend llama y el backend no tiene (TO_DO §26 y §27) |
+| (siguiente) | `.strict()` — cierra la Fase 1.1 salvo matrices y recipes |
 
 **Las tres cosas que más mueven la aguja, en orden:**
 
@@ -198,7 +200,9 @@ Y lo que cierra la clase no es el 400: es que el interceptor **reemplaza `reques
 **Acciones:**
 
 1. ~~Registrar `ZodValidationPipe` como pipe global.~~ **Hecho** como `@ZodBody` + `ZodValidationInterceptor` global, registrado antes del `AuditInterceptor` para que el audit log guarde el body ya limpio.
-2. Un schema por endpoint de escritura. `.strict()` **al final de la fase**, no al principio: es el equivalente del `extra="forbid"` de BBSplap, pero activarlo antes de saber qué manda realmente el frontend convierte en 400 de producción un campo de más que hoy se descarta sin consecuencia.
+2. ~~Un schema por endpoint de escritura~~ **Hecho**, con `.strict()` al final de la fase y no al principio. Fue la decisión correcta: revisar qué manda el frontend antes de cerrar encontró **dos schemas que no se pueden cerrar todavía** (`matrices` y `recipes`, por `TO_DO.md` §26) y una regresión ya introducida — las filas vacías de `fieldMapping`, que el editor de flujos genera a propósito y el backend descarta, quedaban rechazadas con un `.min(1)`.
+
+   Los otros **41 objetos** llevan `.strict()`: un campo de más es un 400 y no un campo descartado en silencio.
 3. ~~Empezar por los endpoints que escriben~~ **Hecho en los 17 controllers**: van **43 de los 45** `@Body()` de la API. Los 2 restantes son multipart (`documents/:id/version`, `instruments/:id/certificates`) y no llevan schema por diseño — ver la nota de abajo.
 
    El orden del plan no incluía `auth`, y debería haber ido primero: sus tres endpoints con body son `@Public()`, o sea **la superficie entera que se atiende sin token**. Tampoco incluía `calibration-templates`, que casi queda afuera del recuento.
@@ -207,7 +211,9 @@ Y lo que cierra la clase no es el 400: es que el interceptor **reemplaza `reques
 4. Reutilizar los schemas de `packages/validators` que ya existen; extender donde falten. **Hecho** para los 8 endpoints migrados: se extendió `updateOrgUserSchema`, al que le faltaban `positionId`, `phone` y `signature`, y se agregaron `createPosition`, `setAreaLeader` y `addTraining`.
 5. ~~Acotar `Entry.data`~~ **Hecho** (`entryDataSchema`): 300 claves, 10 000 caracteres por texto, 500 items por lista y profundidad declarada explícita en vez de `z.lazy()`. El tamaño total ya estaba acotado aguas arriba —el body parser de Express corta el JSON en 100 kB—; lo que faltaba era la forma. Los números son holgados a propósito: el objetivo de la fase no es afinar cuotas sino que deje de entrar cualquier cosa.
 
-**Criterio de hecho:** un body con un campo que el schema no declara devuelve 400, y los tres parches de lista blanca de §1.2 quedan redundantes (dejarlos igual: defensa en capas).
+**Criterio de hecho:** ✅ un body con un campo que el schema no declara devuelve 400, y los tres parches de lista blanca de §1.2 quedan redundantes (se dejan igual: defensa en capas).
+
+**Lo que queda de la fase:** los dos schemas de `matrices` y `recipes`, bloqueados por `TO_DO.md` §26. Hay un test que falla cuando eso se resuelva, para que no se olvide.
 
 > **Lo que costó y no estaba previsto:** `packages/validators` declaraba `main: ./src/index.ts`, y Node no puede requerir TypeScript. El primer import de valor entre paquetes del workspace —los schemas son valores en runtime, a diferencia de `@synapse/types`, que se usa solo para tipos y tsc borra— dejó el dist de la API sin arrancar. Typecheck, la suite entera y `nest build` pasaban igual. Se arregló emitiendo CommonJS con `main` a `dist`.
 >

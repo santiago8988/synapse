@@ -59,7 +59,7 @@ export const createEntrySchema = z.object({
   lotNumber: z.string().max(100).optional(),
   sampleCode: z.string().max(100).optional(),
   client: z.string().max(200).optional(),
-})
+}).strict()
 
 /**
  * `transitionReason` es el motivo que pide una transition con
@@ -70,7 +70,7 @@ export const createEntrySchema = z.object({
 export const updateEntrySchema = z.object({
   data: entryDataSchema,
   transitionReason: z.string().max(1000).optional(),
-})
+}).strict()
 
 export type EntryDataInput = z.infer<typeof entryDataSchema>
 export type CreateEntryInput = z.infer<typeof createEntrySchema>

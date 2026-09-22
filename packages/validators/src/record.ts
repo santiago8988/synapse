@@ -42,7 +42,7 @@ const campoNuevo = z.object({
   relatedFieldIds: z.array(z.string().cuid()).max(MAX_FIELDS).optional(),
   comparisonConfig: fieldConfigSchema.optional(),
   formulaConfig: fieldConfigSchema.optional(),
-})
+}).strict()
 
 export const createRecordSchema = z.object({
   name: z.string().min(1).max(200),
@@ -56,7 +56,7 @@ export const createRecordSchema = z.object({
   periodicity: z.number().int().positive().max(3650).optional(),
   notifyDaysBefore: z.number().int().min(0).max(365).optional(),
   fields: z.array(campoNuevo).max(MAX_FIELDS),
-})
+}).strict()
 
 /**
  * `changeReason` es obligatorio y tiene techo: versionar un registro escribe una
@@ -92,7 +92,7 @@ export const editRecordSchema = z.object({
     )
     .max(MAX_FIELDS)
     .optional(),
-})
+}).strict()
 
 // ─────────────────────────────────────────────
 // Flujos (RecordAction)
@@ -114,9 +114,15 @@ const actionTypeEnum = z.enum(['CREATE_ENTRY', 'UPDATE_FIELD', 'NOTIFY', 'EMAIL'
  * nada mas — resolver el path es tarea de `flow-evaluation.ts`.
  */
 const filaDeMapeo = z.object({
-  sourceFieldId: z.string().min(1).max(200),
-  targetFieldId: z.string().min(1).max(200),
-})
+  // Sin `.min(1)`: el editor agrega filas vacias
+  // (`{ sourceFieldId: '', targetFieldId: '' }`) y guardar a medias es un
+  // estado normal y deliberado — `sanitizeFieldMapping` las descarta del lado
+  // del backend, y `flow-config.ts` trata la configuracion incompleta como
+  // advertencia y no como error. Exigir contenido aca convertia en 400 el acto
+  // de agregar un mapeo y guardar antes de completarlo.
+  sourceFieldId: z.string().max(200),
+  targetFieldId: z.string().max(200),
+}).strict()
 
 const MAX_MAPEOS = 300
 
@@ -128,7 +134,7 @@ export const createRecordActionSchema = z.object({
   allowCascade: z.boolean().optional(),
   actionType: actionTypeEnum.optional(),
   actionConfig: flowConfigJsonSchema.nullable().optional(),
-})
+}).strict()
 
 export const updateRecordActionSchema = createRecordActionSchema.partial()
 

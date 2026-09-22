@@ -10,7 +10,7 @@ const camposDeMetodo = {
   sourceRef: z.string().max(500).optional(),
 }
 
-export const createMethodSchema = z.object(camposDeMetodo)
+export const createMethodSchema = z.object(camposDeMetodo).strict()
 
 /** `Partial<CreateMethodDto>`, que es lo que el service declara. */
 export const updateMethodSchema = createMethodSchema.partial()

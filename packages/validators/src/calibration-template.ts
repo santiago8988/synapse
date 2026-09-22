@@ -5,7 +5,7 @@ const punto = z.object({
   order: z.number().int().min(0).max(10_000),
   load: z.number().finite().optional(),
   unit: z.string().max(32).optional(),
-})
+}).strict()
 
 /**
  * Una prueba de la plantilla con sus puntos de medicion.
@@ -26,7 +26,7 @@ const prueba = z.object({
   criteriaOperator: z.string().max(50).optional(),
   notes: z.string().max(5000).optional(),
   points: z.array(punto).max(500),
-})
+}).strict()
 
 const MAX_PRUEBAS = 200
 
@@ -43,7 +43,7 @@ const campos = {
 export const createCalibrationTemplateSchema = z.object({
   ...campos,
   tests: z.array(prueba).max(MAX_PRUEBAS),
-})
+}).strict()
 
 /**
  * Incluye `periodicity` y `notifyDaysBefore`, que el tipo inline del controller
@@ -60,7 +60,7 @@ export const updateCalibrationTemplateSchema = z.object({
   ...campos,
   name: campos.name.optional(),
   tests: z.array(prueba).max(MAX_PRUEBAS).optional(),
-})
+}).strict()
 
 export type CreateCalibrationTemplateInput = z.infer<typeof createCalibrationTemplateSchema>
 export type UpdateCalibrationTemplateInput = z.infer<typeof updateCalibrationTemplateSchema>

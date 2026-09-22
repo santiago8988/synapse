@@ -11,6 +11,6 @@ import { z } from 'zod'
 export const changeInstrumentStatusSchema = z.object({
   status: z.enum(['ACTIVE', 'IN_CALIBRATION', 'IN_REPAIR', 'DECOMMISSIONED']),
   reason: z.string().max(1000).optional(),
-})
+}).strict()
 
 export type ChangeInstrumentStatusInput = z.infer<typeof changeInstrumentStatusSchema>
