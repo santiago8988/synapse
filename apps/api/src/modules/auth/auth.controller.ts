@@ -18,6 +18,15 @@ import { ConfigService } from '@nestjs/config'
 import { AuthCodeService } from './auth-code.service'
 import { Public } from '../../common/decorators/public.decorator'
 import { normalizeFrontendUrl } from '../../common/config/frontend-url'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  exchangeOrganizationsSchema,
+  exchangeSchema,
+  switchOrgSchema,
+  type ExchangeInput,
+  type ExchangeOrganizationsInput,
+  type SwitchOrgInput,
+} from '@synapse/validators'
 
 /**
  * Las cuatro rutas del flujo de ingreso llevan `@Public()`: son las unicas que se
@@ -72,7 +81,11 @@ export class AuthController {
    */
   @Post('exchange/organizations')
   @Public()
-  async exchangeOrganizations(@Body() body: { code?: string }) {
+  @ZodBody(exchangeOrganizationsSchema)
+  async exchangeOrganizations(@Body() body: ExchangeOrganizationsInput) {
+    // Redundante con el schema, que ya exige `code`. Se deja igual: es la unica
+    // superficie sin autenticar de la API y no conviene que dependa de que
+    // alguien se acuerde del decorador.
     if (!body?.code) throw new BadRequestException('Falta el código')
     const entry = this.authCodes.peek(body.code)
     if (!entry) {
@@ -87,7 +100,11 @@ export class AuthController {
    */
   @Post('exchange')
   @Public()
-  async exchange(@Body() body: { code?: string; organizationId?: string }) {
+  @ZodBody(exchangeSchema)
+  async exchange(@Body() body: ExchangeInput) {
+    // Redundante con el schema, que ya exige `code`. Se deja igual: es la unica
+    // superficie sin autenticar de la API y no conviene que dependa de que
+    // alguien se acuerde del decorador.
     if (!body?.code) throw new BadRequestException('Falta el código')
 
     const entry = this.authCodes.consume(body.code)
@@ -109,11 +126,13 @@ export class AuthController {
 
   @Post('switch-org')
   @UseGuards(JwtAuthGuard)
+  @ZodBody(switchOrgSchema)
   async switchOrg(
     @CurrentUser() user: JwtPayload,
     // Solo organizationId: el usuario sale del JWT. Aceptar un userId por body
     // seria un bypass de autenticacion (cualquiera pediria token de cualquiera).
-    @Body() body: { organizationId: string },
+    // El schema tampoco lo declara, asi que si alguien lo manda no llega aca.
+    @Body() body: SwitchOrgInput,
   ) {
     const token = await this.authService.generateToken(user.sub, body.organizationId)
     return { token }
