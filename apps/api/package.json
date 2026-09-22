@@ -6,7 +6,8 @@
     "node": ">=20 <21"
   },
   "scripts": {
-    "build": "nest build",
+    "_comentario_build": "Construye @synapse/validators antes que la API. Los schemas de Zod son VALORES en runtime —a diferencia de @synapse/types, que es solo tipos y tsc borra— asi que el dist compilado hace un require real contra packages/validators/dist. Turbo ya ordena esto con dependsOn ^build cuando se corre `pnpm build` desde la raiz, pero el deploy construye solo la API y ahi validators quedaba sin compilar: el contenedor arrancaba y moria con MODULE_NOT_FOUND. Explicito aca funciona con cualquiera de los dos comandos.",
+    "build": "pnpm --filter @synapse/validators build && nest build",
     "dev": "nest start --watch",
     "start": "nest start",
     "start:prod": "node dist/main",
