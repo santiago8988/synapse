@@ -1,6 +1,11 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    // CommonJS y no el ESNext de la base: apps/api compila a CommonJS y hace
+    // `require("@synapse/validators")` en runtime. Con modulos ES el require
+    // falla con "Unexpected token 'export'" al arrancar.
+    "module": "commonjs",
+    "moduleResolution": "node",
     "outDir": "./dist",
     "rootDir": "./src"
   },
