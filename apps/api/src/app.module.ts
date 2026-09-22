@@ -26,6 +26,7 @@ import { StockModule } from './modules/stock/stock.module'
 import { CalibrationTemplatesModule } from './modules/calibration-templates/calibration-templates.module'
 import { CalibrationsModule } from './modules/calibrations/calibrations.module'
 import { AuditInterceptor } from './common/interceptors/audit.interceptor'
+import { ZodValidationInterceptor } from './common/interceptors/zod-validation.interceptor'
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard'
 import { TenantGuard } from './common/guards/tenant.guard'
 import { RolesGuard } from './common/guards/roles.guard'
@@ -69,6 +70,13 @@ import { RolesGuard } from './common/guards/roles.guard'
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: TenantGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    // Antes del AuditInterceptor a proposito: los interceptores globales corren
+    // en el orden en que se registran, asi que el body que se escribe en el
+    // AuditLog es el ya validado y sin campos de mas, no el crudo.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ZodValidationInterceptor,
+    },
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditInterceptor,

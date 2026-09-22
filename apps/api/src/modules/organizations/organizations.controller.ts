@@ -5,6 +5,21 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  addTrainingSchema,
+  addWhitelistSchema,
+  createPositionSchema,
+  setAreaLeaderSchema,
+  updateOrganizationSchema,
+  updateOrgUserSchema,
+  type AddTrainingInput,
+  type AddWhitelistInput,
+  type CreatePositionInput,
+  type SetAreaLeaderInput,
+  type UpdateOrganizationInput,
+  type UpdateOrgUserInput,
+} from '@synapse/validators'
 
 @Controller('organizations')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -18,7 +33,8 @@ export class OrganizationsController {
 
   @Patch(':id')
   @Roles('ADMIN')
-  update(@CurrentUser() user: JwtPayload, @Body() body: { name?: string; logoUrl?: string }) {
+  @ZodBody(updateOrganizationSchema)
+  update(@CurrentUser() user: JwtPayload, @Body() body: UpdateOrganizationInput) {
     return this.service.update(user.organizationId, body)
   }
 
@@ -30,7 +46,8 @@ export class OrganizationsController {
 
   @Post(':id/whitelist')
   @Roles('ADMIN')
-  addWhitelist(@CurrentUser() user: JwtPayload, @Body() body: { email: string; role?: string; areaId?: string }) {
+  @ZodBody(addWhitelistSchema)
+  addWhitelist(@CurrentUser() user: JwtPayload, @Body() body: AddWhitelistInput) {
     return this.service.addToWhitelist(user.organizationId, body)
   }
 
@@ -50,17 +67,11 @@ export class OrganizationsController {
 
   @Patch(':id/users/:userId')
   @Roles('ADMIN')
+  @ZodBody(updateOrgUserSchema)
   updateUser(
     @CurrentUser() user: JwtPayload,
     @Param('userId') userId: string,
-    @Body() body: {
-      role?: string
-      areaId?: string | null
-      positionId?: string | null
-      phone?: string | null
-      signature?: string | null
-      isActive?: boolean
-    },
+    @Body() body: UpdateOrgUserInput,
   ) {
     return this.service.updateUser(userId, user.organizationId, body)
   }
@@ -74,9 +85,10 @@ export class OrganizationsController {
 
   @Post(':id/positions')
   @Roles('ADMIN')
+  @ZodBody(createPositionSchema)
   createPosition(
     @CurrentUser() user: JwtPayload,
-    @Body() body: { name: string },
+    @Body() body: CreatePositionInput,
   ) {
     return this.service.createPosition(user.organizationId, body.name)
   }
@@ -94,10 +106,11 @@ export class OrganizationsController {
 
   @Patch(':id/areas/:areaId/leader')
   @Roles('ADMIN')
+  @ZodBody(setAreaLeaderSchema)
   setAreaLeader(
     @CurrentUser() user: JwtPayload,
     @Param('areaId') areaId: string,
-    @Body() body: { leaderId: string | null },
+    @Body() body: SetAreaLeaderInput,
   ) {
     return this.service.setAreaLeader(user.organizationId, areaId, body.leaderId)
   }
@@ -114,17 +127,11 @@ export class OrganizationsController {
 
   @Post(':id/users/:userId/trainings')
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(addTrainingSchema)
   addTraining(
     @CurrentUser() user: JwtPayload,
     @Param('userId') userId: string,
-    @Body() body: {
-      name: string
-      description?: string
-      provider?: string
-      completedAt: string
-      expiresAt?: string
-      certificateUrl?: string
-    },
+    @Body() body: AddTrainingInput,
   ) {
     return this.service.addTraining(user.organizationId, userId, body)
   }

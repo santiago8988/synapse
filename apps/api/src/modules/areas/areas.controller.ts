@@ -5,6 +5,13 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  createAreaSchema,
+  updateAreaSchema,
+  type CreateAreaInput,
+  type UpdateAreaInput,
+} from '@synapse/validators'
 
 @Controller('organizations/:orgId/areas')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -18,16 +25,18 @@ export class AreasController {
 
   @Post()
   @Roles('ADMIN', 'QUALITY_MANAGER')
-  create(@CurrentUser() user: JwtPayload, @Body() body: { name: string; parentId?: string }) {
+  @ZodBody(createAreaSchema)
+  create(@CurrentUser() user: JwtPayload, @Body() body: CreateAreaInput) {
     return this.service.create(user.organizationId, body)
   }
 
   @Patch(':areaId')
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(updateAreaSchema)
   update(
     @CurrentUser() user: JwtPayload,
     @Param('areaId') areaId: string,
-    @Body() body: { name?: string; parentId?: string | null },
+    @Body() body: UpdateAreaInput,
   ) {
     return this.service.update(areaId, user.organizationId, body)
   }
