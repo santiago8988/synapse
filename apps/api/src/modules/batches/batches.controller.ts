@@ -9,9 +9,11 @@ import { ZodBody } from '../../common/decorators/zod-body.decorator'
 import {
   changeBatchStatusSchema,
   consumeStockSchema,
+  completeBatchSchema,
   updateBatchSchema,
   type ChangeBatchStatusInput,
   type ConsumeStockInput,
+  type CompleteBatchInput,
   type UpdateBatchInput,
 } from '@synapse/validators'
 
@@ -49,6 +51,36 @@ export class BatchesController {
       body.status,
       { producedQuantity: body.producedQuantity, unit: body.unit, reason: body.reason },
     )
+  }
+
+  /**
+   * Disponibilidad de stock para la formula del lote, antes de iniciar.
+   *
+   * Es de lectura, asi que no muta nada y `@AuditIgnore` no aplica: el
+   * interceptor solo loguea POST/PATCH/PUT/DELETE.
+   */
+  @Get(':id/stock-check')
+  checkStock(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.checkStock(id, user.organizationId)
+  }
+
+  /** PLANIFICADO -> EN PRODUCCION, sin tocar el inventario. */
+  @Post(':id/start')
+  @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  start(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.service.start(id, user.organizationId, user.sub)
+  }
+
+  /** EN PRODUCCION -> COMPLETADO, registrando los egresos de stock. */
+  @Post(':id/complete')
+  @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  @ZodBody(completeBatchSchema)
+  complete(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() body: CompleteBatchInput,
+  ) {
+    return this.service.complete(id, user.organizationId, user.sub, body)
   }
 
   @Post(':id/consume-stock')

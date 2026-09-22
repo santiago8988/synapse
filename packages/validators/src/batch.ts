@@ -27,6 +27,27 @@ export const consumeStockSchema = z.object({
     .max(500),
 }).strict()
 
+/**
+ * Cierre de produccion. Los consumos NO llevan `ingredientName`, a diferencia
+ * de `consumeStockSchema`: el formulario de cierre manda solo lo que hace falta
+ * para descontar del inventario, y el nombre del ingrediente ya esta en la
+ * formula.
+ */
+export const completeBatchSchema = z.object({
+  producedQuantity: cantidad,
+  unit: z.string().min(1).max(32),
+  consumptions: z
+    .array(
+      z.object({
+        product: z.string().min(1).max(200),
+        lotNumber: z.string().min(1).max(100),
+        quantity: cantidad,
+        unit: z.string().min(1).max(32),
+      }).strict(),
+    )
+    .max(500),
+}).strict()
+
 export const updateBatchSchema = z.object({
   producedQuantity: cantidad.optional(),
   unit: z.string().max(32).optional(),
@@ -34,4 +55,5 @@ export const updateBatchSchema = z.object({
 
 export type ChangeBatchStatusInput = z.infer<typeof changeBatchStatusSchema>
 export type ConsumeStockInput = z.infer<typeof consumeStockSchema>
+export type CompleteBatchInput = z.infer<typeof completeBatchSchema>
 export type UpdateBatchInput = z.infer<typeof updateBatchSchema>

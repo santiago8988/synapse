@@ -22,33 +22,37 @@ reescribiendo `formula-evaluator.service` sobre mathjs.
 > §3 (middleware) y §4 (origen exacto de R2 en la CSP) se resolvieron el
 > 2026-09-04.
 
-### 27. El flujo de producción de lotes pega a tres endpoints que no existen
+### 27. ~~El flujo de producción de lotes pega a tres endpoints que no existen~~ — resuelto
 
-**Esto sí es alcanzable por el usuario**, a diferencia de §26.
+`GET /batches/:id/stock-check`, `POST /batches/:id/start` y
+`POST /batches/:id/complete` ya existen en `BatchesController`. El contrato no
+se inventó: se leyó de `batches/[id]/page.tsx`, que es quien lo definía.
 
-En un lote en estado `PLANNED`, `batches/[id]/page.tsx` muestra un botón que
-abre el chequeo de stock y después permite iniciar y completar la producción.
-Los tres pegan a rutas que `BatchesController` no declara:
+Cómo quedó el ciclo:
 
-| Cliente | Ruta | Cuándo se dispara |
-|---|---|---|
-| `api.batches.checkStock` | `GET /batches/:id/stock-check` | al abrir el panel de inicio |
-| `api.batches.start` | `POST /batches/:id/start` | botón "Iniciar producción" |
-| `api.batches.complete` | `POST /batches/:id/complete` | al completar, con cantidad y consumos |
+1. **Verificar** — `stock-check` devuelve, por cada ingrediente marcado
+   `fromStock`, el saldo por lote y si alcanza para la cantidad de la fórmula.
+   Una fórmula sin ingredientes de stock devuelve la lista vacía, que la UI ya
+   leía como "se puede iniciar sin restricciones".
+2. **Iniciar** — `start` pasa a `IN_PROGRESS` **sin tocar el inventario**: qué
+   lote se usó no se sabe hasta que se usó.
+3. **Completar** — `complete` registra los EGRESOs contra los lotes que el
+   operador eligió, guarda la cantidad producida y cierra el lote, todo en una
+   transacción.
 
-`BatchesController` tiene solo `GET /`, `GET /:id`, `POST /:id/status`,
-`POST /:id/consume-stock` y `PATCH /:id`. O sea que existe un camino manual
-equivalente (cambiar estado + consumir stock por separado), pero el flujo guiado
-que la UI ofrece nunca se implementó.
+Dos decisiones que conviene tener presentes:
 
-Sumado a §26, son **seis** rutas que el frontend llama y el backend no tiene.
-Todas entraron con el rediseño (`00717b8`). Conviene revisar el resto del
-cliente (`apps/web/src/lib/api.ts`) contra las rutas reales antes de asumir que
-no hay más.
+- **`complete` valida saldo y `consumeStock` no.** Completar es donde el número
+  se vuelve definitivo, y un saldo negativo no es un estado que el inventario
+  pueda representar. `consumeStock` quedó como estaba para no cambiarle el
+  comportamiento a un camino que ya se usa.
+- **El producto de un ingrediente se deriva de su nombre en MAYÚSCULAS**, que es
+  la regla que el formulario ya usaba. No hay vínculo duro entre
+  `RecipeIngredient` y el producto de stock; si alguna vez lo hay, el lugar a
+  cambiar es `checkStock`.
 
-> Un test que compare las rutas declaradas en el cliente contra las de los
-> controllers evitaría que vuelva a pasar. Es el mismo tipo de verificación que
-> `audit-entities.spec.ts` hace con el mapa de entidades.
+`consumeStock` sigue disponible como camino inverso (descontar al iniciar) y
+ahora tiene tests, que no tenía.
 
 ### 26. Trazabilidad de instrumentos: la UI está entera, el backend no existe
 
