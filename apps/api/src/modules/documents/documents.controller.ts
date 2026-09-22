@@ -16,7 +16,13 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
-import { DocumentStatus } from '@prisma/client'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  createDocumentSchema,
+  updateDocumentSchema,
+  type CreateDocumentInput,
+  type UpdateDocumentInput,
+} from '@synapse/validators'
 import { StorageService } from '../../common/storage/storage.service'
 import { assertUploadedPdf, PDF_UPLOAD_OPTIONS } from '../../common/storage/uploaded-pdf'
 
@@ -35,9 +41,10 @@ export class DocumentsController {
 
   @Post()
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(createDocumentSchema)
   create(
     @CurrentUser() user: JwtPayload,
-    @Body() body: { title: string; code?: string },
+    @Body() body: CreateDocumentInput,
   ) {
     return this.service.create(user.organizationId, user.sub, body)
   }
@@ -49,10 +56,11 @@ export class DocumentsController {
 
   @Patch(':id')
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(updateDocumentSchema)
   update(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: { title?: string; code?: string; status?: DocumentStatus },
+    @Body() body: UpdateDocumentInput,
   ) {
     return this.service.update(id, user.organizationId, body)
   }
@@ -75,6 +83,10 @@ export class DocumentsController {
     return { fileUrl: document.fileUrl, filename: stored.name }
   }
 
+  // Sin `@ZodBody`: es multipart, y ahi el decorador no valida nada. Los
+  // interceptores globales corren antes que los de ruta, asi que cuando el
+  // interceptor de Zod llega, multer todavia no parseo el body. El propio
+  // interceptor devuelve 400 si se lo pone igual, para que no pase inadvertido.
   @Post(':id/version')
   @Roles('ADMIN', 'QUALITY_MANAGER')
   @UseInterceptors(FileInterceptor('file', PDF_UPLOAD_OPTIONS))

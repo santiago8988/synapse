@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { Body, Controller, Module, Post, INestApplication } from '@nestjs/common'
+import { Body, Controller, Module, Post, UseInterceptors, UploadedFile, INestApplication } from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
 import { APP_INTERCEPTOR, NestFactory } from '@nestjs/core'
 import { z } from 'zod'
 import { ZodBody } from '../decorators/zod-body.decorator'
@@ -33,6 +34,24 @@ class ControllerDePrueba {
   @Post('sin-schema')
   crearSinSchema(@Body() body: unknown) {
     return { recibido: body }
+  }
+
+  /**
+   * Endpoint multipart CON schema: la combinacion que no funciona y que el
+   * interceptor tiene que rechazar de forma visible.
+   */
+  @Post('multipart-con-schema')
+  @ZodBody(schema)
+  @UseInterceptors(FileInterceptor('file'))
+  subirConSchema(@UploadedFile() file: unknown, @Body() body: unknown) {
+    return { recibido: body, tieneArchivo: !!file }
+  }
+
+  /** Multipart sin schema: el caso legitimo, tiene que seguir andando. */
+  @Post('multipart-sin-schema')
+  @UseInterceptors(FileInterceptor('file'))
+  subirSinSchema(@UploadedFile() file: unknown, @Body() body: unknown) {
+    return { recibido: body, tieneArchivo: !!file }
   }
 }
 
@@ -99,5 +118,32 @@ describe('ZodValidationInterceptor — integracion con Nest', () => {
 
     expect(status).toBe(201)
     expect(json).toEqual({ recibido: { cualquier: 'cosa' } })
+  })
+
+  async function postearMultipart(ruta: string) {
+    const fd = new FormData()
+    fd.append('name', 'LABORATORIO')
+    fd.append('noDeclarado', 'sobreviviria')
+    fd.append('file', new Blob(['%PDF-x'], { type: 'application/pdf' }), 'x.pdf')
+    const res = await fetch(`${baseUrl}${ruta}`, { method: 'POST', body: fd })
+    return { status: res.status, json: await res.json() }
+  }
+
+  it('multipart con @ZodBody es 400 y no un no-op silencioso', async () => {
+    const { status } = await postearMultipart('/prueba/multipart-con-schema')
+
+    // Sin este corte el decorador no hace nada: los interceptores globales
+    // corren antes que los de ruta, asi que multer todavia no parseo el body.
+    // Se validaria `{}` y despues multer lo pisaria con los campos sin filtrar
+    // —verificado: `noDeclarado` llegaba intacto al handler—. Un endpoint de
+    // subida que parece validado y no lo esta es peor que uno sin decorar.
+    expect(status).toBe(400)
+  })
+
+  it('multipart sin @ZodBody sigue funcionando', async () => {
+    const { status, json } = await postearMultipart('/prueba/multipart-sin-schema')
+
+    expect(status).toBe(201)
+    expect(json).toMatchObject({ tieneArchivo: true })
   })
 })

@@ -1,5 +1,7 @@
 export * from './auth'
 export * from './organization'
 export * from './area'
+export * from './document'
+export * from './entry'
 export * from './whitelist'
 export * from './record-field'

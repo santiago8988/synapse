@@ -18,6 +18,8 @@ Lo urgente ya está cerrado: no queda un camino conocido para cruzar tenants ni 
 | `47d18c5` | los arreglos de §1: IDOR, mass assignment, revocación de JWT, guards globales, subidas, storage, headers |
 | `25fc23a` | primer tramo de la Fase 1.1: `@ZodBody` + interceptor global, 8 endpoints |
 | `364ad6a` | `packages/validators` emite CommonJS — sin esto el dist de la API no arrancaba |
+| `229db0e` | este documento |
+| (siguiente) | Fase 1.1 en `documents` y `entries`, más el acotado de `Entry.data` |
 
 **Las tres cosas que más mueven la aguja, en orden:**
 
@@ -194,15 +196,19 @@ Y lo que cierra la clase no es el 400: es que el interceptor **reemplaza `reques
 
 1. ~~Registrar `ZodValidationPipe` como pipe global.~~ **Hecho** como `@ZodBody` + `ZodValidationInterceptor` global, registrado antes del `AuditInterceptor` para que el audit log guarde el body ya limpio.
 2. Un schema por endpoint de escritura. `.strict()` **al final de la fase**, no al principio: es el equivalente del `extra="forbid"` de BBSplap, pero activarlo antes de saber qué manda realmente el frontend convierte en 400 de producción un campo de más que hoy se descarta sin consecuencia.
-3. Empezar por los endpoints que escriben, en este orden: `organizations` ✅, `areas` ✅, `documents`, `entries`, `records`.
+3. Empezar por los endpoints que escriben, en este orden: `organizations` ✅, `areas` ✅, `documents` ✅, `entries` ✅, `records`.
 4. Reutilizar los schemas de `packages/validators` que ya existen; extender donde falten. **Hecho** para los 8 endpoints migrados: se extendió `updateOrgUserSchema`, al que le faltaban `positionId`, `phone` y `signature`, y se agregaron `createPosition`, `setAreaLeader` y `addTraining`.
-5. Acotar `Entry.data` en particular: hoy entra como `Record<string, unknown>` sin límite de claves, de profundidad ni de tamaño de valor, y se escribe directo a una columna Json.
+5. ~~Acotar `Entry.data`~~ **Hecho** (`entryDataSchema`): 300 claves, 10 000 caracteres por texto, 500 items por lista y profundidad declarada explícita en vez de `z.lazy()`. El tamaño total ya estaba acotado aguas arriba —el body parser de Express corta el JSON en 100 kB—; lo que faltaba era la forma. Los números son holgados a propósito: el objetivo de la fase no es afinar cuotas sino que deje de entrar cualquier cosa.
 
 **Criterio de hecho:** un body con un campo que el schema no declara devuelve 400, y los tres parches de lista blanca de §1.2 quedan redundantes (dejarlos igual: defensa en capas).
 
 > **Lo que costó y no estaba previsto:** `packages/validators` declaraba `main: ./src/index.ts`, y Node no puede requerir TypeScript. El primer import de valor entre paquetes del workspace —los schemas son valores en runtime, a diferencia de `@synapse/types`, que se usa solo para tipos y tsc borra— dejó el dist de la API sin arrancar. Typecheck, la suite entera y `nest build` pasaban igual. Se arregló emitiendo CommonJS con `main` a `dist`.
 >
 > Deja dos lecciones para el resto de la fase: **verificar arrancando el dist**, no compilándolo, y que vitest transpila con esbuild, que no soporta `emitDecoratorMetadata` — cualquier provider que se instancie en un test de integración necesita `@Inject()` explícito.
+
+> **`@ZodBody` no sirve en endpoints multipart, y hay que saberlo.** Los interceptores globales corren **antes** que los de ruta, así que cuando el de Zod llega, el `FileInterceptor` todavía no pasó y multer no parseó nada: valida un `{}` y después multer pisa `request.body` con los campos sin filtrar. Verificado: un campo no declarado llega intacto al handler. O sea que el decorador ahí no falla ni avisa, simplemente no hace nada — la peor forma de una defensa.
+>
+> El interceptor ahora devuelve 400 ante un body multipart cuando hay schema declarado, para que la primera prueba lo muestre. Los cuatro endpoints de subida (`documents/upload`, `documents/version`, `entries/files`, y los de instruments/recipes/templates) validan su parte en el handler con `assertUploadedPdf`.
 
 #### 1.2 Rate limiting y lockout · ~2 días
 

@@ -22,6 +22,13 @@ import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.de
 import { StorageService } from '../../common/storage/storage.service'
 import type { UserRole } from '@synapse/types'
 import { assertUploadedPdf, PDF_UPLOAD_OPTIONS } from '../../common/storage/uploaded-pdf'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  createEntrySchema,
+  updateEntrySchema,
+  type CreateEntryInput,
+  type UpdateEntryInput,
+} from '@synapse/validators'
 
 const FILE_PDF_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
 
@@ -43,16 +50,11 @@ export class EntriesController {
 
   @Post()
   @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  @ZodBody(createEntrySchema)
   create(
     @Param('recordId') recordId: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: {
-      data: Record<string, unknown>
-      revisionDate?: string
-      lotNumber?: string
-      sampleCode?: string
-      client?: string
-    },
+    @Body() body: CreateEntryInput,
   ) {
     return this.service.create(
       recordId,
@@ -76,11 +78,12 @@ export class EntriesController {
 
   @Patch(':id')
   @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  @ZodBody(updateEntrySchema)
   update(
     @Param('recordId') recordId: string,
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: { data: Record<string, unknown>; transitionReason?: string },
+    @Body() body: UpdateEntryInput,
   ) {
     return this.service.update(
       id,
@@ -110,6 +113,8 @@ export class EntriesController {
    * Body: multipart/form-data con `file` (max 10 MB, mime application/pdf).
    * Devuelve el value persistido en data[fieldId].
    */
+  // Sin `@ZodBody`: multipart. Ver el comentario del interceptor — ahi el
+  // decorador no validaria nada porque multer todavia no parseo el body.
   @Post(':id/files')
   @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
   @UseInterceptors(FileInterceptor('file', PDF_UPLOAD_OPTIONS))

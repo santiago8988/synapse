@@ -55,6 +55,25 @@ export class ZodValidationInterceptor implements NestInterceptor {
 
     const request = context.switchToHttp().getRequest()
 
+    // Multipart no se puede validar desde aca, y es importante que se note.
+    //
+    // Los interceptores globales corren ANTES que los de ruta, asi que cuando
+    // este llega, el `FileInterceptor` todavia no paso y multer no parseo nada:
+    // `request.body` esta vacio. Se validaria un objeto vacio y despues multer
+    // lo pisaria con los campos reales, sin filtrar. Verificado: un campo no
+    // declarado llega intacto al handler.
+    //
+    // O sea que poner `@ZodBody` en un endpoint de subida no valida: no falla,
+    // no avisa, simplemente no hace nada. Un 400 explicito convierte eso en un
+    // error que se ve en la primera prueba. Los endpoints multipart validan su
+    // parte en el handler (`assertUploadedPdf`).
+    const contentType = String(request.headers?.['content-type'] ?? '')
+    if (contentType.startsWith('multipart/')) {
+      throw new BadRequestException(
+        'Este endpoint no acepta multipart/form-data',
+      )
+    }
+
     try {
       // Un body ausente se valida como objeto vacio: si el schema exige algo,
       // que lo diga el schema y no un TypeError.
