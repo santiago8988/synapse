@@ -17,6 +17,11 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  changeInstrumentStatusSchema,
+  type ChangeInstrumentStatusInput,
+} from '@synapse/validators'
 import { StorageService } from '../../common/storage/storage.service'
 import { assertUploadedPdf, PDF_UPLOAD_OPTIONS } from '../../common/storage/uploaded-pdf'
 
@@ -58,10 +63,11 @@ export class InstrumentsController {
 
   @Post(':id/status')
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(changeInstrumentStatusSchema)
   changeStatus(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: { status: string; reason?: string },
+    @Body() body: ChangeInstrumentStatusInput,
   ) {
     return this.service.changeStatus(id, user.organizationId, body.status, body.reason || null, user.sub)
   }

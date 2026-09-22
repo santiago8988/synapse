@@ -88,5 +88,13 @@ export const fieldConfigSchema = objetoDe(valorJson(3))
  */
 export const flowConfigJsonSchema = objetoDe(valorJson(5))
 
+/**
+ * Mapas de resultados y condiciones que cargan los formularios de muestras y
+ * calibraciones. La forma tipica es `{ [testId]: { [pointId]: { readings: [] } } }`,
+ * o sea tres niveles de anidamiento sobre el objeto raiz.
+ */
+export const resultsJsonSchema = objetoDe(valorJson(3))
+
 export type FieldConfigInput = z.infer<typeof fieldConfigSchema>
 export type FlowConfigJsonInput = z.infer<typeof flowConfigJsonSchema>
+export type ResultsJsonInput = z.infer<typeof resultsJsonSchema>

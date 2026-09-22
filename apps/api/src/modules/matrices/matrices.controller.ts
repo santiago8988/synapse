@@ -5,6 +5,13 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  createMatrixSchema,
+  updateMatrixSchema,
+  type CreateMatrixInput,
+  type UpdateMatrixInput,
+} from '@synapse/validators'
 
 @Controller('matrices')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -18,15 +25,10 @@ export class MatricesController {
 
   @Post()
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(createMatrixSchema)
   create(
     @CurrentUser() user: JwtPayload,
-    @Body() body: {
-      name: string
-      code?: string
-      description?: string
-      parameters: Array<{ name: string; method?: string; unit?: string; minValue?: number; maxValue?: number; order: number }>
-      conditions?: Array<{ label: string; fieldType: string; unit?: string; options?: string[]; order: number }>
-    },
+    @Body() body: CreateMatrixInput,
   ) {
     return this.service.create(user.organizationId, user.sub, body)
   }
@@ -38,16 +40,11 @@ export class MatricesController {
 
   @Patch(':id')
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(updateMatrixSchema)
   update(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: {
-      name?: string
-      code?: string
-      description?: string
-      parameters?: Array<{ name: string; method?: string; unit?: string; minValue?: number; maxValue?: number; order: number }>
-      conditions?: Array<{ label: string; fieldType: string; unit?: string; options?: string[]; order: number }>
-    },
+    @Body() body: UpdateMatrixInput,
   ) {
     return this.service.update(id, user.organizationId, body)
   }

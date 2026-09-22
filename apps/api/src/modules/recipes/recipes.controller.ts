@@ -18,6 +18,13 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  createRecipeSchema,
+  updateRecipeSchema,
+  type CreateRecipeInput,
+  type UpdateRecipeInput,
+} from '@synapse/validators'
 import { StorageService } from '../../common/storage/storage.service'
 import { assertUploadedPdf, PDF_UPLOAD_OPTIONS } from '../../common/storage/uploaded-pdf'
 
@@ -38,14 +45,10 @@ export class RecipesController {
 
   @Post()
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(createRecipeSchema)
   create(
     @CurrentUser() user: JwtPayload,
-    @Body() body: {
-      name: string
-      code: string
-      ingredients: Array<{ name: string; quantity: number; unit: string; order: number; fromStock?: boolean; stockRecipeId?: string }>
-      steps: Array<{ order: number; name: string; description?: string; duration?: number; controls?: string }>
-    },
+    @Body() body: CreateRecipeInput,
   ) {
     return this.service.create(user.organizationId, user.sub, body)
   }
@@ -57,15 +60,11 @@ export class RecipesController {
 
   @Patch(':id')
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(updateRecipeSchema)
   update(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: {
-      name?: string
-      code?: string
-      ingredients?: Array<{ name: string; quantity: number; unit: string; order: number }>
-      steps?: Array<{ order: number; name: string; description?: string; duration?: number; controls?: string }>
-    },
+    @Body() body: UpdateRecipeInput,
   ) {
     return this.service.update(id, user.organizationId, body)
   }

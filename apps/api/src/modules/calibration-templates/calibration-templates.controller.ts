@@ -18,6 +18,13 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  createCalibrationTemplateSchema,
+  updateCalibrationTemplateSchema,
+  type CreateCalibrationTemplateInput,
+  type UpdateCalibrationTemplateInput,
+} from '@synapse/validators'
 import { StorageService } from '../../common/storage/storage.service'
 import { assertUploadedPdf, PDF_UPLOAD_OPTIONS } from '../../common/storage/uploaded-pdf'
 
@@ -38,29 +45,10 @@ export class CalibrationTemplatesController {
 
   @Post()
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(createCalibrationTemplateSchema)
   create(
     @CurrentUser() user: JwtPayload,
-    @Body() body: {
-      name: string
-      code?: string
-      description?: string
-      unitMain?: string
-      unitTolerance?: string
-      periodicity?: number
-      notifyDaysBefore?: number
-      tests: Array<{
-        name: string
-        description?: string
-        order: number
-        tolerance?: number
-        toleranceUnit?: string
-        readingsPerPoint?: number
-        formulaError?: string
-        criteriaOperator?: string
-        notes?: string
-        points: Array<{ name: string; order: number; load?: number; unit?: string }>
-      }>
-    },
+    @Body() body: CreateCalibrationTemplateInput,
   ) {
     return this.service.create(user.organizationId, user.sub, body)
   }
@@ -72,28 +60,11 @@ export class CalibrationTemplatesController {
 
   @Patch(':id')
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(updateCalibrationTemplateSchema)
   update(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: {
-      name?: string
-      code?: string
-      description?: string
-      unitMain?: string
-      unitTolerance?: string
-      tests?: Array<{
-        name: string
-        description?: string
-        order: number
-        tolerance?: number
-        toleranceUnit?: string
-        readingsPerPoint?: number
-        formulaError?: string
-        criteriaOperator?: string
-        notes?: string
-        points: Array<{ name: string; order: number; load?: number; unit?: string }>
-      }>
-    },
+    @Body() body: UpdateCalibrationTemplateInput,
   ) {
     return this.service.update(id, user.organizationId, body)
   }

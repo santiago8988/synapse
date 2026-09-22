@@ -5,6 +5,13 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  createMethodSchema,
+  updateMethodSchema,
+  type CreateMethodInput,
+  type UpdateMethodInput,
+} from '@synapse/validators'
 
 @Controller('methods')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -21,35 +28,21 @@ export class MethodsController {
 
   @Post()
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(createMethodSchema)
   create(
     @CurrentUser() user: JwtPayload,
-    @Body() body: {
-      code: string
-      name: string
-      parameter: string
-      unit?: string
-      defaultMin?: number
-      defaultMax?: number
-      sourceRef?: string
-    },
+    @Body() body: CreateMethodInput,
   ) {
     return this.service.create(user.organizationId, body)
   }
 
   @Patch(':id')
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(updateMethodSchema)
   update(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: {
-      code?: string
-      name?: string
-      parameter?: string
-      unit?: string
-      defaultMin?: number
-      defaultMax?: number
-      sourceRef?: string
-    },
+    @Body() body: UpdateMethodInput,
   ) {
     return this.service.update(id, user.organizationId, body)
   }

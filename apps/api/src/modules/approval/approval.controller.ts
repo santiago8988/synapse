@@ -5,7 +5,16 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
-import { QualityRoleType, ApprovableEntity } from '@prisma/client'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  assignQualityRoleSchema,
+  submitForApprovalSchema,
+  approvalDecisionSchema,
+  type AssignQualityRoleInput,
+  type SubmitForApprovalInput,
+  type ApprovalDecisionInput,
+} from '@synapse/validators'
+import { ApprovableEntity } from '@prisma/client'
 
 @Controller('approval')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -22,9 +31,10 @@ export class ApprovalController {
 
   @Post('quality-roles')
   @Roles('ADMIN')
+  @ZodBody(assignQualityRoleSchema)
   assignQualityRole(
     @CurrentUser() user: JwtPayload,
-    @Body() body: { organizationUserId: string; role: QualityRoleType },
+    @Body() body: AssignQualityRoleInput,
   ) {
     return this.service.assignQualityRole(
       user.organizationId,
@@ -46,9 +56,10 @@ export class ApprovalController {
 
   @Post('submit')
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(submitForApprovalSchema)
   submitForApproval(
     @CurrentUser() user: JwtPayload,
-    @Body() body: { entityType: ApprovableEntity; entityId: string },
+    @Body() body: SubmitForApprovalInput,
   ) {
     return this.service.submitForApproval(
       user.organizationId,
@@ -59,10 +70,11 @@ export class ApprovalController {
   }
 
   @Post('requests/:id/decide')
+  @ZodBody(approvalDecisionSchema)
   decide(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: { decision: 'APPROVED' | 'REJECTED'; comments?: string },
+    @Body() body: ApprovalDecisionInput,
   ) {
     return this.service.decide(
       id,

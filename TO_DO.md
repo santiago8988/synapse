@@ -22,6 +22,23 @@ reescribiendo `formula-evaluator.service` sobre mathjs.
 > §3 (middleware) y §4 (origen exacto de R2 en la CSP) se resolvieron el
 > 2026-09-04.
 
+### 26. El formulario de matrices manda un campo que el backend no tiene
+
+`matrices/page.tsx` tiene una sección **"Instrumentos requeridos"** donde el
+usuario carga labels de equipos (Termómetro, pHmetro) y las manda en el payload
+como `requiredInstruments`. `requiredInstruments` **no existe en ningún lado del
+backend**: ni en `schema.prisma`, ni en `matrices.service`, ni en los DTO. Lo
+que el usuario escribe ahí se descarta en silencio, y el bloque que lo muestra
+—que lee `matrix.requiredInstruments`— nunca se renderiza porque la respuesta
+nunca lo trae.
+
+Es anterior a la validación con Zod y el schema no cambió el comportamiento
+(ya se perdía antes); hay un test que lo deja documentado en
+`modules/module-schemas.spec.ts`. Falta decidir si se implementa en el backend
+o se saca del formulario. La UI lo describe como "se asignan al instrumento
+real en cada muestra", así que parece una feature a medio hacer y no un
+descarte deliberado.
+
 ### 25. Los errores de validación no dicen qué campo falló
 
 `ZodValidationInterceptor` responde siempre `message: 'Error de validación'` y

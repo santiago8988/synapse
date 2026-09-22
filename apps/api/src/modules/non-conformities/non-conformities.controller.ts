@@ -5,6 +5,15 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  createNonConformitySchema,
+  updateNonConformityStatusSchema,
+  addCorrectiveActionSchema,
+  type CreateNonConformityInput,
+  type UpdateNonConformityStatusInput,
+  type AddCorrectiveActionInput,
+} from '@synapse/validators'
 
 @Controller('non-conformities')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -30,29 +39,32 @@ export class NonConformitiesController {
 
   @Post()
   @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  @ZodBody(createNonConformitySchema)
   create(
     @CurrentUser() user: JwtPayload,
-    @Body() body: { title: string; description: string; entryId?: string; assignedToId?: string },
+    @Body() body: CreateNonConformityInput,
   ) {
     return this.service.create(user.organizationId, user.sub, body)
   }
 
   @Patch(':id/status')
   @Roles('ADMIN', 'QUALITY_MANAGER')
+  @ZodBody(updateNonConformityStatusSchema)
   updateStatus(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: { status: string },
+    @Body() body: UpdateNonConformityStatusInput,
   ) {
     return this.service.updateStatus(id, user.organizationId, body.status, user.sub)
   }
 
   @Post(':id/corrective-actions')
   @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  @ZodBody(addCorrectiveActionSchema)
   addCorrectiveAction(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: { description: string; dueDate?: string },
+    @Body() body: AddCorrectiveActionInput,
   ) {
     return this.service.addCorrectiveAction(id, user.organizationId, user.sub, body)
   }

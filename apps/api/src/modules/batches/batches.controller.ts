@@ -5,7 +5,15 @@ import { TenantGuard } from '../../common/guards/tenant.guard'
 import { RolesGuard } from '../../common/guards/roles.guard'
 import { Roles } from '../../common/decorators/roles.decorator'
 import { CurrentUser, JwtPayload } from '../../common/decorators/current-user.decorator'
-import { BatchStatus } from '@prisma/client'
+import { ZodBody } from '../../common/decorators/zod-body.decorator'
+import {
+  changeBatchStatusSchema,
+  consumeStockSchema,
+  updateBatchSchema,
+  type ChangeBatchStatusInput,
+  type ConsumeStockInput,
+  type UpdateBatchInput,
+} from '@synapse/validators'
 
 @Controller('batches')
 @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
@@ -28,15 +36,11 @@ export class BatchesController {
 
   @Post(':id/status')
   @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  @ZodBody(changeBatchStatusSchema)
   changeStatus(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: {
-      status: BatchStatus
-      producedQuantity?: number
-      unit?: string
-      reason?: string
-    },
+    @Body() body: ChangeBatchStatusInput,
   ) {
     return this.service.changeStatus(
       id,
@@ -49,22 +53,22 @@ export class BatchesController {
 
   @Post(':id/consume-stock')
   @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  @ZodBody(consumeStockSchema)
   consumeStock(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: {
-      consumptions: Array<{ ingredientName: string; product: string; lotNumber: string; quantity: number; unit: string }>
-    },
+    @Body() body: ConsumeStockInput,
   ) {
     return this.service.consumeStock(id, user.organizationId, user.sub, body.consumptions)
   }
 
   @Patch(':id')
   @Roles('ADMIN', 'QUALITY_MANAGER', 'TECHNICIAN')
+  @ZodBody(updateBatchSchema)
   update(
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
-    @Body() body: { producedQuantity?: number; unit?: string },
+    @Body() body: UpdateBatchInput,
   ) {
     return this.service.update(id, user.organizationId, body)
   }
