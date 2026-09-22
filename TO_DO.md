@@ -20,7 +20,30 @@ reescribiendo `formula-evaluator.service` sobre mathjs.
 ## Seguridad
 
 > §3 (middleware) y §4 (origen exacto de R2 en la CSP) se resolvieron el
-> 2026-09-04. No queda nada abierto en esta sección.
+> 2026-09-04.
+
+### 25. Los errores de validación no dicen qué campo falló
+
+`ZodValidationInterceptor` responde siempre `message: 'Error de validación'` y
+pone el detalle en `errors: [{ field, message }]`. Pero el frontend lee
+**`body.message`**, tanto en `fetchApi` (`lib/api.ts`) como en el callback del
+login, así que cualquier fallo de validación se ve igual y no dice qué campo
+está mal. Hoy afecta a los 15 endpoints ya migrados y va a afectar a los 30 que
+faltan.
+
+El arreglo es chico —componer `message` con el primer error, algo como
+`title: el título es obligatorio`— pero cambia el contrato de error de toda la
+API, así que conviene hacerlo de una vez y no endpoint por endpoint. Los
+mensajes de Zod vienen en inglés por defecto: hay que pasarles texto propio o
+traducir los códigos, porque la UI es en español.
+
+Mientras tanto, en `/auth/exchange` el formato del código de login **no** se
+valida justamente para no perder su mensaje útil (ver el comentario en
+`packages/validators/src/auth.ts`). Cuando esto se resuelva, esa decisión se
+puede revisar.
+
+> El resto del estado de seguridad vive en `Synapse-Plan-Seguridad.md`, que
+> tiene el plan por fases y lo que queda abierto.
 
 ---
 
