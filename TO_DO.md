@@ -22,22 +22,68 @@ reescribiendo `formula-evaluator.service` sobre mathjs.
 > §3 (middleware) y §4 (origen exacto de R2 en la CSP) se resolvieron el
 > 2026-09-04.
 
-### 26. El formulario de matrices manda un campo que el backend no tiene
+### 27. El flujo de producción de lotes pega a tres endpoints que no existen
 
-`matrices/page.tsx` tiene una sección **"Instrumentos requeridos"** donde el
-usuario carga labels de equipos (Termómetro, pHmetro) y las manda en el payload
-como `requiredInstruments`. `requiredInstruments` **no existe en ningún lado del
-backend**: ni en `schema.prisma`, ni en `matrices.service`, ni en los DTO. Lo
-que el usuario escribe ahí se descarta en silencio, y el bloque que lo muestra
-—que lee `matrix.requiredInstruments`— nunca se renderiza porque la respuesta
-nunca lo trae.
+**Esto sí es alcanzable por el usuario**, a diferencia de §26.
 
-Es anterior a la validación con Zod y el schema no cambió el comportamiento
-(ya se perdía antes); hay un test que lo deja documentado en
-`modules/module-schemas.spec.ts`. Falta decidir si se implementa en el backend
-o se saca del formulario. La UI lo describe como "se asignan al instrumento
-real en cada muestra", así que parece una feature a medio hacer y no un
-descarte deliberado.
+En un lote en estado `PLANNED`, `batches/[id]/page.tsx` muestra un botón que
+abre el chequeo de stock y después permite iniciar y completar la producción.
+Los tres pegan a rutas que `BatchesController` no declara:
+
+| Cliente | Ruta | Cuándo se dispara |
+|---|---|---|
+| `api.batches.checkStock` | `GET /batches/:id/stock-check` | al abrir el panel de inicio |
+| `api.batches.start` | `POST /batches/:id/start` | botón "Iniciar producción" |
+| `api.batches.complete` | `POST /batches/:id/complete` | al completar, con cantidad y consumos |
+
+`BatchesController` tiene solo `GET /`, `GET /:id`, `POST /:id/status`,
+`POST /:id/consume-stock` y `PATCH /:id`. O sea que existe un camino manual
+equivalente (cambiar estado + consumir stock por separado), pero el flujo guiado
+que la UI ofrece nunca se implementó.
+
+Sumado a §26, son **seis** rutas que el frontend llama y el backend no tiene.
+Todas entraron con el rediseño (`00717b8`). Conviene revisar el resto del
+cliente (`apps/web/src/lib/api.ts`) contra las rutas reales antes de asumir que
+no hay más.
+
+> Un test que compare las rutas declaradas en el cliente contra las de los
+> controllers evitaría que vuelva a pasar. Es el mismo tipo de verificación que
+> `audit-entities.spec.ts` hace con el mapa de entidades.
+
+### 26. Trazabilidad de instrumentos: la UI está entera, el backend no existe
+
+Hay una feature completa de ISO 17025 —**qué instrumento físico se usó en qué
+ensayo o lote**— construida en el frontend y sin una sola línea de backend.
+
+Lo que el frontend usa y **no existe**:
+
+| Pieza | Dónde la usa el frontend |
+|---|---|
+| `Matrix.requiredInstruments` | formulario y ficha de matrices |
+| `Recipe.requiredInstruments` | detalle de lote |
+| `Sample.instrumentAssignments` / `Batch.instrumentAssignments` | bloque "Equipos asignados" |
+| `GET /instruments/real` | selector de instrumento real |
+| `POST/DELETE .../assign-instrument` | asignar y desasignar, en lotes y muestras |
+
+No hay modelo, ni servicio, ni endpoint, ni migración. `git log -S` confirma que
+nunca estuvo: entró con el rediseño (`00717b8`) como UI sola.
+
+**Qué se ve hoy:** los bloques de asignación están detrás de
+`requiredInstruments?.length > 0`, que nunca es verdadero porque el backend no
+devuelve el campo — así que esa parte no se renderiza nunca y nadie recibe un
+error. Lo único alcanzable es la sección "Instrumentos requeridos" del
+formulario de matrices, que **sí** se muestra, deja cargar equipos y los
+descarta al guardar.
+
+**Decisión pendiente:** implementarlo (2 modelos, ~5 endpoints, migración) o
+sacar esa sección del formulario de matrices. Para ISO 17025 §6.4 la
+trazabilidad del equipamiento usado en cada ensayo es un requisito real, así que
+la primera parece la respuesta, pero es una feature y no un arreglo.
+
+**Bloquea `.strict()` en matrices.** Mientras el formulario mande
+`requiredInstruments`, cerrar el schema convierte cada guardado de matriz en un
+400. Los dos schemas de matrices quedan sin `.strict()` y con el comentario
+correspondiente hasta que esto se resuelva.
 
 ### 25. Los errores de validación no dicen qué campo falló
 
